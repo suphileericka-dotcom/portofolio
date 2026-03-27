@@ -1,0 +1,88 @@
+/* --- Base --- */
+body {
+    font-family: 'Inter', sans-serif;
+    color: #2d3338;
+}
+
+.font-headline {
+    font-family: 'Manrope', sans-serif;
+}
+
+/* --- Cartes Projets (Image 1) --- */
+.project-card {
+    background-color: #ffffff;
+    border-radius: 1rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease-in-out;
+}
+
+.project-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 15px 35px rgba(0, 76, 237, 0.1);
+}
+
+/* --- Modales (Image 2) --- */
+.modal {
+    display: none; 
+    position: fixed;
+    inset: 0;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal > div {
+    background-color: #f8faff; /* Fond légèrement bleuté comme ta capture */
+    padding: 2.5rem;
+    border-radius: 0.5rem;
+    max-width: 40rem;
+    width: 90%;
+    position: relative;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* La barre bleue verticale à gauche du texte (Image 2) */
+.description-text {
+    border-left: 4px solid #00c3ff;
+    padding-left: 1.25rem;
+    margin-bottom: 2rem;
+    color: #4a5568;
+}
+
+/* La croix de fermeture à GAUCHE (comme sur ta capture) */
+.close-btn {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.75rem;
+    background: none;
+    color: #2d3338;
+    font-size: 1.5rem;
+    border: none;
+    cursor: pointer;
+}
+
+/* Liste d'icônes bleues */
+.modal ul li i {
+    color: #004ced;
+    width: 25px;
+}
+
+/* Bouton Voir le site */
+.button {
+    background-color: #004ced;
+    color: white !important;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.375rem;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.button:hover {
+    background-color: #00c3ff;
+}
