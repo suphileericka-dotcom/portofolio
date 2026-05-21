@@ -1,175 +1,194 @@
 <!DOCTYPE html>
-<html lang="fr" class="scroll-smooth">
+<html lang="fr">
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Ericka Suphile | Portfolio UI & Web Design</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Sora:wght@400;500;600&display=swap" rel="stylesheet"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
     <link rel="stylesheet" href="styles.css"/>
 </head>
-<body class="bg-gradient-to-br from-[#f0f4ff] via-[#ffffff] to-[#e0eaff] text-[#2d3338] font-body min-h-screen">
+<body>
+<div class="page-aura aura-one"></div>
+<div class="page-aura aura-two"></div>
+<div class="page-grid"></div>
 
-<header class="fixed top-0 w-full bg-white/80 backdrop-blur-md shadow-sm z-50 border-b border-blue-100">
-  <nav class="max-w-7xl mx-auto flex justify-between items-center px-8 py-4">
-    <span class="text-xl font-bold font-headline text-[#004ced]">Ericka Suphile</span>
-    <div class="hidden md:flex gap-6">
-      <a href="#about" class="hover:text-[#00c3ff] font-medium transition-colors">À propos</a>
-      <a href="#skills" class="hover:text-[#00c3ff] font-medium transition-colors">Outils</a>
-      <a href="#projects" class="hover:text-[#00c3ff] font-medium transition-colors">Projets</a>
-      <a href="#contact" class="hover:text-[#00c3ff] font-medium transition-colors">Contact</a>
+<header class="site-header">
+  <nav class="site-nav">
+    <a href="#about" class="brand-mark">Ericka Suphile</a>
+    <div class="nav-links">
+      <a href="#about">À propos</a>
+      <a href="#skills">Design & création</a>
+      <a href="#projects">Projets</a>
+      <a href="#contact">Contact</a>
     </div>
   </nav>
 </header>
 
-<main class="pt-24">
-
-<section id="about" class="max-w-4xl mx-auto px-8 py-16 flex flex-col md:flex-row items-center gap-12">
-  <div class="relative">
-    <div class="absolute -inset-1 bg-[#004ced] rounded-full blur opacity-20"></div>
-    <img src="suphile.png" alt="Ericka Suphile" class="relative w-48 h-48 rounded-full object-cover shadow-xl border-4 border-white">
-  </div>
-  <div>
-    <p class="text-sm font-semibold uppercase tracking-[0.25em] text-[#004ced] mb-3">Webdesigner / UI Designer</p>
-    <h1 class="text-4xl font-headline font-bold mb-4">Ericka Suphile</h1>
-    <div class="space-y-2 mb-6 text-gray-600 text-sm">
-        <p><i class="fas fa-envelope text-[#004ced] w-6"></i> ntsimbaericka810@gmail.com</p>
-        <p><i class="fas fa-briefcase text-[#004ced] w-6"></i> Recherche d'alternance - disponible septembre 2026</p>
-    </div>
-    <p class="leading-relaxed text-gray-700">Je conçois des interfaces éditoriales, sensibles et lisibles pour le web et le mobile. Mon approche mêle direction visuelle, clarté des parcours et culture digitale, avec une base technique utile pour collaborer avec les développeurs.</p>
-  </div>
-</section>
-
-<section id="education" class="max-w-4xl mx-auto px-8 py-8 border-t border-blue-100">
-  <h2 class="text-2xl font-bold mb-6 text-[#004ced]">Formation & profil</h2>
-  <ul class="list-disc list-inside space-y-2 text-gray-700">
-    <li>Parcours en développement web et informatique - Ecole IT Orléans, France (2024 - 2026)</li>
-    <li>Travail sur projets concrets avec une approche pratique orientée produit et expérience utilisateur</li>
-    <li>Base technique en intégration front-end, utile pour dialoguer avec les développeurs et comprendre les contraintes de production</li>
-  </ul>
-</section>
-
-<section id="skills" class="max-w-4xl mx-auto px-8 py-12 border-t border-blue-100">
-  <h2 class="text-2xl font-bold mb-10 text-[#004ced]">Outils & sensibilités</h2>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
-    <div>
-      <h3 class="font-bold mb-6 text-gray-800 uppercase tracking-wider text-xs">Design visuel</h3>
-      <div class="flex flex-wrap gap-3">
-        <span class="skill-pill">UI mobile</span>
-        <span class="skill-pill">Maquettes Figma</span>
-        <span class="skill-pill">Hiérarchie visuelle</span>
-        <span class="skill-pill">Typographie</span>
-        <span class="skill-pill">Palette couleur</span>
-        <span class="skill-pill">Parcours utilisateur</span>
+<main class="site-main">
+  <section id="about" class="hero-section">
+    <div class="hero-copy">
+      <p class="hero-kicker">Webdesigner / UI Designer</p>
+      <h1 class="hero-title">Des interfaces plus sensibles, plus brandées, plus mémorables.</h1>
+      <p class="hero-text">Je conçois des univers digitaux pour le web et le mobile, avec une attention particulière portée à la direction visuelle, à la hiérarchie éditoriale et à la fluidité des parcours.</p>
+      <div class="hero-meta">
+        <span><i class="fas fa-envelope"></i> ntsimbaericka810@gmail.com</span>
+        <span><i class="fas fa-briefcase"></i> Alternance disponible septembre 2026</span>
+      </div>
+      <div class="hero-actions">
+        <a href="#projects" class="button-primary">Voir les projets</a>
+        <a href="https://www.figma.com/design/Qmzwa9ebS1hrnTlI7C9oza/Untitled?node-id=0-1&t=8WP6FcGeJfHIdsdN-1" target="_blank" rel="noreferrer" class="button-secondary">Ouvrir Figma</a>
       </div>
     </div>
-    <div>
-      <h3 class="font-bold mb-6 text-gray-800 uppercase tracking-wider text-xs">Outils & intégration</h3>
-      <div class="flex flex-wrap gap-3">
-        <span class="skill-pill">Figma</span>
-        <span class="skill-pill">HTML / CSS</span>
-        <span class="skill-pill">Tailwind</span>
-        <span class="skill-pill">Accessibilité</span>
-        <span class="skill-pill">React / Vue en support</span>
-        <span class="skill-pill">Culture produit</span>
+
+    <div class="hero-visual">
+      <div class="portrait-shell">
+        <div class="portrait-glow"></div>
+        <img src="suphile.png" alt="Portrait d'Ericka Suphile" class="portrait-image">
+      </div>
+      <div class="floating-card floating-card-top">
+        <span class="floating-label">Disponible</span>
+        <strong>Septembre 2026</strong>
+      </div>
+      <div class="floating-card floating-card-bottom">
+        <span class="floating-label">Focus</span>
+        <strong>Branding, Figma, UI mobile</strong>
+      </div>
+      <div class="hero-note">
+        <p class="note-title">Direction visuelle</p>
+        <p class="note-text">Un portfolio pensé comme une expérience éditoriale, pas comme une simple liste de stacks techniques.</p>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section id="projects" class="max-w-6xl mx-auto px-8 py-16 border-t border-blue-100 bg-white rounded-3xl shadow-lg mt-12 mb-20">
-    <h2 class="text-3xl font-headline font-bold mb-16 text-center text-gray-800">Sélection de projets</h2>
-    <div class="space-y-20">
-        <div class="project-detail flex flex-col md:flex-row items-start gap-10">
-            <img src="projet3.png" alt="Concept visuel d'application musicale sur Figma" class="w-full md:w-2/5 h-64 md:h-80 object-cover object-center rounded-xl shadow-md">
-            <div class="flex-1 w-full">
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-[#00a6d6] mb-3">À la une</p>
-                <div class="flex flex-wrap gap-3 mb-4">
-                    <span class="project-pill">Concept visuel</span>
-                    <span class="project-pill">UI mobile</span>
-                    <span class="project-pill">Figma</span>
-                </div>
-                <h3 class="text-2xl font-bold mb-6 font-headline text-[#004ced]">UI concept - application musicale</h3>
-                <p class="description-text mb-8 text-gray-700 italic border-l-4 border-[#00c3ff] pl-4">
-                    Exploration visuelle d'une application musicale mobile pensée comme une expérience fraîche, pop et intuitive, avec plusieurs écrans de navigation et de lecture.
-                </p>
-                <ul class="space-y-4 mb-12 text-gray-700">
-                    <li class="flex items-center gap-3"><i class="fas fa-palette text-[#004ced]"></i> Direction artistique légère autour d'une palette mint, de touches pop et d'un univers illustré</li>
-                    <li class="flex items-center gap-3"><i class="fas fa-mobile-screen-button text-[#004ced]"></i> Déclinaison de plusieurs écrans : accueil, recherche, bibliothèque, playlists et lancement d'écoute</li>
-                    <li class="flex items-center gap-3"><i class="fas fa-layer-group text-[#004ced]"></i> Travail de composition sur les cartes, les modules éditoriaux et la navigation mobile</li>
-                    <li class="flex items-center gap-3"><i class="fas fa-wand-magic-sparkles text-[#004ced]"></i> Projet centré sur le rendu visuel, la cohérence d'ensemble et l'ambiance de marque</li>
-                </ul>
-                <a href="https://www.figma.com/design/Qmzwa9ebS1hrnTlI7C9oza/Untitled?node-id=0-1&t=8WP6FcGeJfHIdsdN-1" target="_blank" rel="noreferrer" class="button inline-block text-center py-3 px-8 shadow-lg shadow-blue-200">
-                    <i class="fas fa-arrow-up-right-from-square mr-2"></i> Voir sur Figma
-                </a>
-            </div>
-        </div>
-
-        <div class="border-t border-blue-100 my-16"></div>
-
-        <div class="project-detail flex flex-col md:flex-row items-start gap-10">
-            <img src="projet1.png" alt="Ameya" class="w-full md:w-2/5 h-64 md:h-80 object-cover rounded-xl shadow-md">
-            <div class="flex-1 w-full">
-                <div class="flex flex-wrap gap-3 mb-4">
-                    <span class="project-pill">Produit digital</span>
-                    <span class="project-pill">UI émotionnelle</span>
-                    <span class="project-pill">Web</span>
-                </div>
-                <h3 class="text-2xl font-bold mb-6 font-headline text-[#004ced]">Ameya</h3>
-                <p class="description-text mb-8 text-gray-700 italic border-l-4 border-[#00c3ff] pl-4">
-                    Création complète de l'identité de marque et de l'expérience utilisateur. Recherche utilisateur sur la gestion de l'anonymat, conception du Design System sur Figma et intégration Pixel-Perfect en React/Vue.js.
-                </p>
-                <ul class="space-y-4 mb-12 text-gray-700">
-                    <li class="flex items-center gap-3"><i class="fas fa-paintbrush text-[#004ced]"></i> Univers visuel immersif et palette pensée pour accompagner des sujets personnels</li>
-                    <li class="flex items-center gap-3"><i class="fas fa-users text-[#004ced]"></i> Parcours thématiques, cartes éditoriales et espaces d'échange</li>
-                    <li class="flex items-center gap-3"><i class="fas fa-pen-nib text-[#004ced]"></i> Interface conçue pour favoriser l'expression, la douceur et la confidentialité</li>
-                    <li class="flex items-center gap-3"><i class="fas fa-globe text-[#004ced]"></i> Projet mené du concept à l'intégration front-end pour donner vie à l'expérience</li>
-                </ul>
-                <a href="https://ameya.company" target="_blank" rel="noreferrer" class="button inline-block text-center py-3 px-8 shadow-lg shadow-blue-200">
-                    <i class="fas fa-external-link-alt mr-2"></i> Voir le site
-                </a>
-            </div>
-        </div>
-
-        <div class="border-t border-blue-100 my-16"></div>
-
-        <div class="project-detail flex flex-col md:flex-row items-start gap-10">
-            <img src="projet2.png" alt="PathSense" class="w-full md:w-2/5 h-64 md:h-80 object-cover rounded-xl shadow-md">
-            <div class="flex-1 w-full">
-                <div class="flex flex-wrap gap-3 mb-4">
-                    <span class="project-pill">Accessibilité</span>
-                    <span class="project-pill">UX</span>
-                    <span class="project-pill">Concept service</span>
-                </div>
-                <h3 class="text-2xl font-bold mb-6 font-headline text-[#004ced]">PathSense</h3>
-                <p class="description-text mb-8 text-gray-700 italic border-l-4 border-[#00c3ff] pl-4">
-                    Projet de Product Design centré sur l'accessibilité numérique (normes RGAA). Conception d'une interface utilisateur inclusive et adaptative, prototypage des parcours et interactions vocales.
-                </p>
-                <ul class="space-y-4 mb-12 text-gray-700">
-                    <li class="flex items-center gap-3"><i class="fas fa-universal-access text-[#004ced]"></i> Priorité donnée à la lisibilité, aux contrastes et à la compréhension des actions</li>
-                    <li class="flex items-center gap-3"><i class="fas fa-microphone text-[#004ced]"></i> Parcours vocal et repères visuels simplifiés pour réduire la charge cognitive</li>
-                    <li class="flex items-center gap-3"><i class="fas fa-route text-[#004ced]"></i> Organisation des écrans autour de l'orientation, de la reassurance et du guidage</li>
-                    <li class="flex items-center gap-3"><i class="fas fa-compass-drafting text-[#004ced]"></i> Projet mêlant accessibilité, expérience utilisateur et faisabilité digitale</li>
-                </ul>
-                <a href="https://groupe-gamma-og4f.vercel.app/home" target="_blank" rel="noreferrer" class="button inline-block text-center py-3 px-8 shadow-lg shadow-blue-200">
-                    <i class="fas fa-external-link-alt mr-2"></i> Voir le site
-                </a>
-            </div>
-        </div>
+  <section id="skills" class="statement-section">
+    <div class="section-head">
+      <p class="section-kicker">Parcours</p>
+      <h2 class="section-title">Design & création</h2>
     </div>
-</section>
+    <div class="statement-card">
+      <p class="statement-line">Design & Création : UX/UI Design, Wireframing, Mobile-First, Design System, Prototypage interactif, Branding / Identité visuelle</p>
+      <p class="statement-caption">Une approche orientée interface, cohérence de marque et expérience utilisateur, avec une base technique utile pour dialoguer avec les équipes de développement.</p>
+    </div>
+  </section>
 
-<section id="contact" class="max-w-4xl mx-auto px-8 py-20 text-center border-t border-blue-100">
-  <h2 class="text-3xl font-headline font-bold mb-6 text-gray-800">Contact</h2>
-  <a href="mailto:ntsimbaericka810@gmail.com" class="text-[#004ced] font-bold text-xl hover:text-[#00c3ff] transition-colors underline">
-    ntsimbaericka810@gmail.com
-  </a>
-</section>
+  <section class="toolkit-section">
+    <div class="section-head">
+      <p class="section-kicker">Sensibilité</p>
+      <h2 class="section-title">Outils & langage visuel</h2>
+    </div>
+    <div class="toolkit-grid">
+      <article class="tool-card">
+        <p class="tool-card-title">Conception</p>
+        <div class="tool-pills">
+          <span class="skill-pill">Figma</span>
+          <span class="skill-pill">Wireframes</span>
+          <span class="skill-pill">Design System</span>
+          <span class="skill-pill">Prototypage</span>
+        </div>
+      </article>
+      <article class="tool-card">
+        <p class="tool-card-title">Direction artistique</p>
+        <div class="tool-pills">
+          <span class="skill-pill">Palette couleur</span>
+          <span class="skill-pill">Typographie</span>
+          <span class="skill-pill">Branding</span>
+          <span class="skill-pill">Composition</span>
+        </div>
+      </article>
+      <article class="tool-card">
+        <p class="tool-card-title">Culture produit</p>
+        <div class="tool-pills">
+          <span class="skill-pill">Mobile-First</span>
+          <span class="skill-pill">Accessibilité</span>
+          <span class="skill-pill">HTML / CSS</span>
+          <span class="skill-pill">React / Vue en support</span>
+        </div>
+      </article>
+    </div>
+  </section>
 
+  <section id="projects" class="projects-section">
+    <div class="section-head section-head-wide">
+      <div>
+        <p class="section-kicker">Portfolio</p>
+        <h2 class="section-title">Sélection de projets</h2>
+      </div>
+      <p class="section-copy">Des concepts visuels et des interfaces pensées pour raconter une marque, structurer un parcours et créer une ambiance digitale forte.</p>
+    </div>
+
+    <div class="projects-stack">
+      <article class="project-card project-card-featured">
+        <div class="project-media featured-media">
+          <img src="projet3.png" alt="Concept visuel d'application musicale sur Figma">
+        </div>
+        <div class="project-copy">
+          <p class="project-flag">À la une</p>
+          <div class="project-tags">
+            <span class="project-pill">Concept visuel</span>
+            <span class="project-pill">UI mobile</span>
+            <span class="project-pill">Figma</span>
+          </div>
+          <h3 class="project-title">UI concept - application musicale</h3>
+          <p class="project-description">Exploration visuelle d'une application musicale mobile pensée comme une expérience fraîche, pop et intuitive, avec plusieurs écrans de navigation et de lecture.</p>
+          <ul class="project-points">
+            <li><i class="fas fa-palette"></i> Palette mint, touches pop et univers illustré pour créer une ambiance de marque immédiate</li>
+            <li><i class="fas fa-mobile-screen-button"></i> Déclinaison de plusieurs écrans : accueil, recherche, bibliothèque, playlists et lancement d'écoute</li>
+            <li><i class="fas fa-layer-group"></i> Travail de composition sur les cartes, les modules éditoriaux et la navigation mobile</li>
+            <li><i class="fas fa-wand-magic-sparkles"></i> Projet centré sur le rendu visuel, la cohérence d'ensemble et l'énergie du concept</li>
+          </ul>
+          <a href="https://www.figma.com/design/Qmzwa9ebS1hrnTlI7C9oza/Untitled?node-id=0-1&t=8WP6FcGeJfHIdsdN-1" target="_blank" rel="noreferrer" class="button-primary">Voir sur Figma</a>
+        </div>
+      </article>
+
+      <div class="projects-grid">
+        <article class="project-card project-card-soft">
+          <div class="project-media">
+            <img src="projet1.png" alt="Aperçu du projet Ameya">
+          </div>
+          <div class="project-copy">
+            <div class="project-tags">
+              <span class="project-pill">Produit digital</span>
+              <span class="project-pill">Design System</span>
+              <span class="project-pill">React / Vue</span>
+            </div>
+            <h3 class="project-title">Ameya</h3>
+            <p class="project-description">Création complète de l'identité de marque et de l'expérience utilisateur. Recherche utilisateur sur la gestion de l'anonymat, conception du Design System sur Figma et intégration Pixel-Perfect en React/Vue.js.</p>
+            <a href="https://ameya.company" target="_blank" rel="noreferrer" class="button-secondary">Voir le site</a>
+          </div>
+        </article>
+
+        <article class="project-card project-card-dark">
+          <div class="project-media">
+            <img src="projet2.png" alt="Aperçu du projet PathSense">
+          </div>
+          <div class="project-copy">
+            <div class="project-tags">
+              <span class="project-pill">Accessibilité</span>
+              <span class="project-pill">RGAA</span>
+              <span class="project-pill">Product Design</span>
+            </div>
+            <h3 class="project-title">PathSense</h3>
+            <p class="project-description">Projet de Product Design centré sur l'accessibilité numérique (normes RGAA). Conception d'une interface utilisateur inclusive et adaptative, prototypage des parcours et interactions vocales.</p>
+            <a href="https://groupe-gamma-og4f.vercel.app/home" target="_blank" rel="noreferrer" class="button-secondary button-secondary-light">Voir le site</a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact" class="contact-section">
+    <div class="contact-card">
+      <p class="section-kicker">Contact</p>
+      <h2 class="section-title">Disponible pour une alternance en webdesign, UI design ou brand content digital.</h2>
+      <p class="contact-copy">Je recherche une alternance à partir de septembre 2026, avec un portfolio pensé pour des marques, des studios créatifs et des équipes produit sensibles à l'image.</p>
+      <a href="mailto:ntsimbaericka810@gmail.com" class="button-primary">Me contacter</a>
+    </div>
+  </section>
 </main>
 
-<footer class="bg-white py-8 text-center text-gray-500 text-sm border-t border-blue-50">
+<footer class="site-footer">
   <p>© 2026 Ericka Suphile. Tous droits réservés.</p>
 </footer>
 
