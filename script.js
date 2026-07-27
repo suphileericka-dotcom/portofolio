@@ -38,7 +38,7 @@ const ui = {
 const saveKey = "bosquet-lent-save";
 const optionsKey = "bosquet-lent-options";
 const playerKey = "bosquet-lent-player";
-const world = { ground: 0, chapterSize: 900 };
+const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
 const joystick = { active: false, id: null, x: 0, y: 0 };
@@ -89,14 +89,14 @@ const villagers = [
 ];
 
 const villagerNeeds = [
-  { itemId: "leaf", itemLabel: "Feuille nervuree", need: "recoudre une carte dechiree par le vent" },
-  { itemId: "stone", itemLabel: "Pierre polie", need: "caler la porte d'une maison qui tremble" },
-  { itemId: "feather", itemLabel: "Plume claire", need: "terminer une lettre qui ne voulait pas partir" },
-  { itemId: "moss", itemLabel: "Statue moussue", need: "se souvenir du nom d'une vieille place" },
-  { itemId: "shell", itemLabel: "Coquille de riviere", need: "appeler l'eau jusqu'au puits" },
-  { itemId: "cone", itemLabel: "Pomme de pin bleue", need: "rallumer un four trop froid" },
-  { itemId: "mushroom", itemLabel: "Champignon lueur", need: "guider un enfant dans la nuit" },
-  { itemId: "star", itemLabel: "Eclat d'etoile", need: "retrouver le chemin du matin" }
+  { itemId: "leaf", itemLabel: "Feuille nervuree", need: "recoudre une carte dechiree par le vent", use: "sert a reparer les cartes fragiles et ouvrir des raccourcis dans les villages" },
+  { itemId: "stone", itemLabel: "Pierre polie", need: "caler la porte d'une maison qui tremble", use: "sert a stabiliser des mecanismes, des portes et des ponts anciens" },
+  { itemId: "feather", itemLabel: "Plume claire", need: "terminer une lettre qui ne voulait pas partir", use: "sert a ecrire des messages et apaiser certains habitants" },
+  { itemId: "moss", itemLabel: "Statue moussue", need: "se souvenir du nom d'une vieille place", use: "sert de memoire vivante pour reveiller des lieux oublies" },
+  { itemId: "shell", itemLabel: "Coquille de riviere", need: "appeler l'eau jusqu'au puits", use: "sert a comprendre les rivieres, les puits et les passages humides" },
+  { itemId: "cone", itemLabel: "Pomme de pin bleue", need: "rallumer un four trop froid", use: "sert a produire une chaleur douce sans bruler la foret" },
+  { itemId: "mushroom", itemLabel: "Champignon lueur", need: "guider un enfant dans la nuit", use: "sert de lampe calme pour les caves, les nuits et les maisons eteintes" },
+  { itemId: "star", itemLabel: "Eclat d'etoile", need: "retrouver le chemin du matin", use: "sert a activer les grands passages apres la route scenarisee" }
 ];
 
 const riddles = [
@@ -162,25 +162,34 @@ function makeId(prefix, index) {
   return `${prefix}-${index}`;
 }
 
+function isExpandedWorld(x = state.player.x) {
+  return state.cinematicPlayed;
+}
+
 function getChapter(x = state.player.x) {
-  return Math.max(1, Math.floor(x / world.chapterSize) + 1);
+  if (x < world.firstRouteEnd) return Math.max(1, Math.floor(x / world.chapterSize) + 1);
+  return Math.max(4, Math.floor((x - world.firstRouteEnd) / world.chapterSize) + 4);
 }
 
 function getWeatherForChapter(chapter = state.chapter) {
-  return weatherTypes[(chapter - 1) % weatherTypes.length];
+  if (!isExpandedWorld()) return weatherTypes[0];
+  const index = ((chapter - 4) % weatherTypes.length + weatherTypes.length) % weatherTypes.length;
+  return weatherTypes[index];
 }
 
 function getProceduralDiscoveries() {
-  const start = Math.max(0, Math.floor((state.camera.x - 500) / world.chapterSize));
-  const end = Math.floor((state.camera.x + window.innerWidth + 900) / world.chapterSize);
+  if (!isExpandedWorld()) return discoveries;
+  const relativeCamera = state.camera.x - world.firstRouteEnd;
+  const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
+  const end = Math.floor((relativeCamera + window.innerWidth + 900) / world.chapterSize);
   const items = [];
   for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
-    const chapter = chapterIndex + 1;
+    const chapter = chapterIndex + 4;
     const local = discoveries[chapterIndex % discoveries.length];
     const jitter = 160 + hashNumber(chapter * 3.1) * 520;
     items.push({
       id: makeId(local.id, chapter),
-      x: chapterIndex * world.chapterSize + jitter,
+      x: world.firstRouteEnd + chapterIndex * world.chapterSize + jitter,
       label: chapter <= discoveries.length ? local.label : `${local.label} ${chapter}`,
       text: chapter <= discoveries.length
         ? local.text
@@ -191,26 +200,30 @@ function getProceduralDiscoveries() {
 }
 
 function getProceduralLanterns() {
-  const start = Math.max(0, Math.floor((state.camera.x - 500) / world.chapterSize));
-  const end = Math.floor((state.camera.x + window.innerWidth + 900) / world.chapterSize);
+  if (!isExpandedWorld()) return lanterns;
+  const relativeCamera = state.camera.x - world.firstRouteEnd;
+  const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
+  const end = Math.floor((relativeCamera + window.innerWidth + 900) / world.chapterSize);
   const items = [];
   for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
     if (chapterIndex % 2 === 0) {
-      items.push({ id: makeId("lantern", chapterIndex + 1), x: chapterIndex * world.chapterSize + 650 + hashNumber(chapterIndex) * 120 });
+      items.push({ id: makeId("lantern", chapterIndex + 4), x: world.firstRouteEnd + chapterIndex * world.chapterSize + 650 + hashNumber(chapterIndex) * 120 });
     }
   }
   return items;
 }
 
 function getProceduralRests() {
-  const start = Math.max(0, Math.floor((state.camera.x - 500) / world.chapterSize));
-  const end = Math.floor((state.camera.x + window.innerWidth + 900) / world.chapterSize);
+  if (!isExpandedWorld()) return rests;
+  const relativeCamera = state.camera.x - world.firstRouteEnd;
+  const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
+  const end = Math.floor((relativeCamera + window.innerWidth + 900) / world.chapterSize);
   const labels = ["banc de clairiere", "rocher pres de la riviere", "souche phosphorescente", "marche d'un vieux puits"];
   const items = [];
   for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
     if (chapterIndex % 3 !== 1) {
       items.push({
-        x: chapterIndex * world.chapterSize + 310 + hashNumber(chapterIndex + 9) * 180,
+        x: world.firstRouteEnd + chapterIndex * world.chapterSize + 310 + hashNumber(chapterIndex + 9) * 180,
         label: labels[chapterIndex % labels.length]
       });
     }
@@ -219,14 +232,16 @@ function getProceduralRests() {
 }
 
 function getProceduralVillages() {
-  const start = Math.max(0, Math.floor((state.camera.x - 800) / world.chapterSize));
-  const end = Math.floor((state.camera.x + window.innerWidth + 1200) / world.chapterSize);
+  if (!isExpandedWorld()) return [];
+  const relativeCamera = state.camera.x - world.firstRouteEnd;
+  const start = Math.max(0, Math.floor((relativeCamera - 800) / world.chapterSize));
+  const end = Math.floor((relativeCamera + window.innerWidth + 1200) / world.chapterSize);
   const items = [];
   for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
-    if (chapterIndex > 0 && chapterIndex % 4 === 0) {
+    if (chapterIndex >= 0 && chapterIndex % 2 === 0) {
       items.push({
-        x: chapterIndex * world.chapterSize + 260,
-        name: `Village ${chapterIndex / 4}`,
+        x: world.firstRouteEnd + chapterIndex * world.chapterSize + 520,
+        name: `Village ${Math.floor(chapterIndex / 2) + 1}`,
         villager: villagers[chapterIndex % villagers.length]
       });
     }
@@ -460,7 +475,7 @@ function drawWorldObjects() {
   });
 
   getProceduralDiscoveries().forEach((item, index) => {
-    const collected = state.discoveries.includes(item.id);
+    const collected = hasCollectedDiscovery(item);
     if (collected) return;
     const y = world.ground - 20 + Math.sin(state.time * 2 + index) * 5;
     const color = ["#f0bd6c", "#67b4c8", "#f7f3df", "#8ebf76", "#ce6f75"][index % 5];
@@ -504,7 +519,9 @@ function drawWorldObjects() {
 }
 
 function drawRiver() {
-  const riverX = Math.floor((state.camera.x + window.innerWidth / 2) / 3600) * 3600 + 3820;
+  const riverX = isExpandedWorld()
+    ? Math.floor((state.camera.x + window.innerWidth / 2 - world.firstRouteEnd) / 4200) * 4200 + world.firstRouteEnd + 3820
+    : 3820;
   const y = world.ground + 25;
   if (riverX < state.camera.x - 600 || riverX > state.camera.x + window.innerWidth + 600) return;
   ctx.fillStyle = "rgba(103, 180, 200, 0.74)";
@@ -711,7 +728,7 @@ function update(dt) {
   state.chapter = getChapter();
   state.weather = getWeatherForChapter().id;
   if (previousWeather !== state.weather) announceWeather();
-  if (state.chapter >= 8 && !state.cinematicPlayed) playChapterEightCinematic();
+  if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
   const targetZoom = p.rest > 0 ? 1.08 : 1;
   state.camera.zoom += (targetZoom - state.camera.zoom) * Math.min(1, dt * 2.5);
@@ -739,7 +756,7 @@ function interact() {
     return;
   }
 
-  const item = getProceduralDiscoveries().find((entry) => !state.discoveries.includes(entry.id) && Math.abs(entry.x - p.x) < 78);
+  const item = getProceduralDiscoveries().find((entry) => !hasCollectedDiscovery(entry) && Math.abs(entry.x - p.x) < 78);
   if (item) {
     state.discoveries.push(item.id);
     showMessage(`${item.label}: ${item.text}`);
@@ -809,19 +826,27 @@ function hasCollectedBaseItem(itemId) {
   return state.discoveries.some((id) => baseDiscoveryId(id) === itemId);
 }
 
+function hasCollectedDiscovery(item) {
+  return state.discoveries.includes(item.id) || state.discoveries.includes(normalizeDiscoveryId(item.id));
+}
+
+function getItemUse(itemId) {
+  const need = villagerNeeds.find((entry) => entry.itemId === baseDiscoveryId(itemId));
+  return need ? need.use : "servira peut-etre plus loin sur la route";
+}
+
 function openVillagerHelp(villager) {
   const alreadyHelped = state.helpedVillagers.includes(villager.villageId);
   const hasItem = hasCollectedBaseItem(villager.need.itemId);
-  const riddle = riddles[(state.chapter + state.discoveries.length) % riddles.length];
   ui.villagerTitle.textContent = villager.role;
   ui.giveItemButton.disabled = alreadyHelped || !hasItem;
   ui.giveItemButton.style.opacity = alreadyHelped || !hasItem ? "0.55" : "1";
   if (alreadyHelped) {
-    ui.villagerText.textContent = `${villager.line} Tu l'as deja aide. ${riddle}`;
+    ui.villagerText.textContent = `${villager.line} Tu l'as deja aide. Le village se souvient de ton geste.`;
   } else if (hasItem) {
-    ui.villagerText.textContent = `${villager.line} Il lui faudrait ${villager.need.itemLabel} pour ${villager.need.need}. Tu peux lui donner, ou garder l'objet.`;
+    ui.villagerText.textContent = `${villager.line} Il te demande: "Vous avez ${villager.need.itemLabel} ? J'en aurais besoin pour ${villager.need.need}." Tu peux lui donner, ou garder l'objet.`;
   } else {
-    ui.villagerText.textContent = `${villager.line} Il lui faudrait ${villager.need.itemLabel} pour ${villager.need.need}. Si tu le trouves, le carnet s'en souviendra.`;
+    ui.villagerText.textContent = `${villager.line} Il te demande: "Vous avez ${villager.need.itemLabel} ? J'en aurais besoin pour ${villager.need.need}." Tu ne l'as pas encore dans ton carnet.`;
   }
   pendingVillagerHelp = villager;
   ui.villagerDialog.showModal();
@@ -851,16 +876,16 @@ function refusePendingHelp() {
   showMessage(`${name} hoche la tete. Tu gardes ton objet et tu peux continuer.`);
 }
 
-function playChapterEightCinematic() {
+function playRouteEndCinematic() {
   state.cinematicPlayed = true;
   running = false;
   saveGame();
   const name = state.playerProfile.nickname || "Voyageur";
   const frames = [
-    `${name} a traverse les clairieres sans jamais ouvrir de compte.`,
-    "Le jeu se souvenait pourtant de chaque pas: un identifiant anonyme, un pseudo, des lanternes rallumees.",
-    "Des bancs ont ralenti le temps. Des villages ont murmure que la fin n'etait peut-etre qu'une rumeur.",
-    "Partie 8: le sentier cesse d'etre une promenade. Les vraies enigmes commencent."
+    `${name} arrive au bout de la longue route.`,
+    "Derriere lui: les lanternes, les petites trouvailles, les bancs ou le temps ralentissait.",
+    "Il croyait atteindre la fin. Le sentier, lui, ouvre un autre monde.",
+    "A partir d'ici, les villages apparaissent, les habitants demandent de l'aide, et la route ne s'arrete plus."
   ];
   let index = 0;
   ui.cinematic.classList.add("is-visible");
@@ -871,7 +896,7 @@ function playChapterEightCinematic() {
       clearInterval(timer);
       ui.cinematic.classList.remove("is-visible");
       running = true;
-      showMessage("Le monde continue. Il n'y a pas de fin, seulement des traces plus profondes.");
+      showMessage("Le monde s'ouvre. Les villages arrivent plus loin sur la route.");
       return;
     }
     ui.cinematicText.textContent = frames[index];
@@ -893,10 +918,11 @@ function buildJournal() {
     ui.journalList.appendChild(entry);
   }
   foundItems.forEach((id) => {
-    const item = visibleItems.find((entry) => entry.id === id) || { label: id.replace(/-/g, " "), text: "Une trace retrouvee dans une ancienne partie du chemin." };
+    const baseItem = discoveries.find((entry) => entry.id === baseDiscoveryId(id));
+    const item = visibleItems.find((entry) => entry.id === id) || baseItem || { label: id.replace(/-/g, " "), text: "Une trace retrouvee dans une ancienne partie du chemin." };
     const entry = document.createElement("article");
     entry.className = "journal-item";
-    entry.innerHTML = `<strong>${item.label}</strong><p>${item.text}</p>`;
+    entry.innerHTML = `<strong>${item.label}</strong><p>${item.text}</p><p>Utilite: ${getItemUse(id)}.</p>`;
     ui.journalList.appendChild(entry);
   });
 }
@@ -920,6 +946,7 @@ function resetGame() {
   state.helpedVillagers = [];
   state.camera.x = 0;
   state.chapter = 1;
+  state.weather = "clear";
   state.cinematicPlayed = false;
   state.player.rest = 0;
   localStorage.removeItem(saveKey);
@@ -954,7 +981,7 @@ function loadGame() {
     state.lanterns = Array.isArray(payload.lanterns) ? payload.lanterns : [];
     state.helpedVillagers = Array.isArray(payload.helpedVillagers) ? payload.helpedVillagers : [];
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
-    state.cinematicPlayed = Boolean(payload.cinematicPlayed);
+    state.cinematicPlayed = Boolean(payload.cinematicPlayed) && state.player.x >= world.firstRouteEnd;
     state.party = normalizeParty(payload.party);
     state.chapter = getChapter(state.player.x);
     if (payload.nickname) state.playerProfile.nickname = payload.nickname;
