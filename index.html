@@ -17,7 +17,22 @@
       <div class="title-block">
         <p class="eyebrow">Marche contemplative en 2D</p>
         <h1>Bosquet Lent</h1>
-        <p class="intro">Explore une foret douce, allume les lanternes, collectionne de petites trouvailles et repose-toi pres de la riviere.</p>
+        <p class="intro">Explore une foret douce et infinie, traverse des villages, rencontre des habitants, resous de petites enigmes et repose-toi quand le monde devient trop rapide.</p>
+        <div class="player-card" aria-label="Identification du joueur">
+          <label>
+            <span>Pseudo</span>
+            <input id="nicknameInput" type="text" maxlength="18" autocomplete="nickname" placeholder="Voyageur">
+          </label>
+          <p id="anonymousId" class="identity-note"></p>
+        </div>
+        <div class="party-card" aria-label="Code de partie">
+          <button id="createPartyButton" class="secondary-button" type="button">Creer une partie</button>
+          <label>
+            <span>Code ami</span>
+            <input id="partyCodeInput" type="text" maxlength="6" inputmode="text" placeholder="X8P4K2">
+          </label>
+          <button id="joinPartyButton" class="secondary-button" type="button">Rejoindre</button>
+        </div>
         <div class="start-actions">
           <button id="startButton" class="primary-button" type="button">Commencer</button>
           <button id="continueButton" class="secondary-button" type="button">Continuer</button>
@@ -28,9 +43,12 @@
     <section class="hud" aria-live="polite">
       <div class="hud-group">
         <span id="biomeLabel" class="hud-pill">Bosquet vert</span>
+        <span id="chapterLabel" class="hud-pill">Partie 1</span>
+        <span id="weatherLabel" class="hud-pill">Temps clair</span>
         <span id="discoveryCount" class="hud-pill">0 / 8 decouvertes</span>
       </div>
       <div class="hud-group">
+        <span id="partyLabel" class="hud-pill">Solo</span>
         <button id="muteButton" class="sound-button" type="button" title="Couper le son" aria-label="Couper le son">Son</button>
         <button id="journalButton" class="icon-button" type="button" title="Carnet">Carnet</button>
         <button id="optionsButton" class="icon-button" type="button" title="Options">Options</button>
@@ -38,6 +56,11 @@
     </section>
 
     <aside id="message" class="message" aria-live="polite"></aside>
+    <section id="cinematic" class="cinematic" aria-live="polite">
+      <div class="cinematic-frame">
+        <p id="cinematicText"></p>
+      </div>
+    </section>
 
     <div id="mobilePad" class="mobile-pad" aria-hidden="true">
       <div id="padKnob" class="pad-knob"></div>

@@ -13,7 +13,17 @@ const ui = {
   journalList: document.getElementById("journalList"),
   resetButton: document.getElementById("resetButton"),
   message: document.getElementById("message"),
+  cinematic: document.getElementById("cinematic"),
+  cinematicText: document.getElementById("cinematicText"),
+  nicknameInput: document.getElementById("nicknameInput"),
+  anonymousId: document.getElementById("anonymousId"),
+  createPartyButton: document.getElementById("createPartyButton"),
+  partyCodeInput: document.getElementById("partyCodeInput"),
+  joinPartyButton: document.getElementById("joinPartyButton"),
   biomeLabel: document.getElementById("biomeLabel"),
+  chapterLabel: document.getElementById("chapterLabel"),
+  weatherLabel: document.getElementById("weatherLabel"),
+  partyLabel: document.getElementById("partyLabel"),
   discoveryCount: document.getElementById("discoveryCount"),
   musicVolume: document.getElementById("musicVolume"),
   natureVolume: document.getElementById("natureVolume"),
@@ -23,7 +33,8 @@ const ui = {
 
 const saveKey = "bosquet-lent-save";
 const optionsKey = "bosquet-lent-options";
-const world = { width: 7200, ground: 0 };
+const playerKey = "bosquet-lent-player";
+const world = { ground: 0, chapterSize: 900 };
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
 const joystick = { active: false, id: null, x: 0, y: 0 };
@@ -36,9 +47,14 @@ const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0 },
   camera: { x: 0, y: 0, zoom: 1 },
   time: 0,
+  chapter: 1,
+  weather: "clear",
+  cinematicPlayed: false,
   discoveries: [],
   lanterns: [],
   startedAtLeastOnce: false,
+  playerProfile: { id: "", nickname: "Voyageur" },
+  party: { code: "", members: [] },
   options: { music: 0.22, nature: 0.32, muted: false, audioVersion: 2 }
 };
 
@@ -47,6 +63,30 @@ const biomes = [
   { at: 1800, name: "Clairiere fleurie", sky: "#b5cba8", haze: "#f2c98e", tree: "#4d6c45", leaf: "#9aaf67", grass: "#b8a75f" },
   { at: 3600, name: "Sous-bois frais", sky: "#8bb0bc", haze: "#d8e5ed", tree: "#2d4c57", leaf: "#6f8a8d", grass: "#7a9a8f" },
   { at: 5400, name: "Nuit aux champignons", sky: "#24324f", haze: "#a7d9c4", tree: "#172a38", leaf: "#3f6a75", grass: "#486d69" }
+];
+
+const weatherTypes = [
+  { id: "clear", label: "Temps clair", sky: "#ffffff", alpha: 0, wind: 0.85 },
+  { id: "rain", label: "Pluie fine", sky: "#9eb1bd", alpha: 0.22, wind: 1.25 },
+  { id: "mist", label: "Brume", sky: "#dbe7df", alpha: 0.28, wind: 0.55 },
+  { id: "wind", label: "Grand vent", sky: "#d9c57c", alpha: 0.14, wind: 1.75 },
+  { id: "snow", label: "Neige lente", sky: "#eef4f7", alpha: 0.18, wind: 0.68 }
+];
+
+const villagers = [
+  { role: "Tisserande d'ombres", line: "Elle dit que les chemins longs finissent par raconter ton nom." },
+  { role: "Facteur des collines", line: "Il porte des lettres sans adresse, seulement des intuitions." },
+  { role: "Gardienne du puits", line: "Elle garde les questions jusqu'a ce que quelqu'un ose les poser." },
+  { role: "Enfant aux lucioles", line: "Il connait une chanson qui ouvre les barrieres fatiguees." },
+  { role: "Cartographe sans carte", line: "Il dessine le monde apres l'avoir oublie." },
+  { role: "Boulangere de pluie", line: "Son pain rechauffe les poches quand la meteo tourne." }
+];
+
+const riddles = [
+  "Enigme: je disparais quand tu cours, je grandis quand tu t'assois. Qui suis-je ?",
+  "Enigme: trois lanternes savent la route, mais une seule attend ton silence.",
+  "Enigme: le village change de place quand personne ne le regarde.",
+  "Enigme: ce que tu ramasses n'est pas un objet, mais une preuve que tu etais la."
 ];
 
 const discoveries = [
@@ -96,6 +136,87 @@ const trees = Array.from({ length: 95 }, (_, index) => {
   };
 });
 
+function hashNumber(value) {
+  const x = Math.sin(value * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function makeId(prefix, index) {
+  return `${prefix}-${index}`;
+}
+
+function getChapter(x = state.player.x) {
+  return Math.max(1, Math.floor(x / world.chapterSize) + 1);
+}
+
+function getWeatherForChapter(chapter = state.chapter) {
+  return weatherTypes[(chapter - 1) % weatherTypes.length];
+}
+
+function getProceduralDiscoveries() {
+  const start = Math.max(0, Math.floor((state.camera.x - 500) / world.chapterSize));
+  const end = Math.floor((state.camera.x + window.innerWidth + 900) / world.chapterSize);
+  const items = [];
+  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
+    const chapter = chapterIndex + 1;
+    const local = discoveries[chapterIndex % discoveries.length];
+    const jitter = 160 + hashNumber(chapter * 3.1) * 520;
+    items.push({
+      id: makeId(local.id, chapter),
+      x: chapterIndex * world.chapterSize + jitter,
+      label: chapter <= discoveries.length ? local.label : `${local.label} ${chapter}`,
+      text: chapter <= discoveries.length
+        ? local.text
+        : `${local.text} Ce fragment semble venir d'une partie qui n'avait pas encore de nom.`
+    });
+  }
+  return items;
+}
+
+function getProceduralLanterns() {
+  const start = Math.max(0, Math.floor((state.camera.x - 500) / world.chapterSize));
+  const end = Math.floor((state.camera.x + window.innerWidth + 900) / world.chapterSize);
+  const items = [];
+  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
+    if (chapterIndex % 2 === 0) {
+      items.push({ id: makeId("lantern", chapterIndex + 1), x: chapterIndex * world.chapterSize + 650 + hashNumber(chapterIndex) * 120 });
+    }
+  }
+  return items;
+}
+
+function getProceduralRests() {
+  const start = Math.max(0, Math.floor((state.camera.x - 500) / world.chapterSize));
+  const end = Math.floor((state.camera.x + window.innerWidth + 900) / world.chapterSize);
+  const labels = ["banc de clairiere", "rocher pres de la riviere", "souche phosphorescente", "marche d'un vieux puits"];
+  const items = [];
+  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
+    if (chapterIndex % 3 !== 1) {
+      items.push({
+        x: chapterIndex * world.chapterSize + 310 + hashNumber(chapterIndex + 9) * 180,
+        label: labels[chapterIndex % labels.length]
+      });
+    }
+  }
+  return items;
+}
+
+function getProceduralVillages() {
+  const start = Math.max(0, Math.floor((state.camera.x - 800) / world.chapterSize));
+  const end = Math.floor((state.camera.x + window.innerWidth + 1200) / world.chapterSize);
+  const items = [];
+  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
+    if (chapterIndex > 0 && chapterIndex % 4 === 0) {
+      items.push({
+        x: chapterIndex * world.chapterSize + 260,
+        name: `Village ${chapterIndex / 4}`,
+        villager: villagers[chapterIndex % villagers.length]
+      });
+    }
+  }
+  return items;
+}
+
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.floor(window.innerWidth * dpr);
@@ -108,6 +229,8 @@ function resize() {
 }
 
 function getBiome(x) {
+  const cycleLength = biomes[biomes.length - 1].at + world.chapterSize;
+  x = ((x % cycleLength) + cycleLength) % cycleLength;
   let current = biomes[0];
   for (const biome of biomes) {
     if (x >= biome.at) current = biome;
@@ -131,7 +254,8 @@ function blendHex(a, b, t) {
 }
 
 function biomeColors() {
-  const x = state.player.x;
+  const cycleLength = biomes[biomes.length - 1].at + world.chapterSize;
+  const x = ((state.player.x % cycleLength) + cycleLength) % cycleLength;
   const currentIndex = Math.max(0, biomes.findIndex((biome, index) => {
     const next = biomes[index + 1];
     return !next || x < next.at;
@@ -140,13 +264,15 @@ function biomeColors() {
   const next = biomes[currentIndex + 1] || current;
   const span = Math.max(1, next.at - current.at);
   const t = Math.max(0, Math.min(1, (x - current.at) / span));
+  const weather = getWeatherForChapter();
   return {
     name: current.name,
-    sky: blendHex(current.sky, next.sky, t),
-    haze: blendHex(current.haze, next.haze, t),
+    sky: blendHex(blendHex(current.sky, next.sky, t), weather.sky, weather.alpha),
+    haze: blendHex(blendHex(current.haze, next.haze, t), weather.sky, weather.alpha * 0.7),
     tree: blendHex(current.tree, next.tree, t),
     leaf: blendHex(current.leaf, next.leaf, t),
-    grass: blendHex(current.grass, next.grass, t)
+    grass: blendHex(current.grass, next.grass, t),
+    wind: weather.wind
   };
 }
 
@@ -212,17 +338,24 @@ function drawParallaxTrees(colors) {
     ctx.save();
     ctx.translate(-state.camera.x * factor, 0);
     ctx.globalAlpha = alpha;
-    for (const tree of trees) {
-      if (tree.layer !== layer) continue;
-      const x = tree.x + layer * 95;
-      if (x + tree.w < state.camera.x * factor - 160 || x > state.camera.x * factor + window.innerWidth + 180) continue;
-      const base = h * 0.74 + Math.sin(tree.x) * 18;
-      ctx.fillStyle = colors.tree;
-      roundedRect(x - 8, base - tree.h * 0.68, 16, tree.h * 0.7, 7);
-      ctx.fill();
-      drawEllipse(x, base - tree.h * 0.72, tree.w * 0.72, tree.h * 0.28, colors.leaf);
-      drawEllipse(x - tree.w * 0.34, base - tree.h * 0.58, tree.w * 0.46, tree.h * 0.22, colors.leaf);
-      drawEllipse(x + tree.w * 0.34, base - tree.h * 0.55, tree.w * 0.5, tree.h * 0.23, colors.leaf);
+    const repeatWidth = 7800;
+    const visibleStart = state.camera.x * factor - 180;
+    const visibleEnd = state.camera.x * factor + window.innerWidth + 200;
+    const firstRepeat = Math.floor(visibleStart / repeatWidth) - 1;
+    const lastRepeat = Math.ceil(visibleEnd / repeatWidth) + 1;
+    for (let repeat = firstRepeat; repeat <= lastRepeat; repeat += 1) {
+      for (const tree of trees) {
+        if (tree.layer !== layer) continue;
+        const x = tree.x + layer * 95 + repeat * repeatWidth;
+        if (x + tree.w < visibleStart || x > visibleEnd) continue;
+        const base = h * 0.74 + Math.sin(tree.x + repeat) * 18;
+        ctx.fillStyle = colors.tree;
+        roundedRect(x - 8, base - tree.h * 0.68, 16, tree.h * 0.7, 7);
+        ctx.fill();
+        drawEllipse(x, base - tree.h * 0.72, tree.w * 0.72, tree.h * 0.28, colors.leaf);
+        drawEllipse(x - tree.w * 0.34, base - tree.h * 0.58, tree.w * 0.46, tree.h * 0.22, colors.leaf);
+        drawEllipse(x + tree.w * 0.34, base - tree.h * 0.55, tree.w * 0.5, tree.h * 0.23, colors.leaf);
+      }
     }
     ctx.restore();
   }
@@ -236,7 +369,7 @@ function drawGround(colors) {
   ctx.translate(-state.camera.x, 0);
   ctx.fillStyle = colors.grass;
   for (let x = Math.floor(state.camera.x / 18) * 18 - 40; x < state.camera.x + window.innerWidth + 60; x += 18) {
-    const sway = Math.sin(x * 0.04 + state.time * 2) * 4;
+    const sway = Math.sin(x * 0.04 + state.time * 2 * colors.wind) * 4 * colors.wind;
     const nearPlayer = Math.abs(x - state.player.x) < 58;
     ctx.globalAlpha = nearPlayer ? 0.72 : 0.48;
     ctx.beginPath();
@@ -253,7 +386,29 @@ function drawWorldObjects() {
   ctx.save();
   ctx.translate(-state.camera.x, 0);
 
-  rests.forEach((rest) => {
+  getProceduralVillages().forEach((village) => {
+    const y = world.ground - 18;
+    for (let i = 0; i < 4; i += 1) {
+      const houseX = village.x + i * 86;
+      ctx.fillStyle = i % 2 ? "#9d7658" : "#b08a61";
+      roundedRect(houseX - 34, y - 54, 68, 54, 6);
+      ctx.fill();
+      ctx.fillStyle = "#6c4a3d";
+      ctx.beginPath();
+      ctx.moveTo(houseX - 42, y - 52);
+      ctx.lineTo(houseX, y - 92);
+      ctx.lineTo(houseX + 42, y - 52);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 215, 115, 0.55)";
+      roundedRect(houseX - 10, y - 32, 20, 18, 4);
+      ctx.fill();
+    }
+    drawVillager(village.x + 410, village.villager);
+    if (Math.abs(state.player.x - (village.x + 410)) < 90) drawPrompt(village.x + 410, y - 102, "E parler");
+  });
+
+  getProceduralRests().forEach((rest) => {
     const y = world.ground - 18;
     ctx.fillStyle = "#775747";
     roundedRect(rest.x - 54, y - 18, 108, 16, 6);
@@ -263,7 +418,7 @@ function drawWorldObjects() {
     if (Math.abs(state.player.x - rest.x) < 90) drawPrompt(rest.x, y - 64, "E se reposer");
   });
 
-  lanterns.forEach((lantern) => {
+  getProceduralLanterns().forEach((lantern) => {
     const lit = state.lanterns.includes(lantern.id);
     const y = world.ground - 62;
     ctx.strokeStyle = "#3d3028";
@@ -287,7 +442,7 @@ function drawWorldObjects() {
     if (!lit && Math.abs(state.player.x - lantern.x) < 78) drawPrompt(lantern.x, y - 58, "E allumer");
   });
 
-  discoveries.forEach((item, index) => {
+  getProceduralDiscoveries().forEach((item, index) => {
     const collected = state.discoveries.includes(item.id);
     if (collected) return;
     const y = world.ground - 20 + Math.sin(state.time * 2 + index) * 5;
@@ -332,7 +487,7 @@ function drawWorldObjects() {
 }
 
 function drawRiver() {
-  const riverX = 3820;
+  const riverX = Math.floor((state.camera.x + window.innerWidth / 2) / 3600) * 3600 + 3820;
   const y = world.ground + 25;
   if (riverX < state.camera.x - 600 || riverX > state.camera.x + window.innerWidth + 600) return;
   ctx.fillStyle = "rgba(103, 180, 200, 0.74)";
@@ -347,6 +502,90 @@ function drawRiver() {
     ctx.quadraticCurveTo(riverX - 250 + i * 120, y - 10, riverX - 200 + i * 120, y + 2);
     ctx.stroke();
   }
+}
+
+function drawVillager(x, villager) {
+  const y = world.ground - 48;
+  const bob = Math.sin(state.time * 2 + x) * 3;
+  ctx.save();
+  ctx.translate(x, y + bob);
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.beginPath();
+  ctx.ellipse(0, 48, 20, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#6a8a80";
+  roundedRect(-14, -3, 28, 38, 10);
+  ctx.fill();
+  ctx.fillStyle = "#e5b878";
+  ctx.beginPath();
+  ctx.arc(0, -22, 14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#4a3632";
+  ctx.beginPath();
+  ctx.ellipse(0, -31, 16, 7, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  if (Math.abs(state.player.x - x) < 210) {
+    ctx.save();
+    ctx.font = "800 12px Nunito";
+    ctx.fillStyle = "rgba(20, 34, 33, 0.72)";
+    roundedRect(x - 74, y - 82, 148, 26, 7);
+    ctx.fill();
+    ctx.fillStyle = "#f7f3df";
+    ctx.textAlign = "center";
+    ctx.fillText(villager.role, x, y - 64);
+    ctx.restore();
+  }
+}
+
+function drawWeather() {
+  const weather = getWeatherForChapter();
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  ctx.save();
+  if (weather.id === "rain") {
+    ctx.strokeStyle = "rgba(216, 235, 241, 0.42)";
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 80; i += 1) {
+      const x = (i * 47 + state.time * 360) % (w + 80) - 40;
+      const y = (i * 91 + state.time * 520) % (h + 90) - 60;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 18, y + 42);
+      ctx.stroke();
+    }
+  }
+  if (weather.id === "mist") {
+    ctx.fillStyle = "rgba(236, 242, 226, 0.18)";
+    for (let i = 0; i < 7; i += 1) {
+      const x = (i * 260 + state.time * 24) % (w + 360) - 180;
+      drawEllipse(x, h * (0.35 + i * 0.06), 210, 24, ctx.fillStyle);
+    }
+  }
+  if (weather.id === "wind") {
+    ctx.strokeStyle = "rgba(247, 243, 223, 0.24)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 10; i += 1) {
+      const x = (i * 180 + state.time * 240) % (w + 220) - 110;
+      const y = h * 0.22 + i * 38;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + 68, y - 18, x + 142, y + 4);
+      ctx.stroke();
+    }
+  }
+  if (weather.id === "snow") {
+    ctx.fillStyle = "rgba(247, 250, 252, 0.72)";
+    for (let i = 0; i < 70; i += 1) {
+      const x = (i * 59 + Math.sin(state.time + i) * 30) % (w + 80) - 40;
+      const y = (i * 83 + state.time * 58) % (h + 70) - 40;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.4 + (i % 3) * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
 }
 
 function drawPrompt(x, y, text) {
@@ -428,8 +667,12 @@ function draw() {
   drawWorldObjects();
   ctx.restore();
   drawOverlay();
+  drawWeather();
   ui.biomeLabel.textContent = getBiome(state.player.x).name;
-  ui.discoveryCount.textContent = `${state.discoveries.length} / ${discoveries.length} decouvertes`;
+  ui.chapterLabel.textContent = `Partie ${state.chapter}`;
+  ui.weatherLabel.textContent = getWeatherForChapter().label;
+  ui.partyLabel.textContent = state.party.code ? `Code ${state.party.code}` : "Solo";
+  ui.discoveryCount.textContent = `${state.discoveries.length} decouvertes`;
 }
 
 function update(dt) {
@@ -446,16 +689,19 @@ function update(dt) {
   const target = input * maxSpeed;
   p.vx += (target - p.vx) * Math.min(1, dt * 5.5);
   p.x += p.vx * dt;
-  p.x = Math.max(110, Math.min(world.width - 130, p.x));
+  p.x = Math.max(110, p.x);
   p.y = world.ground;
   if (Math.abs(p.vx) > 5) p.face = Math.sign(p.vx);
   p.rest = Math.max(0, p.rest - dt * 0.35);
+  state.chapter = getChapter();
+  state.weather = getWeatherForChapter().id;
+  if (state.chapter >= 8 && !state.cinematicPlayed) playChapterEightCinematic();
 
   const targetZoom = p.rest > 0 ? 1.08 : 1;
   state.camera.zoom += (targetZoom - state.camera.zoom) * Math.min(1, dt * 2.5);
   const targetCamera = p.x - window.innerWidth * 0.45;
   state.camera.x += (targetCamera - state.camera.x) * Math.min(1, dt * 2.8);
-  state.camera.x = Math.max(0, Math.min(world.width - window.innerWidth, state.camera.x));
+  state.camera.x = Math.max(0, state.camera.x);
 
   if (audio) updateAudio();
   autosave();
@@ -463,7 +709,17 @@ function update(dt) {
 
 function interact() {
   const p = state.player;
-  const item = discoveries.find((entry) => !state.discoveries.includes(entry.id) && Math.abs(entry.x - p.x) < 78);
+  const villager = getProceduralVillages()
+    .map((village) => ({ ...village.villager, x: village.x + 410 }))
+    .find((entry) => Math.abs(entry.x - p.x) < 98);
+  if (villager) {
+    const riddle = riddles[(state.chapter + state.discoveries.length) % riddles.length];
+    showMessage(`${villager.role}: ${villager.line} ${riddle}`);
+    saveGame();
+    return;
+  }
+
+  const item = getProceduralDiscoveries().find((entry) => !state.discoveries.includes(entry.id) && Math.abs(entry.x - p.x) < 78);
   if (item) {
     state.discoveries.push(item.id);
     showMessage(`${item.label}: ${item.text}`);
@@ -472,7 +728,7 @@ function interact() {
     return;
   }
 
-  const lantern = lanterns.find((entry) => !state.lanterns.includes(entry.id) && Math.abs(entry.x - p.x) < 86);
+  const lantern = getProceduralLanterns().find((entry) => !state.lanterns.includes(entry.id) && Math.abs(entry.x - p.x) < 86);
   if (lantern) {
     state.lanterns.push(lantern.id);
     showMessage("La lanterne s'allume. Le sentier respire un peu plus chaud.");
@@ -481,7 +737,7 @@ function interact() {
     return;
   }
 
-  const rest = rests.find((entry) => Math.abs(entry.x - p.x) < 98);
+  const rest = getProceduralRests().find((entry) => Math.abs(entry.x - p.x) < 98);
   if (rest) {
     p.rest = 1;
     showMessage(`Tu t'assois un instant sur le ${rest.label}. Tout ralentit.`);
@@ -507,20 +763,54 @@ function showMessage(text) {
   messageTimer = setTimeout(() => ui.message.classList.remove("is-visible"), 3400);
 }
 
+function playChapterEightCinematic() {
+  state.cinematicPlayed = true;
+  running = false;
+  saveGame();
+  const name = state.playerProfile.nickname || "Voyageur";
+  const frames = [
+    `${name} a traverse les clairieres sans jamais ouvrir de compte.`,
+    "Le jeu se souvenait pourtant de chaque pas: un identifiant anonyme, un pseudo, des lanternes rallumees.",
+    "Des bancs ont ralenti le temps. Des villages ont murmure que la fin n'etait peut-etre qu'une rumeur.",
+    "Partie 8: le sentier cesse d'etre une promenade. Les vraies enigmes commencent."
+  ];
+  let index = 0;
+  ui.cinematic.classList.add("is-visible");
+  ui.cinematicText.textContent = frames[index];
+  const timer = setInterval(() => {
+    index += 1;
+    if (index >= frames.length) {
+      clearInterval(timer);
+      ui.cinematic.classList.remove("is-visible");
+      running = true;
+      showMessage("Le monde continue. Il n'y a pas de fin, seulement des traces plus profondes.");
+      return;
+    }
+    ui.cinematicText.textContent = frames[index];
+  }, 2300);
+}
+
 function buildJournal() {
   ui.journalList.innerHTML = "";
-  discoveries.forEach((item) => {
-    const found = state.discoveries.includes(item.id);
+  const foundItems = state.discoveries.slice(-18).reverse();
+  const visibleItems = getProceduralDiscoveries();
+  if (foundItems.length === 0) {
     const entry = document.createElement("article");
     entry.className = "journal-item";
-    entry.innerHTML = found
-      ? `<strong>${item.label}</strong><p>${item.text}</p>`
-      : `<strong>????</strong><p>Une page encore vide attend une decouverte.</p>`;
+    entry.innerHTML = "<strong>????</strong><p>Une page encore vide attend une decouverte.</p>";
+    ui.journalList.appendChild(entry);
+  }
+  foundItems.forEach((id) => {
+    const item = visibleItems.find((entry) => entry.id === id) || { label: id.replace(/-/g, " "), text: "Une trace retrouvee dans une ancienne partie du chemin." };
+    const entry = document.createElement("article");
+    entry.className = "journal-item";
+    entry.innerHTML = `<strong>${item.label}</strong><p>${item.text}</p>`;
     ui.journalList.appendChild(entry);
   });
 }
 
 function startGame(reset = false) {
+  savePlayerProfile();
   if (reset) resetGame();
   state.startedAtLeastOnce = true;
   ui.startScreen.classList.add("is-hidden");
@@ -536,6 +826,8 @@ function resetGame() {
   state.discoveries = [];
   state.lanterns = [];
   state.camera.x = 0;
+  state.chapter = 1;
+  state.cinematicPlayed = false;
   state.player.rest = 0;
   localStorage.removeItem(saveKey);
 }
@@ -545,7 +837,11 @@ function saveGame() {
     x: state.player.x,
     discoveries: state.discoveries,
     lanterns: state.lanterns,
-    startedAtLeastOnce: state.startedAtLeastOnce
+    startedAtLeastOnce: state.startedAtLeastOnce,
+    cinematicPlayed: state.cinematicPlayed,
+    party: state.party,
+    playerId: state.playerProfile.id,
+    nickname: state.playerProfile.nickname
   };
   localStorage.setItem(saveKey, JSON.stringify(payload));
 }
@@ -560,13 +856,82 @@ function loadGame() {
   try {
     const payload = JSON.parse(raw);
     state.player.x = payload.x || 380;
-    state.discoveries = Array.isArray(payload.discoveries) ? payload.discoveries : [];
+    state.discoveries = Array.isArray(payload.discoveries) ? payload.discoveries.map(normalizeDiscoveryId) : [];
     state.lanterns = Array.isArray(payload.lanterns) ? payload.lanterns : [];
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
+    state.cinematicPlayed = Boolean(payload.cinematicPlayed);
+    state.party = payload.party && typeof payload.party === "object" ? payload.party : state.party;
+    state.chapter = getChapter(state.player.x);
+    if (payload.nickname) state.playerProfile.nickname = payload.nickname;
     return true;
   } catch {
     return false;
   }
+}
+
+function normalizeDiscoveryId(id) {
+  if (typeof id !== "string" || id.includes("-")) return id;
+  const index = discoveries.findIndex((item) => item.id === id);
+  return index >= 0 ? makeId(id, index + 1) : id;
+}
+
+function createUuid() {
+  if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const value = Math.random() * 16 | 0;
+    const resolved = char === "x" ? value : (value & 0x3) | 0x8;
+    return resolved.toString(16);
+  });
+}
+
+function loadPlayerProfile() {
+  const raw = localStorage.getItem(playerKey);
+  if (raw) {
+    try {
+      const payload = JSON.parse(raw);
+      state.playerProfile.id = payload.id || createUuid();
+      state.playerProfile.nickname = payload.nickname || "Voyageur";
+    } catch {
+      state.playerProfile.id = createUuid();
+    }
+  } else {
+    state.playerProfile.id = createUuid();
+  }
+  ui.nicknameInput.value = state.playerProfile.nickname;
+  ui.anonymousId.textContent = `Identifiant anonyme: ${state.playerProfile.id.slice(0, 8)}...`;
+  savePlayerProfile();
+}
+
+function savePlayerProfile() {
+  const nickname = ui.nicknameInput.value.trim().slice(0, 18) || "Voyageur";
+  state.playerProfile.nickname = nickname;
+  localStorage.setItem(playerKey, JSON.stringify(state.playerProfile));
+}
+
+function makePartyCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+}
+
+function createParty() {
+  savePlayerProfile();
+  state.party = { code: makePartyCode(), members: [state.playerProfile.id] };
+  ui.partyCodeInput.value = state.party.code;
+  showMessage(`Partie creee: ${state.party.code}. Un ami peut saisir ce code pour rejoindre.`);
+  saveGame();
+}
+
+function joinParty() {
+  const code = ui.partyCodeInput.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  if (code.length < 4) {
+    showMessage("Entre un code de partie valide pour rejoindre un ami.");
+    return;
+  }
+  savePlayerProfile();
+  state.party = { code, members: Array.from(new Set([...(state.party.members || []), state.playerProfile.id])) };
+  ui.partyCodeInput.value = code;
+  showMessage(`Tu as rejoint la partie ${code}. La reprise gardera ce groupe en memoire.`);
+  saveGame();
 }
 
 function loadOptions() {
@@ -737,6 +1102,12 @@ ui.mobilePad.addEventListener("pointerup", () => {
 
 ui.startButton.addEventListener("click", () => startGame(true));
 ui.continueButton.addEventListener("click", () => startGame(false));
+ui.nicknameInput.addEventListener("change", () => {
+  savePlayerProfile();
+  saveGame();
+});
+ui.createPartyButton.addEventListener("click", createParty);
+ui.joinPartyButton.addEventListener("click", joinParty);
 ui.journalButton.addEventListener("click", () => {
   buildJournal();
   ui.journalDialog.showModal();
@@ -765,8 +1136,11 @@ ui.natureVolume.addEventListener("input", () => {
   if (audio) updateAudio();
 });
 
+loadPlayerProfile();
 loadOptions();
 const hasSave = loadGame();
+ui.nicknameInput.value = state.playerProfile.nickname;
+ui.partyCodeInput.value = state.party.code || "";
 ui.continueButton.disabled = !hasSave;
 ui.continueButton.style.opacity = hasSave ? "1" : "0.55";
 resize();

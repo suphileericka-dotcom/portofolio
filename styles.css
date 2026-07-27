@@ -114,6 +114,51 @@ h2 {
   line-height: 1.7;
 }
 
+.player-card,
+.party-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.7rem;
+  width: min(38rem, 100%);
+  margin-top: 1rem;
+}
+
+.player-card label,
+.party-card label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: min(15rem, 100%);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.player-card input,
+.party-card input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  color: var(--ink);
+  background: rgba(20, 34, 33, 0.58);
+  outline: none;
+  text-transform: none;
+}
+
+.party-card input {
+  text-transform: uppercase;
+}
+
+.identity-note {
+  width: 100%;
+  margin: 0;
+  color: rgba(247, 243, 223, 0.62);
+  font-size: 0.82rem;
+}
+
 .start-actions {
   display: flex;
   flex-wrap: wrap;
@@ -275,6 +320,43 @@ h2 {
   transform: translate(-50%, 0);
 }
 
+.cinematic {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(7, 10, 12, 0.88);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.cinematic.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cinematic-frame {
+  width: min(44rem, 100%);
+  min-height: 14rem;
+  display: grid;
+  place-items: center;
+  padding: clamp(1.2rem, 5vw, 3rem);
+  border-top: 1px solid rgba(247, 243, 223, 0.32);
+  border-bottom: 1px solid rgba(247, 243, 223, 0.32);
+  text-align: center;
+}
+
+.cinematic-frame p {
+  margin: 0;
+  font-family: "Spectral", Georgia, serif;
+  font-size: clamp(1.8rem, 5vw, 4rem);
+  line-height: 1.08;
+}
+
 .mobile-pad {
   position: absolute;
   z-index: 4;
@@ -409,6 +491,12 @@ input[type="range"] {
   }
 
   .start-actions button {
+    width: 100%;
+  }
+
+  .party-card button,
+  .player-card label,
+  .party-card label {
     width: 100%;
   }
 }
