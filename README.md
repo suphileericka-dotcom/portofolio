@@ -4,14 +4,20 @@ Prototype de jeu de marche contemplative en 2D, construit en HTML, CSS et JavaSc
 
 Ouvrir `index.html` dans un navigateur pour jouer.
 
+Pour jouer avec le serveur temps reel:
+- Installer les dependances: `npm install`
+- Lancer le serveur: `npm start`
+- Ouvrir `http://localhost:3000`
+
 Nouveautes:
 - Identifiant anonyme genere au premier lancement, sans creation de compte visible
-- Pseudo joueur, code de partie ami et reprise de partie via sauvegarde locale
+- Pseudo joueur, code de partie ami et reprise de partie
 - Creation ou rejoindre une partie depuis les options, avec parties de 2 a 4 joueurs
 - Croix pour quitter une partie ami et continuer en solo
+- Serveur Node.js + Socket.IO pour creer les parties, synchroniser les joueurs, reactions, repos et dons aux habitants
 - Monde procedurale infini avec biomes qui reviennent sous de nouvelles formes
-- Meteo changeante, villages, habitants, enigmes et repos qui ralentit le temps
-- Mini scene narrative automatique a partir de la partie 8
+- Meteo changeante, villages, habitants, objets utiles et repos qui ralentit le temps
+- Mini scene narrative a la fin de la premiere longue route
 
 Controles:
 - Fleches, ZQSD ou clic pour marcher
@@ -19,4 +25,4 @@ Controles:
 - Joystick discret sur mobile
 - Bouton son en haut a droite pour couper ou remettre l'audio
 
-Le jeu sauvegarde automatiquement la position, l'identite anonyme, le pseudo, le code de partie, les lanternes, les decouvertes et les preferences audio dans le navigateur.
+Le jeu sauvegarde automatiquement la position, l'identite anonyme, le pseudo, le code de partie, les lanternes, les decouvertes et les preferences audio dans le navigateur. Le serveur sauvegarde aussi les parties dans `server-save.json`.

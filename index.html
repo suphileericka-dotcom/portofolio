@@ -35,18 +35,18 @@
       <div class="hud-group">
         <span id="partyLabel" class="hud-pill">Solo</span>
         <button id="leavePartyButton" class="party-exit" type="button" title="Quitter la partie" aria-label="Quitter la partie">x</button>
-        <button id="reactionButton" class="reaction-button" type="button" title="Reactions" aria-label="Reactions">☺</button>
+        <button id="reactionButton" class="reaction-button" type="button" title="Reactions" aria-label="Reactions">:)</button>
         <button id="muteButton" class="sound-button" type="button" title="Couper le son" aria-label="Couper le son">Son</button>
         <button id="journalButton" class="icon-button" type="button" title="Carnet">Carnet</button>
         <button id="optionsButton" class="icon-button" type="button" title="Options">Options</button>
       </div>
     </section>
     <div id="reactionMenu" class="reaction-menu" aria-label="Choisir une reaction">
-      <button type="button" data-reaction="☺">☺</button>
+      <button type="button" data-reaction=":)">:)</button>
       <button type="button" data-reaction="!">!</button>
       <button type="button" data-reaction="?">?</button>
-      <button type="button" data-reaction="♥">♥</button>
-      <button type="button" data-reaction="☀">☀</button>
+      <button type="button" data-reaction="<3">&lt;3</button>
+      <button type="button" data-reaction="*">*</button>
     </div>
 
     <aside id="message" class="message" aria-live="polite"></aside>
@@ -126,6 +126,7 @@
     </dialog>
   </main>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {

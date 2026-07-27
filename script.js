@@ -49,6 +49,7 @@ let lastTime = 0;
 let running = false;
 let messageTimer = 0;
 let pendingVillagerHelp = null;
+const net = { socket: null, connected: false, lastMoveSent: 0 };
 
 const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0 },
@@ -529,15 +530,22 @@ function drawWorldObjects() {
 function getPartyCompanions() {
   if (!state.party.code) return [];
   const colors = ["#67b4c8", "#8ebf76", "#b98ad6"];
-  const count = Math.max(1, Math.min(3, (state.party.members.length || 2) - 1));
-  return Array.from({ length: count }, (_, index) => ({
-    id: `companion-${index}`,
-    label: ["Ami 1", "Ami 2", "Ami 3"][index],
-    x: state.player.x - 70 - index * 54 + Math.sin(state.time * 1.5 + index) * 8,
+  const members = Array.isArray(state.party.members) ? state.party.members : [];
+  const remoteMembers = members
+    .map((member) => (typeof member === "string" ? { id: member, nickname: "Ami" } : member))
+    .filter((member) => member.id && member.id !== state.playerProfile.id)
+    .slice(0, 3);
+  const displayMembers = remoteMembers.length > 0
+    ? remoteMembers
+    : Array.from({ length: Math.max(1, Math.min(3, (members.length || 2) - 1)) }, (_, index) => ({ id: `companion-${index}`, nickname: ["Ami 1", "Ami 2", "Ami 3"][index] }));
+  return displayMembers.map((member, index) => ({
+    id: member.id,
+    label: member.nickname || ["Ami 1", "Ami 2", "Ami 3"][index],
+    x: Number.isFinite(member.x) ? member.x : state.player.x - 70 - index * 54 + Math.sin(state.time * 1.5 + index) * 8,
     y: world.ground,
-    face: state.player.face,
+    face: member.face || state.player.face,
     body: colors[index],
-    seated: state.groupRest > 0.18
+    seated: Boolean(member.resting) || state.groupRest > 0.18
   }));
 }
 
@@ -579,9 +587,10 @@ function sendReaction(symbol) {
     return;
   }
   state.reactions.push({ actorId: state.playerProfile.id, symbol, until: state.time + 4 });
+  syncAction("reaction", { symbol, until: Date.now() + 4000 });
   const companions = getPartyCompanions();
   if (companions[0]) {
-    state.reactions.push({ actorId: companions[0].id, symbol: "☺", until: state.time + 4.5 });
+    state.reactions.push({ actorId: companions[0].id, symbol: ":)", until: state.time + 4.5 });
   }
   ui.reactionMenu.classList.remove("is-visible");
   showMessage(`Reaction envoyee au groupe: ${symbol}`);
@@ -867,6 +876,11 @@ function update(dt) {
   state.camera.x += (targetCamera - state.camera.x) * Math.min(1, dt * 2.8);
   state.camera.x = Math.max(0, state.camera.x);
 
+  if (state.party.code && net.connected && state.time - net.lastMoveSent > 0.18) {
+    net.lastMoveSent = state.time;
+    syncAction("move", { x: p.x, face: p.face, resting: p.rest > 0.15 });
+  }
+
   if (audio) updateAudio();
   autosave();
 }
@@ -890,6 +904,7 @@ function interact() {
   const item = getProceduralDiscoveries().find((entry) => !hasCollectedDiscovery(entry) && Math.abs(entry.x - p.x) < 78);
   if (item) {
     state.discoveries.push(item.id);
+    syncAction("collect", { itemId: item.id });
     showMessage(`${item.label}: ${item.text}`);
     playSoftPing();
     saveGame();
@@ -899,6 +914,7 @@ function interact() {
   const lantern = getProceduralLanterns().find((entry) => !state.lanterns.includes(entry.id) && Math.abs(entry.x - p.x) < 86);
   if (lantern) {
     state.lanterns.push(lantern.id);
+    syncAction("lantern", { lanternId: lantern.id });
     showMessage("La lanterne s'allume. Le sentier respire un peu plus chaud.");
     playSoftPing();
     saveGame();
@@ -911,6 +927,7 @@ function interact() {
     if (state.party.code) {
       state.groupRest = 1;
       state.lastSeatActor = state.playerProfile.nickname;
+      syncAction("rest", { actorName: state.playerProfile.nickname, restLabel: rest.label });
       showMessage(`${state.playerProfile.nickname} s'assoit sur le ${rest.label}. Le groupe ralentit avec lui.`);
     } else {
       showMessage(`Tu t'assois un instant sur le ${rest.label}. Tout ralentit.`);
@@ -1021,6 +1038,11 @@ function givePendingItem() {
     return;
   }
   state.helpedVillagers.push(pendingVillagerHelp.villageId);
+  syncAction("help-villager", {
+    villageId: pendingVillagerHelp.villageId,
+    itemId: pendingVillagerHelp.need.itemId,
+    itemLabel: pendingVillagerHelp.need.itemLabel
+  });
   ui.villagerDialog.close();
   showMessage(`${pendingVillagerHelp.role} accepte ${pendingVillagerHelp.need.itemLabel}. Le village se souviendra de ce geste.`);
   pendingVillagerHelp = null;
@@ -1104,6 +1126,8 @@ function resetGame() {
   state.discoveries = [];
   state.lanterns = [];
   state.helpedVillagers = [];
+  state.groupRest = 0;
+  state.reactions = [];
   state.camera.x = 0;
   state.chapter = 1;
   state.weather = "clear";
@@ -1118,6 +1142,8 @@ function saveGame() {
     discoveries: state.discoveries,
     lanterns: state.lanterns,
     helpedVillagers: state.helpedVillagers,
+    groupRest: state.groupRest,
+    reactions: state.reactions,
     startedAtLeastOnce: state.startedAtLeastOnce,
     cinematicPlayed: state.cinematicPlayed,
     party: state.party,
@@ -1140,6 +1166,8 @@ function loadGame() {
     state.discoveries = Array.isArray(payload.discoveries) ? payload.discoveries.map(normalizeDiscoveryId) : [];
     state.lanterns = Array.isArray(payload.lanterns) ? payload.lanterns : [];
     state.helpedVillagers = Array.isArray(payload.helpedVillagers) ? payload.helpedVillagers : [];
+    state.groupRest = Number.isFinite(payload.groupRest) ? payload.groupRest : 0;
+    state.reactions = Array.isArray(payload.reactions) ? payload.reactions : [];
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
     state.cinematicPlayed = Boolean(payload.cinematicPlayed) && state.player.x >= world.firstRouteEnd;
     state.party = normalizeParty(payload.party);
@@ -1153,7 +1181,13 @@ function loadGame() {
 
 function normalizeParty(party) {
   if (!party || typeof party !== "object") return { code: "", members: [], minPlayers: 2, maxPlayers: 4 };
-  const members = Array.isArray(party.members) ? party.members.filter(Boolean).slice(0, 4) : [];
+  const members = Array.isArray(party.members)
+    ? party.members
+      .filter(Boolean)
+      .map((member) => (typeof member === "string" ? { id: member, nickname: "Ami" } : member))
+      .filter((member) => member.id)
+      .slice(0, 4)
+    : [];
   return {
     code: typeof party.code === "string" ? party.code.slice(0, 6).toUpperCase() : "",
     members,
@@ -1212,7 +1246,11 @@ function makePartyCode() {
 
 function createParty() {
   savePlayerProfile();
-  state.party = { code: makePartyCode(), members: [state.playerProfile.id], minPlayers: 2, maxPlayers: 4 };
+  if (net.connected) {
+    net.socket.emit("party:create", { player: getNetworkPlayer() });
+    return;
+  }
+  state.party = { code: makePartyCode(), members: [getNetworkPlayer()], minPlayers: 2, maxPlayers: 4 };
   ui.partyCodeInput.value = state.party.code;
   updatePartyUi();
   showMessage(`Partie creee: ${state.party.code}. Minimum 2 joueurs, maximum 4.`);
@@ -1226,16 +1264,20 @@ function joinParty() {
     return;
   }
   savePlayerProfile();
+  if (net.connected) {
+    net.socket.emit("party:join", { code, player: getNetworkPlayer() });
+    return;
+  }
   const sameParty = state.party.code === code;
   const members = sameParty ? [...(state.party.members || [])] : [];
-  const alreadyInside = members.includes(state.playerProfile.id);
+  const alreadyInside = members.some((member) => (typeof member === "string" ? member : member.id) === state.playerProfile.id);
   if (!alreadyInside && members.length >= 4) {
     showMessage("Cette partie est pleine. Maximum 4 joueurs.");
     return;
   }
   state.party = {
     code,
-    members: Array.from(new Set([...members, state.playerProfile.id])).slice(0, 4),
+    members: mergeMembers([...members, getNetworkPlayer()]).slice(0, 4),
     minPlayers: 2,
     maxPlayers: 4
   };
@@ -1250,6 +1292,7 @@ function leaveParty() {
     showMessage("Tu joues deja en solo.");
     return;
   }
+  if (net.connected) net.socket.emit("party:leave", { code: state.party.code, playerId: state.playerProfile.id });
   state.party = { code: "", members: [], minPlayers: 2, maxPlayers: 4 };
   ui.partyCodeInput.value = "";
   updatePartyUi();
@@ -1267,6 +1310,80 @@ function updatePartyUi() {
   ui.partyCodeInput.value = inParty ? state.party.code : ui.partyCodeInput.value;
   ui.leavePartyButton.classList.toggle("is-visible", inParty);
   ui.leavePartyOptionsButton.classList.toggle("is-visible", inParty);
+}
+
+function getNetworkPlayer() {
+  return {
+    id: state.playerProfile.id,
+    nickname: state.playerProfile.nickname,
+    x: state.player.x,
+    face: state.player.face,
+    resting: state.player.rest > 0.15
+  };
+}
+
+function mergeMembers(members) {
+  const byId = new Map();
+  members.forEach((member) => {
+    const resolved = typeof member === "string" ? { id: member, nickname: "Ami" } : member;
+    if (resolved && resolved.id) byId.set(resolved.id, { ...(byId.get(resolved.id) || {}), ...resolved });
+  });
+  return Array.from(byId.values()).slice(0, 4);
+}
+
+function applyServerSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return;
+  state.party = normalizeParty(snapshot.party || state.party);
+  state.discoveries = Array.isArray(snapshot.discoveries) ? snapshot.discoveries : state.discoveries;
+  state.lanterns = Array.isArray(snapshot.lanterns) ? snapshot.lanterns : state.lanterns;
+  state.helpedVillagers = Array.isArray(snapshot.helpedVillagers) ? snapshot.helpedVillagers : state.helpedVillagers;
+  state.groupRest = Number.isFinite(snapshot.groupRest) ? Math.max(state.groupRest, snapshot.groupRest) : state.groupRest;
+  if (Array.isArray(snapshot.reactions)) {
+    state.reactions = snapshot.reactions.map((reaction) => ({
+      actorId: reaction.actorId,
+      symbol: reaction.symbol,
+      until: reaction.until > 100000 ? state.time + Math.max(0.5, (reaction.until - Date.now()) / 1000) : reaction.until
+    }));
+  }
+  updatePartyUi();
+  saveGame();
+}
+
+function setupRealtime() {
+  if (!window.io) return;
+  net.socket = window.io();
+  net.socket.on("connect", () => {
+    net.connected = true;
+    if (state.party.code) {
+      net.socket.emit("party:join", { code: state.party.code, player: getNetworkPlayer() });
+    }
+  });
+  net.socket.on("disconnect", () => {
+    net.connected = false;
+    showMessage("Connexion serveur perdue. La partie continue en local en attendant.");
+  });
+  net.socket.on("party:created", ({ snapshot }) => {
+    applyServerSnapshot(snapshot);
+    ui.partyCodeInput.value = state.party.code;
+    showMessage(`Partie creee: ${state.party.code}. Partage ce code avec tes amis.`);
+  });
+  net.socket.on("party:joined", ({ snapshot }) => {
+    applyServerSnapshot(snapshot);
+    ui.partyCodeInput.value = state.party.code;
+    showMessage(`Tu as rejoint la partie ${state.party.code}.`);
+  });
+  net.socket.on("party:snapshot", ({ snapshot }) => applyServerSnapshot(snapshot));
+  net.socket.on("party:error", ({ message }) => showMessage(message || "Impossible de rejoindre cette partie."));
+}
+
+function syncAction(type, payload = {}) {
+  if (!net.connected || !state.party.code) return false;
+  net.socket.emit("party:action", {
+    code: state.party.code,
+    player: getNetworkPlayer(),
+    action: { type, payload }
+  });
+  return true;
 }
 
 function loadOptions() {
@@ -1487,6 +1604,7 @@ const hasSave = loadGame();
 ui.nicknameInput.value = state.playerProfile.nickname;
 ui.partyCodeInput.value = state.party.code || "";
 updatePartyUi();
+setupRealtime();
 ui.continueButton.disabled = !hasSave;
 ui.continueButton.style.opacity = hasSave ? "1" : "0.55";
 resize();
