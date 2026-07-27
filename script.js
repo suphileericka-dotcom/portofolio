@@ -23,11 +23,12 @@ const ui = {
   leavePartyButton: document.getElementById("leavePartyButton"),
   leavePartyOptionsButton: document.getElementById("leavePartyOptionsButton"),
   partyStatus: document.getElementById("partyStatus"),
-  biomeLabel: document.getElementById("biomeLabel"),
-  chapterLabel: document.getElementById("chapterLabel"),
-  weatherLabel: document.getElementById("weatherLabel"),
   partyLabel: document.getElementById("partyLabel"),
-  discoveryCount: document.getElementById("discoveryCount"),
+  villagerDialog: document.getElementById("villagerDialog"),
+  villagerTitle: document.getElementById("villagerTitle"),
+  villagerText: document.getElementById("villagerText"),
+  giveItemButton: document.getElementById("giveItemButton"),
+  refuseHelpButton: document.getElementById("refuseHelpButton"),
   musicVolume: document.getElementById("musicVolume"),
   natureVolume: document.getElementById("natureVolume"),
   mobilePad: document.getElementById("mobilePad"),
@@ -45,6 +46,7 @@ let audio = null;
 let lastTime = 0;
 let running = false;
 let messageTimer = 0;
+let pendingVillagerHelp = null;
 
 const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0 },
@@ -55,6 +57,7 @@ const state = {
   cinematicPlayed: false,
   discoveries: [],
   lanterns: [],
+  helpedVillagers: [],
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur" },
   party: { code: "", members: [], minPlayers: 2, maxPlayers: 4 },
@@ -83,6 +86,17 @@ const villagers = [
   { role: "Enfant aux lucioles", line: "Il connait une chanson qui ouvre les barrieres fatiguees." },
   { role: "Cartographe sans carte", line: "Il dessine le monde apres l'avoir oublie." },
   { role: "Boulangere de pluie", line: "Son pain rechauffe les poches quand la meteo tourne." }
+];
+
+const villagerNeeds = [
+  { itemId: "leaf", itemLabel: "Feuille nervuree", need: "recoudre une carte dechiree par le vent" },
+  { itemId: "stone", itemLabel: "Pierre polie", need: "caler la porte d'une maison qui tremble" },
+  { itemId: "feather", itemLabel: "Plume claire", need: "terminer une lettre qui ne voulait pas partir" },
+  { itemId: "moss", itemLabel: "Statue moussue", need: "se souvenir du nom d'une vieille place" },
+  { itemId: "shell", itemLabel: "Coquille de riviere", need: "appeler l'eau jusqu'au puits" },
+  { itemId: "cone", itemLabel: "Pomme de pin bleue", need: "rallumer un four trop froid" },
+  { itemId: "mushroom", itemLabel: "Champignon lueur", need: "guider un enfant dans la nuit" },
+  { itemId: "star", itemLabel: "Eclat d'etoile", need: "retrouver le chemin du matin" }
 ];
 
 const riddles = [
@@ -671,11 +685,7 @@ function draw() {
   ctx.restore();
   drawOverlay();
   drawWeather();
-  ui.biomeLabel.textContent = getBiome(state.player.x).name;
-  ui.chapterLabel.textContent = `Partie ${state.chapter}`;
-  ui.weatherLabel.textContent = getWeatherForChapter().label;
   ui.partyLabel.textContent = state.party.code ? `Code ${state.party.code}` : "Solo";
-  ui.discoveryCount.textContent = `${state.discoveries.length} decouvertes`;
   updatePartyUi();
 }
 
@@ -697,8 +707,10 @@ function update(dt) {
   p.y = world.ground;
   if (Math.abs(p.vx) > 5) p.face = Math.sign(p.vx);
   p.rest = Math.max(0, p.rest - dt * 0.35);
+  const previousWeather = state.weather;
   state.chapter = getChapter();
   state.weather = getWeatherForChapter().id;
+  if (previousWeather !== state.weather) announceWeather();
   if (state.chapter >= 8 && !state.cinematicPlayed) playChapterEightCinematic();
 
   const targetZoom = p.rest > 0 ? 1.08 : 1;
@@ -713,12 +725,16 @@ function update(dt) {
 
 function interact() {
   const p = state.player;
-  const villager = getProceduralVillages()
-    .map((village) => ({ ...village.villager, x: village.x + 410 }))
+  const villageNeed = getProceduralVillages()
+    .map((village) => ({
+      ...village.villager,
+      x: village.x + 410,
+      villageId: makeId("village", Math.round(village.x / world.chapterSize)),
+      need: villagerNeeds[Math.round(village.x / world.chapterSize) % villagerNeeds.length]
+    }))
     .find((entry) => Math.abs(entry.x - p.x) < 98);
-  if (villager) {
-    const riddle = riddles[(state.chapter + state.discoveries.length) % riddles.length];
-    showMessage(`${villager.role}: ${villager.line} ${riddle}`);
+  if (villageNeed) {
+    openVillagerHelp(villageNeed);
     saveGame();
     return;
   }
@@ -761,10 +777,78 @@ function loop(now) {
 }
 
 function showMessage(text) {
+  showMessageFor(text, 3400);
+}
+
+function showMessageFor(text, duration = 3400) {
   ui.message.textContent = text;
   ui.message.classList.add("is-visible");
   clearTimeout(messageTimer);
-  messageTimer = setTimeout(() => ui.message.classList.remove("is-visible"), 3400);
+  messageTimer = setTimeout(() => ui.message.classList.remove("is-visible"), duration);
+}
+
+function announceWeather() {
+  const weather = getWeatherForChapter();
+  if (weather.id === "clear") return;
+  const lines = {
+    rain: "Pluie fine: les feuilles gardent les secrets plus longtemps.",
+    mist: "Brume: pendant quelques instants, le village devient plus difficile a lire.",
+    wind: "Grand vent: les herbes se couchent et les lanternes hesitent.",
+    snow: "Neige lente: le chemin devient silencieux."
+  };
+  showMessageFor(lines[weather.id] || weather.label, 25000);
+}
+
+function baseDiscoveryId(id) {
+  if (typeof id !== "string") return "";
+  const parts = id.split("-");
+  return parts.length > 1 ? parts.slice(0, -1).join("-") : id;
+}
+
+function hasCollectedBaseItem(itemId) {
+  return state.discoveries.some((id) => baseDiscoveryId(id) === itemId);
+}
+
+function openVillagerHelp(villager) {
+  const alreadyHelped = state.helpedVillagers.includes(villager.villageId);
+  const hasItem = hasCollectedBaseItem(villager.need.itemId);
+  const riddle = riddles[(state.chapter + state.discoveries.length) % riddles.length];
+  ui.villagerTitle.textContent = villager.role;
+  ui.giveItemButton.disabled = alreadyHelped || !hasItem;
+  ui.giveItemButton.style.opacity = alreadyHelped || !hasItem ? "0.55" : "1";
+  if (alreadyHelped) {
+    ui.villagerText.textContent = `${villager.line} Tu l'as deja aide. ${riddle}`;
+  } else if (hasItem) {
+    ui.villagerText.textContent = `${villager.line} Il lui faudrait ${villager.need.itemLabel} pour ${villager.need.need}. Tu peux lui donner, ou garder l'objet.`;
+  } else {
+    ui.villagerText.textContent = `${villager.line} Il lui faudrait ${villager.need.itemLabel} pour ${villager.need.need}. Si tu le trouves, le carnet s'en souviendra.`;
+  }
+  pendingVillagerHelp = villager;
+  ui.villagerDialog.showModal();
+}
+
+function givePendingItem() {
+  if (!pendingVillagerHelp) return;
+  if (!hasCollectedBaseItem(pendingVillagerHelp.need.itemId)) {
+    showMessage("Tu n'as pas encore cet objet dans ton carnet.");
+    return;
+  }
+  if (!state.helpedVillagers.includes(pendingVillagerHelp.villageId)) {
+    state.helpedVillagers.push(pendingVillagerHelp.villageId);
+  }
+  ui.villagerDialog.close();
+  showMessage(`${pendingVillagerHelp.role} accepte ${pendingVillagerHelp.need.itemLabel}. Le village se souviendra de ce geste.`);
+  pendingVillagerHelp = null;
+  playSoftPing();
+  saveGame();
+}
+
+function refusePendingHelp() {
+  if (!pendingVillagerHelp) return;
+  const name = pendingVillagerHelp.role;
+  ui.villagerDialog.close();
+  pendingVillagerHelp = null;
+  showMessage(`${name} hoche la tete. Tu gardes ton objet et tu peux continuer.`);
 }
 
 function playChapterEightCinematic() {
@@ -798,6 +882,10 @@ function buildJournal() {
   ui.journalList.innerHTML = "";
   const foundItems = state.discoveries.slice(-18).reverse();
   const visibleItems = getProceduralDiscoveries();
+  const summary = document.createElement("article");
+  summary.className = "journal-item journal-summary";
+  summary.innerHTML = `<strong>Progression</strong><p>Partie ${state.chapter} - ${getBiome(state.player.x).name} - ${getWeatherForChapter().label}. ${state.discoveries.length} decouvertes dans le carnet. ${state.helpedVillagers.length} habitants aides.</p>`;
+  ui.journalList.appendChild(summary);
   if (foundItems.length === 0) {
     const entry = document.createElement("article");
     entry.className = "journal-item";
@@ -829,6 +917,7 @@ function resetGame() {
   state.player.vx = 0;
   state.discoveries = [];
   state.lanterns = [];
+  state.helpedVillagers = [];
   state.camera.x = 0;
   state.chapter = 1;
   state.cinematicPlayed = false;
@@ -841,6 +930,7 @@ function saveGame() {
     x: state.player.x,
     discoveries: state.discoveries,
     lanterns: state.lanterns,
+    helpedVillagers: state.helpedVillagers,
     startedAtLeastOnce: state.startedAtLeastOnce,
     cinematicPlayed: state.cinematicPlayed,
     party: state.party,
@@ -862,6 +952,7 @@ function loadGame() {
     state.player.x = payload.x || 380;
     state.discoveries = Array.isArray(payload.discoveries) ? payload.discoveries.map(normalizeDiscoveryId) : [];
     state.lanterns = Array.isArray(payload.lanterns) ? payload.lanterns : [];
+    state.helpedVillagers = Array.isArray(payload.helpedVillagers) ? payload.helpedVillagers : [];
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
     state.cinematicPlayed = Boolean(payload.cinematicPlayed);
     state.party = normalizeParty(payload.party);
@@ -1167,6 +1258,8 @@ ui.createPartyButton.addEventListener("click", createParty);
 ui.joinPartyButton.addEventListener("click", joinParty);
 ui.leavePartyButton.addEventListener("click", leaveParty);
 ui.leavePartyOptionsButton.addEventListener("click", leaveParty);
+ui.giveItemButton.addEventListener("click", givePendingItem);
+ui.refuseHelpButton.addEventListener("click", refusePendingHelp);
 ui.journalButton.addEventListener("click", () => {
   buildJournal();
   ui.journalDialog.showModal();
