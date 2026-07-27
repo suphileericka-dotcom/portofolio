@@ -17,22 +17,7 @@
       <div class="title-block">
         <p class="eyebrow">Marche contemplative en 2D</p>
         <h1>Bosquet Lent</h1>
-        <p class="intro">Explore une foret douce et infinie, traverse des villages, rencontre des habitants, resous de petites enigmes et repose-toi quand le monde devient trop rapide.</p>
-        <div class="player-card" aria-label="Identification du joueur">
-          <label>
-            <span>Pseudo</span>
-            <input id="nicknameInput" type="text" maxlength="18" autocomplete="nickname" placeholder="Voyageur">
-          </label>
-          <p id="anonymousId" class="identity-note"></p>
-        </div>
-        <div class="party-card" aria-label="Code de partie">
-          <button id="createPartyButton" class="secondary-button" type="button">Creer une partie</button>
-          <label>
-            <span>Code ami</span>
-            <input id="partyCodeInput" type="text" maxlength="6" inputmode="text" placeholder="X8P4K2">
-          </label>
-          <button id="joinPartyButton" class="secondary-button" type="button">Rejoindre</button>
-        </div>
+        <p class="intro">Explore une foret douce, allume les lanternes, collectionne de petites trouvailles et repose-toi pres de la riviere.</p>
         <div class="start-actions">
           <button id="startButton" class="primary-button" type="button">Commencer</button>
           <button id="continueButton" class="secondary-button" type="button">Continuer</button>
@@ -49,6 +34,7 @@
       </div>
       <div class="hud-group">
         <span id="partyLabel" class="hud-pill">Solo</span>
+        <button id="leavePartyButton" class="party-exit" type="button" title="Quitter la partie" aria-label="Quitter la partie">x</button>
         <button id="muteButton" class="sound-button" type="button" title="Couper le son" aria-label="Couper le son">Son</button>
         <button id="journalButton" class="icon-button" type="button" title="Carnet">Carnet</button>
         <button id="optionsButton" class="icon-button" type="button" title="Options">Options</button>
@@ -90,6 +76,29 @@
           <span>Nature</span>
           <input id="natureVolume" type="range" min="0" max="1" step="0.01" value="0.32">
         </label>
+        <section class="options-section" aria-label="Joueur">
+          <h3>Joueur</h3>
+          <label class="field-row">
+            <span>Pseudo</span>
+            <input id="nicknameInput" type="text" maxlength="18" autocomplete="nickname" placeholder="Voyageur">
+          </label>
+          <p id="anonymousId" class="identity-note"></p>
+        </section>
+        <section class="options-section" aria-label="Partie ami">
+          <div class="party-heading">
+            <h3>Partie ami</h3>
+            <button id="leavePartyOptionsButton" class="mini-close-button" type="button" title="Quitter la partie" aria-label="Quitter la partie">x</button>
+          </div>
+          <p id="partyStatus" class="identity-note">Solo</p>
+          <div class="party-card">
+            <button id="createPartyButton" class="secondary-button" type="button">Creer une partie</button>
+            <label class="field-row">
+              <span>Code ami</span>
+              <input id="partyCodeInput" type="text" maxlength="6" inputmode="text" placeholder="X8P4K2">
+            </label>
+            <button id="joinPartyButton" class="secondary-button" type="button">Rejoindre</button>
+          </div>
+        </section>
         <button id="resetButton" class="danger-button" type="button">Recommencer la promenade</button>
       </form>
     </dialog>

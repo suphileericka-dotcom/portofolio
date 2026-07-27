@@ -114,18 +114,16 @@ h2 {
   line-height: 1.7;
 }
 
-.player-card,
 .party-card {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
   gap: 0.7rem;
-  width: min(38rem, 100%);
+  width: 100%;
   margin-top: 1rem;
 }
 
-.player-card label,
-.party-card label {
+.field-row {
   display: grid;
   gap: 0.35rem;
   min-width: min(15rem, 100%);
@@ -135,8 +133,7 @@ h2 {
   text-transform: uppercase;
 }
 
-.player-card input,
-.party-card input {
+.field-row input {
   width: 100%;
   min-height: 2.75rem;
   padding: 0 0.8rem;
@@ -148,8 +145,29 @@ h2 {
   text-transform: none;
 }
 
-.party-card input {
+.party-card .field-row input {
   text-transform: uppercase;
+}
+
+.options-section {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.options-section h3 {
+  margin: 0 0 0.7rem;
+  color: var(--sun);
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.party-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
 }
 
 .identity-note {
@@ -251,6 +269,31 @@ h2 {
 
 .icon-button {
   pointer-events: auto;
+}
+
+.party-exit,
+.mini-close-button {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.55rem;
+  height: 2.55rem;
+  border-radius: 0.5rem;
+  color: var(--ink);
+  background: rgba(206, 111, 117, 0.62);
+  border: 1px solid rgba(247, 243, 223, 0.16);
+  font-weight: 800;
+  pointer-events: auto;
+}
+
+.mini-close-button {
+  width: 2rem;
+  height: 2rem;
+}
+
+.party-exit.is-visible,
+.mini-close-button.is-visible {
+  display: inline-flex;
 }
 
 .sound-button {
@@ -495,8 +538,7 @@ input[type="range"] {
   }
 
   .party-card button,
-  .player-card label,
-  .party-card label {
+  .field-row {
     width: 100%;
   }
 }

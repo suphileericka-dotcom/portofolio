@@ -20,6 +20,9 @@ const ui = {
   createPartyButton: document.getElementById("createPartyButton"),
   partyCodeInput: document.getElementById("partyCodeInput"),
   joinPartyButton: document.getElementById("joinPartyButton"),
+  leavePartyButton: document.getElementById("leavePartyButton"),
+  leavePartyOptionsButton: document.getElementById("leavePartyOptionsButton"),
+  partyStatus: document.getElementById("partyStatus"),
   biomeLabel: document.getElementById("biomeLabel"),
   chapterLabel: document.getElementById("chapterLabel"),
   weatherLabel: document.getElementById("weatherLabel"),
@@ -54,7 +57,7 @@ const state = {
   lanterns: [],
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur" },
-  party: { code: "", members: [] },
+  party: { code: "", members: [], minPlayers: 2, maxPlayers: 4 },
   options: { music: 0.22, nature: 0.32, muted: false, audioVersion: 2 }
 };
 
@@ -673,6 +676,7 @@ function draw() {
   ui.weatherLabel.textContent = getWeatherForChapter().label;
   ui.partyLabel.textContent = state.party.code ? `Code ${state.party.code}` : "Solo";
   ui.discoveryCount.textContent = `${state.discoveries.length} decouvertes`;
+  updatePartyUi();
 }
 
 function update(dt) {
@@ -860,13 +864,24 @@ function loadGame() {
     state.lanterns = Array.isArray(payload.lanterns) ? payload.lanterns : [];
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
     state.cinematicPlayed = Boolean(payload.cinematicPlayed);
-    state.party = payload.party && typeof payload.party === "object" ? payload.party : state.party;
+    state.party = normalizeParty(payload.party);
     state.chapter = getChapter(state.player.x);
     if (payload.nickname) state.playerProfile.nickname = payload.nickname;
     return true;
   } catch {
     return false;
   }
+}
+
+function normalizeParty(party) {
+  if (!party || typeof party !== "object") return { code: "", members: [], minPlayers: 2, maxPlayers: 4 };
+  const members = Array.isArray(party.members) ? party.members.filter(Boolean).slice(0, 4) : [];
+  return {
+    code: typeof party.code === "string" ? party.code.slice(0, 6).toUpperCase() : "",
+    members,
+    minPlayers: 2,
+    maxPlayers: 4
+  };
 }
 
 function normalizeDiscoveryId(id) {
@@ -910,28 +925,70 @@ function savePlayerProfile() {
 
 function makePartyCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  let code = "";
+  do {
+    code = Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  } while (code === state.party.code);
+  return code;
 }
 
 function createParty() {
   savePlayerProfile();
-  state.party = { code: makePartyCode(), members: [state.playerProfile.id] };
+  state.party = { code: makePartyCode(), members: [state.playerProfile.id], minPlayers: 2, maxPlayers: 4 };
   ui.partyCodeInput.value = state.party.code;
-  showMessage(`Partie creee: ${state.party.code}. Un ami peut saisir ce code pour rejoindre.`);
+  updatePartyUi();
+  showMessage(`Partie creee: ${state.party.code}. Minimum 2 joueurs, maximum 4.`);
   saveGame();
 }
 
 function joinParty() {
   const code = ui.partyCodeInput.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
-  if (code.length < 4) {
-    showMessage("Entre un code de partie valide pour rejoindre un ami.");
+  if (code.length !== 6) {
+    showMessage("Entre un code de partie a 6 caracteres pour rejoindre un ami.");
     return;
   }
   savePlayerProfile();
-  state.party = { code, members: Array.from(new Set([...(state.party.members || []), state.playerProfile.id])) };
+  const sameParty = state.party.code === code;
+  const members = sameParty ? [...(state.party.members || [])] : [];
+  const alreadyInside = members.includes(state.playerProfile.id);
+  if (!alreadyInside && members.length >= 4) {
+    showMessage("Cette partie est pleine. Maximum 4 joueurs.");
+    return;
+  }
+  state.party = {
+    code,
+    members: Array.from(new Set([...members, state.playerProfile.id])).slice(0, 4),
+    minPlayers: 2,
+    maxPlayers: 4
+  };
   ui.partyCodeInput.value = code;
-  showMessage(`Tu as rejoint la partie ${code}. La reprise gardera ce groupe en memoire.`);
+  updatePartyUi();
+  showMessage(`Tu as rejoint la partie ${code}. Elle accepte 2 a 4 joueurs.`);
   saveGame();
+}
+
+function leaveParty() {
+  if (!state.party.code) {
+    showMessage("Tu joues deja en solo.");
+    return;
+  }
+  state.party = { code: "", members: [], minPlayers: 2, maxPlayers: 4 };
+  ui.partyCodeInput.value = "";
+  updatePartyUi();
+  saveGame();
+  showMessage("Tu as quitte la partie. Tu continues seul(e).");
+}
+
+function updatePartyUi() {
+  const inParty = Boolean(state.party.code);
+  const count = state.party.members.length || (inParty ? 1 : 0);
+  ui.partyLabel.textContent = inParty ? `Code ${state.party.code}` : "Solo";
+  ui.partyStatus.textContent = inParty
+    ? `Code ${state.party.code} - ${count} / 4 joueurs. La partie commence vraiment a partir de 2 joueurs.`
+    : "Solo - cree une partie ou entre le code d'un ami.";
+  ui.partyCodeInput.value = inParty ? state.party.code : ui.partyCodeInput.value;
+  ui.leavePartyButton.classList.toggle("is-visible", inParty);
+  ui.leavePartyOptionsButton.classList.toggle("is-visible", inParty);
 }
 
 function loadOptions() {
@@ -1108,6 +1165,8 @@ ui.nicknameInput.addEventListener("change", () => {
 });
 ui.createPartyButton.addEventListener("click", createParty);
 ui.joinPartyButton.addEventListener("click", joinParty);
+ui.leavePartyButton.addEventListener("click", leaveParty);
+ui.leavePartyOptionsButton.addEventListener("click", leaveParty);
 ui.journalButton.addEventListener("click", () => {
   buildJournal();
   ui.journalDialog.showModal();
@@ -1141,6 +1200,7 @@ loadOptions();
 const hasSave = loadGame();
 ui.nicknameInput.value = state.playerProfile.nickname;
 ui.partyCodeInput.value = state.party.code || "";
+updatePartyUi();
 ui.continueButton.disabled = !hasSave;
 ui.continueButton.style.opacity = hasSave ? "1" : "0.55";
 resize();

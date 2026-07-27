@@ -7,6 +7,8 @@ Ouvrir `index.html` dans un navigateur pour jouer.
 Nouveautes:
 - Identifiant anonyme genere au premier lancement, sans creation de compte visible
 - Pseudo joueur, code de partie ami et reprise de partie via sauvegarde locale
+- Creation ou rejoindre une partie depuis les options, avec parties de 2 a 4 joueurs
+- Croix pour quitter une partie ami et continuer en solo
 - Monde procedurale infini avec biomes qui reviennent sous de nouvelles formes
 - Meteo changeante, villages, habitants, enigmes et repos qui ralentit le temps
 - Mini scene narrative automatique a partir de la partie 8
