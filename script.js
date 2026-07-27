@@ -73,11 +73,13 @@ const biomes = [
 
 const weatherTypes = [
   { id: "clear", label: "Temps clair", sky: "#ffffff", alpha: 0, wind: 0.85 },
-  { id: "rain", label: "Pluie fine", sky: "#9eb1bd", alpha: 0.22, wind: 1.25 },
-  { id: "mist", label: "Brume", sky: "#dbe7df", alpha: 0.28, wind: 0.55 },
+  { id: "rain", label: "Pluie fine", sky: "#9eb1bd", alpha: 0.14, wind: 1.15 },
+  { id: "mist", label: "Brume", sky: "#dbe7df", alpha: 0.16, wind: 0.55 },
   { id: "wind", label: "Grand vent", sky: "#d9c57c", alpha: 0.14, wind: 1.75 },
-  { id: "snow", label: "Neige lente", sky: "#eef4f7", alpha: 0.18, wind: 0.68 }
+  { id: "snow", label: "Neige lente", sky: "#eef4f7", alpha: 0.12, wind: 0.68 }
 ];
+
+const weatherSchedule = ["clear", "rain", "clear", "mist", "clear", "wind", "clear", "snow", "clear", "clear"];
 
 const villagers = [
   { role: "Tisserande d'ombres", line: "Elle dit que les chemins longs finissent par raconter ton nom." },
@@ -89,14 +91,14 @@ const villagers = [
 ];
 
 const villagerNeeds = [
-  { itemId: "leaf", itemLabel: "Feuille nervuree", need: "recoudre une carte dechiree par le vent", use: "sert a reparer les cartes fragiles et ouvrir des raccourcis dans les villages" },
+  { itemId: "leaf", itemLabel: "Feuille nervuree", need: "recoudre une carte dechiree par le vent", use: "sert a reparer les cartes fragiles, ouvrir des raccourcis et se proteger de la pluie" },
   { itemId: "stone", itemLabel: "Pierre polie", need: "caler la porte d'une maison qui tremble", use: "sert a stabiliser des mecanismes, des portes et des ponts anciens" },
   { itemId: "feather", itemLabel: "Plume claire", need: "terminer une lettre qui ne voulait pas partir", use: "sert a ecrire des messages et apaiser certains habitants" },
   { itemId: "moss", itemLabel: "Statue moussue", need: "se souvenir du nom d'une vieille place", use: "sert de memoire vivante pour reveiller des lieux oublies" },
-  { itemId: "shell", itemLabel: "Coquille de riviere", need: "appeler l'eau jusqu'au puits", use: "sert a comprendre les rivieres, les puits et les passages humides" },
-  { itemId: "cone", itemLabel: "Pomme de pin bleue", need: "rallumer un four trop froid", use: "sert a produire une chaleur douce sans bruler la foret" },
-  { itemId: "mushroom", itemLabel: "Champignon lueur", need: "guider un enfant dans la nuit", use: "sert de lampe calme pour les caves, les nuits et les maisons eteintes" },
-  { itemId: "star", itemLabel: "Eclat d'etoile", need: "retrouver le chemin du matin", use: "sert a activer les grands passages apres la route scenarisee" }
+  { itemId: "shell", itemLabel: "Coquille de riviere", need: "appeler l'eau jusqu'au puits", use: "sert a comprendre les rivieres, les puits, les passages humides et la pluie" },
+  { itemId: "cone", itemLabel: "Pomme de pin bleue", need: "rallumer un four trop froid", use: "sert a produire une chaleur douce contre la neige et le froid" },
+  { itemId: "mushroom", itemLabel: "Champignon lueur", need: "guider un enfant dans la nuit", use: "sert de lampe calme contre la brume, la nuit et la neige" },
+  { itemId: "star", itemLabel: "Eclat d'etoile", need: "retrouver le chemin du matin", use: "sert a activer les grands passages et garder une lumiere dans la brume" }
 ];
 
 const riddles = [
@@ -173,8 +175,8 @@ function getChapter(x = state.player.x) {
 
 function getWeatherForChapter(chapter = state.chapter) {
   if (!isExpandedWorld()) return weatherTypes[0];
-  const index = ((chapter - 4) % weatherTypes.length + weatherTypes.length) % weatherTypes.length;
-  return weatherTypes[index];
+  const index = ((chapter - 4) % weatherSchedule.length + weatherSchedule.length) % weatherSchedule.length;
+  return weatherTypes.find((weather) => weather.id === weatherSchedule[index]) || weatherTypes[0];
 }
 
 function getProceduralDiscoveries() {
@@ -577,11 +579,12 @@ function drawWeather() {
   const weather = getWeatherForChapter();
   const w = window.innerWidth;
   const h = window.innerHeight;
+  const protectedFromWeather = getWeatherProtection(weather.id);
   ctx.save();
   if (weather.id === "rain") {
-    ctx.strokeStyle = "rgba(216, 235, 241, 0.42)";
+    ctx.strokeStyle = protectedFromWeather ? "rgba(216, 235, 241, 0.18)" : "rgba(216, 235, 241, 0.34)";
     ctx.lineWidth = 1.4;
-    for (let i = 0; i < 80; i += 1) {
+    for (let i = 0; i < (protectedFromWeather ? 36 : 64); i += 1) {
       const x = (i * 47 + state.time * 360) % (w + 80) - 40;
       const y = (i * 91 + state.time * 520) % (h + 90) - 60;
       ctx.beginPath();
@@ -591,8 +594,8 @@ function drawWeather() {
     }
   }
   if (weather.id === "mist") {
-    ctx.fillStyle = "rgba(236, 242, 226, 0.18)";
-    for (let i = 0; i < 7; i += 1) {
+    ctx.fillStyle = protectedFromWeather ? "rgba(236, 242, 226, 0.07)" : "rgba(236, 242, 226, 0.13)";
+    for (let i = 0; i < (protectedFromWeather ? 3 : 5); i += 1) {
       const x = (i * 260 + state.time * 24) % (w + 360) - 180;
       drawEllipse(x, h * (0.35 + i * 0.06), 210, 24, ctx.fillStyle);
     }
@@ -610,8 +613,8 @@ function drawWeather() {
     }
   }
   if (weather.id === "snow") {
-    ctx.fillStyle = "rgba(247, 250, 252, 0.72)";
-    for (let i = 0; i < 70; i += 1) {
+    ctx.fillStyle = protectedFromWeather ? "rgba(247, 250, 252, 0.4)" : "rgba(247, 250, 252, 0.62)";
+    for (let i = 0; i < (protectedFromWeather ? 34 : 58); i += 1) {
       const x = (i * 59 + Math.sin(state.time + i) * 30) % (w + 80) - 40;
       const y = (i * 83 + state.time * 58) % (h + 70) - 40;
       ctx.beginPath();
@@ -677,9 +680,24 @@ function drawPlayer() {
 function drawOverlay() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const night = Math.max(0, (state.player.x - 5000) / 1700);
-  ctx.fillStyle = `rgba(10, 16, 30, ${0.1 + night * 0.42})`;
+  const night = Math.max(0, Math.min(1, (state.player.x - 5200) / 2800));
+  const hasLight = hasCollectedBaseItem("mushroom") || hasCollectedBaseItem("star");
+  const darkness = 0.08 + night * (hasLight ? 0.13 : 0.2);
+  ctx.fillStyle = `rgba(10, 16, 30, ${darkness})`;
   ctx.fillRect(0, 0, w, h);
+  if (night > 0.05) {
+    const px = state.player.x - state.camera.x;
+    const py = state.player.y - 54;
+    ctx.save();
+    const glow = ctx.createRadialGradient(px, py, 18, px, py, hasLight ? 190 : 135);
+    glow.addColorStop(0, hasLight ? "rgba(255, 229, 151, 0.26)" : "rgba(247, 243, 223, 0.16)");
+    glow.addColorStop(1, "rgba(247, 243, 223, 0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(px, py, hasLight ? 190 : 135, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   if (state.player.rest > 0) {
     ctx.save();
     ctx.globalAlpha = state.player.rest * 0.24;
@@ -716,7 +734,10 @@ function update(dt) {
   if (pointer.active && Math.abs(pointer.worldX - p.x) > 12) input += Math.sign(pointer.worldX - p.x) * 0.82;
   input = Math.max(-1, Math.min(1, input));
 
-  const maxSpeed = p.rest > 0.15 ? 55 : 185;
+  const weather = getWeatherForChapter();
+  const protectedFromWeather = getWeatherProtection(weather.id);
+  const weatherSlowdown = !protectedFromWeather && (weather.id === "rain" || weather.id === "snow") ? 0.82 : 1;
+  const maxSpeed = (p.rest > 0.15 ? 55 : 185) * weatherSlowdown;
   const target = input * maxSpeed;
   p.vx += (target - p.vx) * Math.min(1, dt * 5.5);
   p.x += p.vx * dt;
@@ -807,11 +828,17 @@ function showMessageFor(text, duration = 3400) {
 function announceWeather() {
   const weather = getWeatherForChapter();
   if (weather.id === "clear") return;
-  const lines = {
-    rain: "Pluie fine: les feuilles gardent les secrets plus longtemps.",
+  const protectedFromWeather = getWeatherProtection(weather.id);
+  const lines = protectedFromWeather ? {
+    rain: "Pluie fine: tes trouvailles te protegent, la route reste lisible.",
+    mist: "Brume: ta lumiere perce le voile, tu peux continuer sans te perdre.",
+    wind: "Grand vent: les herbes se couchent et les lanternes hesitent.",
+    snow: "Neige lente: tu gardes assez de chaleur pour avancer."
+  } : {
+    rain: "Pluie fine: sans protection, le pas devient plus lourd.",
     mist: "Brume: pendant quelques instants, le village devient plus difficile a lire.",
     wind: "Grand vent: les herbes se couchent et les lanternes hesitent.",
-    snow: "Neige lente: le chemin devient silencieux."
+    snow: "Neige lente: le froid ralentit la marche."
   };
   showMessageFor(lines[weather.id] || weather.label, 25000);
 }
@@ -824,6 +851,19 @@ function baseDiscoveryId(id) {
 
 function hasCollectedBaseItem(itemId) {
   return state.discoveries.some((id) => baseDiscoveryId(id) === itemId);
+}
+
+function getWeatherProtection(weatherId = state.weather) {
+  if (weatherId === "rain") {
+    return hasCollectedBaseItem("leaf") || hasCollectedBaseItem("shell");
+  }
+  if (weatherId === "mist") {
+    return hasCollectedBaseItem("mushroom") || hasCollectedBaseItem("star");
+  }
+  if (weatherId === "snow") {
+    return hasCollectedBaseItem("cone") || hasCollectedBaseItem("mushroom");
+  }
+  return false;
 }
 
 function hasCollectedDiscovery(item) {
