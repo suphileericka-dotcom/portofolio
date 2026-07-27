@@ -49,7 +49,7 @@ let lastTime = 0;
 let running = false;
 let messageTimer = 0;
 let pendingVillagerHelp = null;
-const net = { socket: null, connected: false, lastMoveSent: 0 };
+const net = { socket: null, connected: false, lastMoveSent: 0, lastMemberCount: 0, statusMessage: "" };
 
 const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0 },
@@ -535,10 +535,7 @@ function getPartyCompanions() {
     .map((member) => (typeof member === "string" ? { id: member, nickname: "Ami" } : member))
     .filter((member) => member.id && member.id !== state.playerProfile.id)
     .slice(0, 3);
-  const displayMembers = remoteMembers.length > 0
-    ? remoteMembers
-    : Array.from({ length: Math.max(1, Math.min(3, (members.length || 2) - 1)) }, (_, index) => ({ id: `companion-${index}`, nickname: ["Ami 1", "Ami 2", "Ami 3"][index] }));
-  return displayMembers.map((member, index) => ({
+  return remoteMembers.map((member, index) => ({
     id: member.id,
     label: member.nickname || ["Ami 1", "Ami 2", "Ami 3"][index],
     x: Number.isFinite(member.x) ? member.x : state.player.x - 70 - index * 54 + Math.sin(state.time * 1.5 + index) * 8,
@@ -588,10 +585,6 @@ function sendReaction(symbol) {
   }
   state.reactions.push({ actorId: state.playerProfile.id, symbol, until: state.time + 4 });
   syncAction("reaction", { symbol, until: Date.now() + 4000 });
-  const companions = getPartyCompanions();
-  if (companions[0]) {
-    state.reactions.push({ actorId: companions[0].id, symbol: ":)", until: state.time + 4.5 });
-  }
   ui.reactionMenu.classList.remove("is-visible");
   showMessage(`Reaction envoyee au groupe: ${symbol}`);
 }
@@ -1253,7 +1246,7 @@ function createParty() {
   state.party = { code: makePartyCode(), members: [getNetworkPlayer()], minPlayers: 2, maxPlayers: 4 };
   ui.partyCodeInput.value = state.party.code;
   updatePartyUi();
-  showMessage(`Partie creee: ${state.party.code}. Minimum 2 joueurs, maximum 4.`);
+  showMessage(`Partie locale creee: ${state.party.code}. Pour inviter un telephone, lance npm start et ouvre l'adresse du PC.`);
   saveGame();
 }
 
@@ -1264,6 +1257,10 @@ function joinParty() {
     return;
   }
   savePlayerProfile();
+  if (!net.connected) {
+    showMessage("Serveur non connecte: ouvre le jeu depuis l'adresse du PC, par exemple http://IP_DU_PC:3000.");
+    return;
+  }
   if (net.connected) {
     net.socket.emit("party:join", { code, player: getNetworkPlayer() });
     return;
@@ -1306,7 +1303,7 @@ function updatePartyUi() {
   ui.partyLabel.textContent = inParty ? `Code ${state.party.code}` : "Solo";
   ui.partyStatus.textContent = inParty
     ? `Code ${state.party.code} - ${count} / 4 joueurs. La partie commence vraiment a partir de 2 joueurs.`
-    : "Solo - cree une partie ou entre le code d'un ami.";
+    : net.statusMessage || "Solo - cree une partie ou entre le code d'un ami.";
   ui.partyCodeInput.value = inParty ? state.party.code : ui.partyCodeInput.value;
   ui.leavePartyButton.classList.toggle("is-visible", inParty);
   ui.leavePartyOptionsButton.classList.toggle("is-visible", inParty);
@@ -1333,6 +1330,7 @@ function mergeMembers(members) {
 
 function applyServerSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return;
+  const previousCount = state.party.members.length || 0;
   state.party = normalizeParty(snapshot.party || state.party);
   state.discoveries = Array.isArray(snapshot.discoveries) ? snapshot.discoveries : state.discoveries;
   state.lanterns = Array.isArray(snapshot.lanterns) ? snapshot.lanterns : state.lanterns;
@@ -1346,14 +1344,37 @@ function applyServerSnapshot(snapshot) {
     }));
   }
   updatePartyUi();
+  const nextCount = state.party.members.length || 0;
+  if (running && nextCount > previousCount && nextCount >= 2) {
+    playGroupMeetTransition(nextCount);
+  }
+  net.lastMemberCount = nextCount;
   saveGame();
 }
 
+function playGroupMeetTransition(count) {
+  running = false;
+  ui.cinematic.classList.add("is-visible");
+  ui.cinematicText.textContent = count === 2
+    ? "Vous vous retrouvez sur le sentier."
+    : `Vous etes maintenant ${count} sur la route.`;
+  setTimeout(() => {
+    ui.cinematic.classList.remove("is-visible");
+    running = true;
+    showMessage(`${count} joueur${count > 1 ? "s" : ""} dans la partie. Vous avancez ensemble.`);
+  }, 2200);
+}
+
 function setupRealtime() {
-  if (!window.io) return;
+  if (!window.io) {
+    net.statusMessage = "Serveur temps reel absent. Pour le multi, lance npm start et ouvre http://IP_DU_PC:3000.";
+    updatePartyUi();
+    return;
+  }
   net.socket = window.io();
   net.socket.on("connect", () => {
     net.connected = true;
+    net.statusMessage = "";
     if (state.party.code) {
       net.socket.emit("party:join", { code: state.party.code, player: getNetworkPlayer() });
     }
@@ -1361,6 +1382,11 @@ function setupRealtime() {
   net.socket.on("disconnect", () => {
     net.connected = false;
     showMessage("Connexion serveur perdue. La partie continue en local en attendant.");
+  });
+  net.socket.on("connect_error", () => {
+    net.connected = false;
+    net.statusMessage = "Serveur inaccessible. Le telephone doit ouvrir l'adresse reseau du PC, pas localhost.";
+    updatePartyUi();
   });
   net.socket.on("party:created", ({ snapshot }) => {
     applyServerSnapshot(snapshot);

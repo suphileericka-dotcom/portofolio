@@ -8,6 +8,7 @@ Pour jouer avec le serveur temps reel:
 - Installer les dependances: `npm install`
 - Lancer le serveur: `npm start`
 - Ouvrir `http://localhost:3000`
+- Sur telephone, ouvrir l'adresse reseau du PC, par exemple `http://192.168.1.25:3000`
 
 Nouveautes:
 - Identifiant anonyme genere au premier lancement, sans creation de compte visible
