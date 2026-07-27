@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bosquet Lent - Jeu contemplatif</title>
+  <meta name="theme-color" content="#142221">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Bosquet Lent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800&family=Spectral:wght@600;700&display=swap" rel="stylesheet">
@@ -29,11 +35,19 @@
       <div class="hud-group">
         <span id="partyLabel" class="hud-pill">Solo</span>
         <button id="leavePartyButton" class="party-exit" type="button" title="Quitter la partie" aria-label="Quitter la partie">x</button>
+        <button id="reactionButton" class="reaction-button" type="button" title="Reactions" aria-label="Reactions">☺</button>
         <button id="muteButton" class="sound-button" type="button" title="Couper le son" aria-label="Couper le son">Son</button>
         <button id="journalButton" class="icon-button" type="button" title="Carnet">Carnet</button>
         <button id="optionsButton" class="icon-button" type="button" title="Options">Options</button>
       </div>
     </section>
+    <div id="reactionMenu" class="reaction-menu" aria-label="Choisir une reaction">
+      <button type="button" data-reaction="☺">☺</button>
+      <button type="button" data-reaction="!">!</button>
+      <button type="button" data-reaction="?">?</button>
+      <button type="button" data-reaction="♥">♥</button>
+      <button type="button" data-reaction="☀">☀</button>
+    </div>
 
     <aside id="message" class="message" aria-live="polite"></aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
@@ -113,5 +127,10 @@
   </main>
 
   <script src="script.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+  </script>
 </body>
 </html>

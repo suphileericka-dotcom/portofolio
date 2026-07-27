@@ -251,7 +251,8 @@ h2 {
 
 .hud-pill,
 .icon-button,
-.sound-button {
+.sound-button,
+.reaction-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -269,6 +270,41 @@ h2 {
 
 .icon-button {
   pointer-events: auto;
+}
+
+.reaction-button {
+  width: 2.55rem;
+  padding: 0;
+  pointer-events: auto;
+}
+
+.reaction-menu {
+  position: absolute;
+  z-index: 5;
+  top: 4.2rem;
+  right: 9.5rem;
+  display: none;
+  gap: 0.35rem;
+  padding: 0.45rem;
+  border: 1px solid rgba(247, 243, 223, 0.16);
+  border-radius: 0.5rem;
+  background: rgba(20, 34, 33, 0.78);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+
+.reaction-menu.is-visible {
+  display: flex;
+}
+
+.reaction-menu button {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.5rem;
+  color: var(--ink);
+  background: rgba(247, 243, 223, 0.13);
+  border: 1px solid var(--line);
+  font-weight: 800;
 }
 
 .party-exit,
@@ -532,7 +568,8 @@ input[type="range"] {
 
   .hud-pill,
   .icon-button,
-  .sound-button {
+  .sound-button,
+  .reaction-button {
     min-height: 2.35rem;
     padding: 0 0.62rem;
     font-size: 0.8rem;
@@ -541,6 +578,16 @@ input[type="range"] {
   .sound-button {
     width: 2.35rem;
     padding: 0;
+  }
+
+  .reaction-button {
+    width: 2.35rem;
+    padding: 0;
+  }
+
+  .reaction-menu {
+    top: 3.7rem;
+    right: 4.1rem;
   }
 
   .message {

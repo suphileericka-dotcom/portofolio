@@ -24,6 +24,8 @@ const ui = {
   leavePartyOptionsButton: document.getElementById("leavePartyOptionsButton"),
   partyStatus: document.getElementById("partyStatus"),
   partyLabel: document.getElementById("partyLabel"),
+  reactionButton: document.getElementById("reactionButton"),
+  reactionMenu: document.getElementById("reactionMenu"),
   villagerDialog: document.getElementById("villagerDialog"),
   villagerTitle: document.getElementById("villagerTitle"),
   villagerText: document.getElementById("villagerText"),
@@ -58,6 +60,9 @@ const state = {
   discoveries: [],
   lanterns: [],
   helpedVillagers: [],
+  groupRest: 0,
+  lastSeatActor: "",
+  reactions: [],
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur" },
   party: { code: "", members: [], minPlayers: 2, maxPlayers: 4 },
@@ -516,8 +521,70 @@ function drawWorldObjects() {
   });
 
   drawRiver();
+  drawPartyCompanions();
   drawPlayer();
   ctx.restore();
+}
+
+function getPartyCompanions() {
+  if (!state.party.code) return [];
+  const colors = ["#67b4c8", "#8ebf76", "#b98ad6"];
+  const count = Math.max(1, Math.min(3, (state.party.members.length || 2) - 1));
+  return Array.from({ length: count }, (_, index) => ({
+    id: `companion-${index}`,
+    label: ["Ami 1", "Ami 2", "Ami 3"][index],
+    x: state.player.x - 70 - index * 54 + Math.sin(state.time * 1.5 + index) * 8,
+    y: world.ground,
+    face: state.player.face,
+    body: colors[index],
+    seated: state.groupRest > 0.18
+  }));
+}
+
+function drawPartyCompanions() {
+  const companions = getPartyCompanions();
+  companions.forEach((companion, index) => {
+    const reaction = getActiveReactionFor(companion.id);
+    drawCharacter({
+      x: companion.x,
+      y: companion.y,
+      face: companion.face,
+      velocity: state.player.vx * 0.65,
+      body: companion.body,
+      skin: "#e7b879",
+      hair: "#2d4c57",
+      label: companion.label,
+      reaction,
+      seated: companion.seated
+    });
+    if (state.groupRest > 0.4 && index === 0) {
+      drawPrompt(companion.x, companion.y - 108, "se repose");
+    }
+  });
+  const ownReaction = getActiveReactionFor(state.playerProfile.id);
+  if (ownReaction) drawReactionBubble(state.player.x, state.player.y - 132, ownReaction);
+}
+
+function getActiveReactionFor(actorId) {
+  for (let index = state.reactions.length - 1; index >= 0; index -= 1) {
+    const reaction = state.reactions[index];
+    if (reaction.actorId === actorId && reaction.until > state.time) return reaction.symbol;
+  }
+  return "";
+}
+
+function sendReaction(symbol) {
+  if (!state.party.code) {
+    showMessage("Rejoins ou cree une partie pour envoyer des reactions au groupe.");
+    return;
+  }
+  state.reactions.push({ actorId: state.playerProfile.id, symbol, until: state.time + 4 });
+  const companions = getPartyCompanions();
+  if (companions[0]) {
+    state.reactions.push({ actorId: companions[0].id, symbol: "☺", until: state.time + 4.5 });
+  }
+  ui.reactionMenu.classList.remove("is-visible");
+  showMessage(`Reaction envoyee au groupe: ${symbol}`);
 }
 
 function drawRiver() {
@@ -640,12 +707,25 @@ function drawPrompt(x, y, text) {
 
 function drawPlayer() {
   const p = state.player;
-  const walk = Math.sin(state.time * 10) * Math.min(1, Math.abs(p.vx) / 190);
-  const x = p.x;
-  const y = p.y - 48;
+  drawCharacter({
+    x: p.x,
+    y: p.y,
+    face: p.face,
+    velocity: p.vx,
+    body: "#ce6f75",
+    skin: "#f0bd6c",
+    hair: "#22322c",
+    label: state.playerProfile.nickname,
+    seated: p.rest > 0.2
+  });
+}
+
+function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = "#f0bd6c", hair = "#22322c", label = "", reaction = "", seated = false }) {
+  const walk = seated ? 0 : Math.sin(state.time * 10) * Math.min(1, Math.abs(velocity) / 190);
+  const baseY = y - 48 + (seated ? 10 : 0);
   ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(p.face, 1);
+  ctx.translate(x, baseY);
+  ctx.scale(face, 1);
   ctx.fillStyle = "rgba(0,0,0,0.18)";
   ctx.beginPath();
   ctx.ellipse(0, 50, 28, 8, 0, 0, Math.PI * 2);
@@ -655,14 +735,14 @@ function drawPlayer() {
   ctx.lineCap = "round";
   ctx.beginPath();
   ctx.moveTo(-8, 22);
-  ctx.lineTo(-16 - walk * 8, 47);
+  ctx.lineTo(seated ? -22 : -16 - walk * 8, seated ? 38 : 47);
   ctx.moveTo(9, 23);
-  ctx.lineTo(17 + walk * 8, 47);
+  ctx.lineTo(seated ? 22 : 17 + walk * 8, seated ? 38 : 47);
   ctx.stroke();
-  ctx.fillStyle = "#ce6f75";
+  ctx.fillStyle = body;
   roundedRect(-17, -5, 34, 39, 13);
   ctx.fill();
-  ctx.fillStyle = "#f0bd6c";
+  ctx.fillStyle = skin;
   ctx.beginPath();
   ctx.arc(0, -23, 18, 0, Math.PI * 2);
   ctx.fill();
@@ -670,10 +750,36 @@ function drawPlayer() {
   ctx.beginPath();
   ctx.arc(8, -26, 3, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#22322c";
+  ctx.fillStyle = hair;
   ctx.beginPath();
   ctx.ellipse(-3, -37, 20, 10, -0.2, Math.PI, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+
+  if (label && Math.abs(x - state.player.x) < 260) {
+    ctx.save();
+    ctx.font = "800 11px Nunito";
+    ctx.fillStyle = "rgba(20, 34, 33, 0.7)";
+    roundedRect(x - 44, baseY - 66, 88, 22, 7);
+    ctx.fill();
+    ctx.fillStyle = "#f7f3df";
+    ctx.textAlign = "center";
+    ctx.fillText(label.slice(0, 12), x, baseY - 51);
+    ctx.restore();
+  }
+
+  if (reaction) drawReactionBubble(x, baseY - 86, reaction);
+}
+
+function drawReactionBubble(x, y, reaction) {
+  ctx.save();
+  ctx.font = "800 22px Nunito";
+  ctx.fillStyle = "rgba(20, 34, 33, 0.78)";
+  roundedRect(x - 22, y - 26, 44, 38, 10);
+  ctx.fill();
+  ctx.fillStyle = "#f7f3df";
+  ctx.textAlign = "center";
+  ctx.fillText(reaction, x, y);
   ctx.restore();
 }
 
@@ -698,9 +804,10 @@ function drawOverlay() {
     ctx.fill();
     ctx.restore();
   }
-  if (state.player.rest > 0) {
+  const restingTogether = Math.max(state.player.rest, state.groupRest);
+  if (restingTogether > 0) {
     ctx.save();
-    ctx.globalAlpha = state.player.rest * 0.24;
+    ctx.globalAlpha = restingTogether * 0.24;
     ctx.fillStyle = "#f7f3df";
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
@@ -737,7 +844,8 @@ function update(dt) {
   const weather = getWeatherForChapter();
   const protectedFromWeather = getWeatherProtection(weather.id);
   const weatherSlowdown = !protectedFromWeather && (weather.id === "rain" || weather.id === "snow") ? 0.82 : 1;
-  const maxSpeed = (p.rest > 0.15 ? 55 : 185) * weatherSlowdown;
+  const restingTogether = Math.max(p.rest, state.groupRest);
+  const maxSpeed = (restingTogether > 0.15 ? 55 : 185) * weatherSlowdown;
   const target = input * maxSpeed;
   p.vx += (target - p.vx) * Math.min(1, dt * 5.5);
   p.x += p.vx * dt;
@@ -745,13 +853,15 @@ function update(dt) {
   p.y = world.ground;
   if (Math.abs(p.vx) > 5) p.face = Math.sign(p.vx);
   p.rest = Math.max(0, p.rest - dt * 0.35);
+  state.groupRest = Math.max(0, state.groupRest - dt * 0.28);
+  state.reactions = state.reactions.filter((reaction) => reaction.until > state.time);
   const previousWeather = state.weather;
   state.chapter = getChapter();
   state.weather = getWeatherForChapter().id;
   if (previousWeather !== state.weather) announceWeather();
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
-  const targetZoom = p.rest > 0 ? 1.08 : 1;
+  const targetZoom = restingTogether > 0 ? 1.08 : 1;
   state.camera.zoom += (targetZoom - state.camera.zoom) * Math.min(1, dt * 2.5);
   const targetCamera = p.x - window.innerWidth * 0.45;
   state.camera.x += (targetCamera - state.camera.x) * Math.min(1, dt * 2.8);
@@ -798,7 +908,13 @@ function interact() {
   const rest = getProceduralRests().find((entry) => Math.abs(entry.x - p.x) < 98);
   if (rest) {
     p.rest = 1;
-    showMessage(`Tu t'assois un instant sur le ${rest.label}. Tout ralentit.`);
+    if (state.party.code) {
+      state.groupRest = 1;
+      state.lastSeatActor = state.playerProfile.nickname;
+      showMessage(`${state.playerProfile.nickname} s'assoit sur le ${rest.label}. Le groupe ralentit avec lui.`);
+    } else {
+      showMessage(`Tu t'assois un instant sur le ${rest.label}. Tout ralentit.`);
+    }
     saveGame();
     return;
   }
@@ -894,13 +1010,17 @@ function openVillagerHelp(villager) {
 
 function givePendingItem() {
   if (!pendingVillagerHelp) return;
+  if (state.helpedVillagers.includes(pendingVillagerHelp.villageId)) {
+    showMessage("Cet habitant a deja recu de l'aide dans cette partie.");
+    ui.villagerDialog.close();
+    pendingVillagerHelp = null;
+    return;
+  }
   if (!hasCollectedBaseItem(pendingVillagerHelp.need.itemId)) {
     showMessage("Tu n'as pas encore cet objet dans ton carnet.");
     return;
   }
-  if (!state.helpedVillagers.includes(pendingVillagerHelp.villageId)) {
-    state.helpedVillagers.push(pendingVillagerHelp.villageId);
-  }
+  state.helpedVillagers.push(pendingVillagerHelp.villageId);
   ui.villagerDialog.close();
   showMessage(`${pendingVillagerHelp.role} accepte ${pendingVillagerHelp.need.itemLabel}. Le village se souviendra de ce geste.`);
   pendingVillagerHelp = null;
@@ -1325,6 +1445,12 @@ ui.createPartyButton.addEventListener("click", createParty);
 ui.joinPartyButton.addEventListener("click", joinParty);
 ui.leavePartyButton.addEventListener("click", leaveParty);
 ui.leavePartyOptionsButton.addEventListener("click", leaveParty);
+ui.reactionButton.addEventListener("click", () => {
+  ui.reactionMenu.classList.toggle("is-visible");
+});
+ui.reactionMenu.querySelectorAll("button").forEach((button) => {
+  button.addEventListener("click", () => sendReaction(button.dataset.reaction));
+});
 ui.giveItemButton.addEventListener("click", givePendingItem);
 ui.refuseHelpButton.addEventListener("click", refusePendingHelp);
 ui.journalButton.addEventListener("click", () => {

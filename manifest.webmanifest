@@ -1,0 +1,19 @@
+{
+  "name": "Bosquet Lent",
+  "short_name": "Bosquet",
+  "description": "Jeu contemplatif de marche, de villages et de petites decouvertes.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101817",
+  "theme_color": "#142221",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
