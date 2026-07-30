@@ -52,6 +52,7 @@
     </div>
 
     <aside id="message" class="message" aria-live="polite"></aside>
+    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.7</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -176,7 +177,16 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=1.0.7").then((registration) => {
+        registration.update();
+        if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      }).catch(() => {});
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!sessionStorage.getItem("bosquet-lent-sw-reloaded")) {
+          sessionStorage.setItem("bosquet-lent-sw-reloaded", "1");
+          window.location.reload();
+        }
+      });
     }
   </script>
 </body>

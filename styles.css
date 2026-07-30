@@ -399,6 +399,21 @@ h2 {
   transform: translate(-50%, 0);
 }
 
+.version-badge {
+  position: absolute;
+  right: 0.8rem;
+  bottom: 0.65rem;
+  z-index: 3;
+  padding: 0.28rem 0.48rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(247, 243, 223, 0.14);
+  color: rgba(247, 243, 223, 0.62);
+  background: rgba(20, 34, 33, 0.42);
+  font-size: 0.72rem;
+  font-weight: 800;
+  pointer-events: none;
+}
+
 .cinematic {
   position: absolute;
   inset: 0;
