@@ -351,10 +351,19 @@ function drawBackground(colors) {
 
   ctx.save();
   ctx.translate(-state.camera.x * 0.05, 0);
-  drawRoundedHill(-120, h * 0.56, 520, h * 0.22, "rgba(115, 139, 78, 0.42)");
-  drawRoundedHill(260, h * 0.5, 520, h * 0.28, "rgba(126, 153, 96, 0.38)");
-  drawRoundedHill(700, h * 0.58, 620, h * 0.2, "rgba(99, 129, 75, 0.4)");
+  drawRoundedHill(-120, h * 0.57, 560, h * 0.24, "rgba(112, 136, 77, 0.42)");
+  drawRoundedHill(230, h * 0.51, 600, h * 0.3, "rgba(139, 158, 101, 0.38)");
+  drawRoundedHill(690, h * 0.58, 680, h * 0.22, "rgba(98, 127, 74, 0.4)");
+  drawRoundedHill(1050, h * 0.54, 520, h * 0.18, "rgba(130, 148, 85, 0.32)");
+  drawCoverRiver(w * 0.48 + state.camera.x * 0.05, h * 0.69);
   drawDistantVillage(w * 0.9 + state.camera.x * 0.05, h * 0.58);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(-state.camera.x * 0.12, 0);
+  for (let i = -1; i < 8; i += 1) {
+    drawShrubBand(i * 210, h * 0.67, i);
+  }
   ctx.restore();
 }
 
@@ -394,6 +403,26 @@ function drawDistantVillage(x, y) {
     ctx.fillRect(hx - 5, y - houseH + 13, 10, 10);
   }
   ctx.restore();
+}
+
+function drawCoverRiver(x, y) {
+  ctx.save();
+  ctx.fillStyle = "rgba(103, 180, 200, 0.58)";
+  ctx.beginPath();
+  ctx.moveTo(x - 120, y + 38);
+  ctx.bezierCurveTo(x - 34, y - 20, x + 120, y - 4, x + 230, y - 70);
+  ctx.lineTo(x + 270, y - 42);
+  ctx.bezierCurveTo(x + 150, y + 18, x + 12, y + 22, x - 92, y + 68);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawShrubBand(x, y, seed) {
+  const colors = ["#3d613d", "#4f713a", "#274f3f", "#657936"];
+  for (let i = 0; i < 4; i += 1) {
+    drawEllipse(x + i * 58, y + Math.sin(seed + i) * 12, 62, 36, colors[(seed + i + colors.length) % colors.length]);
+  }
 }
 
 function drawParallaxTrees(colors) {
@@ -462,22 +491,28 @@ function drawWorldObjects() {
   ctx.save();
   ctx.translate(-state.camera.x, 0);
 
+  drawCoverForeground();
+
   getProceduralVillages().forEach((village) => {
     const y = world.ground - 18;
     for (let i = 0; i < 4; i += 1) {
       const houseX = village.x + i * 86;
-      ctx.fillStyle = i % 2 ? "#9d7658" : "#b08a61";
-      roundedRect(houseX - 34, y - 54, 68, 54, 6);
+      const houseH = 48 + (i % 2) * 18;
+      ctx.fillStyle = i % 2 ? "#d6bf78" : "#e2cd88";
+      roundedRect(houseX - 32, y - houseH, 64, houseH, 5);
       ctx.fill();
-      ctx.fillStyle = "#6c4a3d";
+      ctx.fillStyle = "#9c5638";
       ctx.beginPath();
-      ctx.moveTo(houseX - 42, y - 52);
-      ctx.lineTo(houseX, y - 92);
-      ctx.lineTo(houseX + 42, y - 52);
+      ctx.moveTo(houseX - 40, y - houseH);
+      ctx.lineTo(houseX, y - houseH - 34);
+      ctx.lineTo(houseX + 40, y - houseH);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = "rgba(255, 215, 115, 0.55)";
-      roundedRect(houseX - 10, y - 32, 20, 18, 4);
+      ctx.fillStyle = "rgba(255, 226, 112, 0.82)";
+      roundedRect(houseX - 10, y - houseH + 18, 20, 18, 4);
+      ctx.fill();
+      ctx.fillStyle = "#7d5a35";
+      roundedRect(houseX - 5, y - 20, 10, 20, 3);
       ctx.fill();
     }
     drawVillager(village.x + 410, village.villager);
@@ -486,11 +521,15 @@ function drawWorldObjects() {
 
   getProceduralRests().forEach((rest) => {
     const y = world.ground - 18;
-    ctx.fillStyle = "#775747";
-    roundedRect(rest.x - 54, y - 18, 108, 16, 6);
+    ctx.fillStyle = "#6f4729";
+    roundedRect(rest.x - 58, y - 20, 116, 14, 5);
     ctx.fill();
-    ctx.fillRect(rest.x - 38, y - 4, 9, 35);
-    ctx.fillRect(rest.x + 29, y - 4, 9, 35);
+    ctx.fillStyle = "#4a2c1b";
+    ctx.fillRect(rest.x - 42, y - 7, 10, 34);
+    ctx.fillRect(rest.x + 32, y - 7, 10, 34);
+    ctx.fillStyle = "#8c6135";
+    roundedRect(rest.x - 50, y - 38, 100, 12, 4);
+    ctx.fill();
     if (Math.abs(state.player.x - rest.x) < 90) drawPrompt(rest.x, y - 64, "E se reposer");
   });
 
@@ -512,8 +551,11 @@ function drawWorldObjects() {
       ctx.arc(lantern.x, y, 135, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = lit ? "#ffd773" : "#715a48";
-    roundedRect(lantern.x - 14, y - 22, 28, 34, 7);
+    ctx.fillStyle = "#6b4527";
+    roundedRect(lantern.x - 16, y - 22, 32, 36, 8);
+    ctx.fill();
+    ctx.fillStyle = lit ? "#ffe07a" : "#7a654b";
+    roundedRect(lantern.x - 9, y - 14, 18, 22, 5);
     ctx.fill();
     if (!lit && Math.abs(state.player.x - lantern.x) < 78) drawPrompt(lantern.x, y - 58, "E allumer");
   });
@@ -560,46 +602,75 @@ function drawCollectibleIcon(item, index, x, y) {
   const baseId = baseDiscoveryId(item.id);
   ctx.save();
   ctx.translate(x, y);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(255, 248, 210, 0.72)";
+  const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, baseId === "stone" ? 26 : 42);
+  glow.addColorStop(0, baseId === "stone" ? "rgba(255, 245, 210, 0.18)" : "rgba(255, 226, 112, 0.34)");
+  glow.addColorStop(1, "rgba(255, 226, 112, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(0, 0, 42, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+  ctx.beginPath();
+  ctx.ellipse(0, 18, 18, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(255, 248, 210, 0.78)";
   if (baseId === "leaf") {
-    drawEllipse(0, 0, 16, 8, "#9fb04d");
+    ctx.save();
+    ctx.rotate(-0.42);
+    drawEllipse(0, 0, 20, 10, "#9fb04d");
     ctx.beginPath();
-    ctx.moveTo(-10, 6);
-    ctx.lineTo(11, -7);
+    ctx.moveTo(-14, 4);
+    ctx.lineTo(15, -5);
     ctx.stroke();
+    ctx.restore();
   } else if (baseId === "stone") {
-    drawEllipse(0, 0, 15, 9, "#9a927c");
+    drawEllipse(0, 0, 20, 12, "#9a927c");
+    drawEllipse(-5, -4, 8, 3, "rgba(255,255,255,0.22)");
   } else if (baseId === "feather") {
     ctx.fillStyle = "#f7efd3";
     ctx.beginPath();
-    ctx.ellipse(0, 0, 7, 18, 0.65, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 8, 23, 0.65, 0, Math.PI * 2);
     ctx.fill();
-  } else if (baseId === "shell") {
-    ctx.fillStyle = "#e7b879";
     ctx.beginPath();
-    ctx.arc(0, 4, 15, Math.PI, Math.PI * 2);
-    ctx.lineTo(14, 7);
-    ctx.lineTo(-14, 7);
+    ctx.moveTo(-8, 16);
+    ctx.lineTo(8, -17);
+    ctx.stroke();
+  } else if (baseId === "shell") {
+    ctx.fillStyle = "#e9b883";
+    ctx.beginPath();
+    ctx.arc(0, 5, 20, Math.PI, Math.PI * 2);
+    ctx.lineTo(18, 9);
+    ctx.lineTo(-18, 9);
     ctx.closePath();
     ctx.fill();
+    for (let i = -2; i <= 2; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, 4);
+      ctx.lineTo(i * 7, -11);
+      ctx.stroke();
+    }
   } else if (baseId === "cone") {
-    drawEllipse(0, 1, 12, 16, "#4f7890");
+    drawEllipse(0, 1, 16, 22, "#4f7890");
     ctx.fillStyle = "rgba(28, 60, 76, 0.45)";
-    for (let row = -8; row < 10; row += 6) {
-      drawEllipse(-4, row, 4, 3, ctx.fillStyle);
-      drawEllipse(4, row + 2, 4, 3, ctx.fillStyle);
+    for (let row = -12; row < 15; row += 6) {
+      drawEllipse(-5, row, 5, 4, ctx.fillStyle);
+      drawEllipse(5, row + 2, 5, 4, ctx.fillStyle);
     }
   } else if (baseId === "mushroom") {
-    drawEllipse(0, -5, 16, 9, "#f0bd6c");
-    roundedRect(-5, -2, 10, 18, 5);
+    drawEllipse(0, -7, 20, 12, "#f0bd6c");
+    ctx.fillStyle = "#fff3bd";
+    drawEllipse(-7, -10, 3, 3, ctx.fillStyle);
+    drawEllipse(6, -5, 3, 3, ctx.fillStyle);
+    roundedRect(-6, -2, 12, 22, 6);
     ctx.fillStyle = "#fff1bc";
     ctx.fill();
   } else if (baseId === "star") {
     ctx.fillStyle = "#f4cc47";
     ctx.beginPath();
     for (let point = 0; point < 10; point += 1) {
-      const radius = point % 2 === 0 ? 17 : 7;
+      const radius = point % 2 === 0 ? 22 : 9;
       const angle = -Math.PI / 2 + point * Math.PI / 5;
       const px = Math.cos(angle) * radius;
       const py = Math.sin(angle) * radius;
@@ -612,6 +683,58 @@ function drawCollectibleIcon(item, index, x, y) {
     drawEllipse(0, 0, 10, 10, ["#f0bd6c", "#67b4c8", "#f7f3df", "#8ebf76", "#ce6f75"][index % 5]);
   }
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawCoverForeground() {
+  const start = Math.floor((state.camera.x - 260) / 900) * 900;
+  for (let baseX = start; baseX < state.camera.x + window.innerWidth + 420; baseX += 900) {
+    const x = baseX + 70;
+    const y = world.ground - 18;
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = "#4a2c1b";
+    roundedRect(x - 62, y - 286, 32, 286, 13);
+    ctx.fill();
+    roundedRect(x + 24, y - 220, 26, 220, 12);
+    ctx.fill();
+    drawEllipse(x - 20, y - 300, 160, 104, "#33451f");
+    drawEllipse(x - 108, y - 226, 96, 72, "#263d29");
+    drawEllipse(x + 84, y - 222, 124, 82, "#405126");
+    ctx.fillStyle = "rgba(17, 39, 20, 0.36)";
+    drawEllipse(x - 60, y - 322, 16, 28, ctx.fillStyle);
+    drawEllipse(x + 38, y - 308, 14, 24, ctx.fillStyle);
+    drawEllipse(x + 112, y - 244, 12, 22, ctx.fillStyle);
+    drawCoverLantern(x - 142, y - 98);
+    ctx.restore();
+  }
+}
+
+function drawCoverLantern(x, y) {
+  ctx.save();
+  ctx.strokeStyle = "#5b371f";
+  ctx.lineWidth = 7;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x, y - 62);
+  ctx.lineTo(x, y);
+  ctx.moveTo(x, y - 60);
+  ctx.lineTo(x + 52, y - 60);
+  ctx.lineTo(x + 52, y - 28);
+  ctx.stroke();
+  const glow = ctx.createRadialGradient(x + 52, y - 10, 6, x + 52, y - 10, 74);
+  glow.addColorStop(0, "rgba(255, 220, 108, 0.48)");
+  glow.addColorStop(1, "rgba(255, 220, 108, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(x + 52, y - 10, 74, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#6b4527";
+  roundedRect(x + 30, y - 30, 44, 44, 8);
+  ctx.fill();
+  ctx.fillStyle = "#ffe07a";
+  roundedRect(x + 40, y - 20, 24, 26, 5);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -683,12 +806,12 @@ function drawRiver() {
     : 3820;
   const y = world.ground + 25;
   if (riverX < state.camera.x - 600 || riverX > state.camera.x + window.innerWidth + 600) return;
-  ctx.fillStyle = "rgba(103, 180, 200, 0.74)";
+  ctx.fillStyle = "rgba(103, 180, 200, 0.58)";
   ctx.beginPath();
-  ctx.ellipse(riverX, y, 360, 38, -0.08, 0, Math.PI * 2);
+  ctx.ellipse(riverX, y, 380, 34, -0.08, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = "rgba(247, 243, 223, 0.38)";
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(247, 243, 223, 0.24)";
+  ctx.lineWidth = 2;
   for (let i = 0; i < 5; i += 1) {
     ctx.beginPath();
     ctx.moveTo(riverX - 300 + i * 120, y + Math.sin(state.time * 2 + i) * 8);
@@ -812,38 +935,40 @@ function drawPlayer() {
 
 function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = "#f0bd6c", hair = "#22322c", label = "", reaction = "", seated = false }) {
   const walk = seated ? 0 : Math.sin(state.time * 10) * Math.min(1, Math.abs(velocity) / 190);
-  const baseY = y - 48 + (seated ? 10 : 0);
+  const baseY = y - 52 + (seated ? 10 : 0);
   ctx.save();
   ctx.translate(x, baseY);
   ctx.scale(face, 1);
   ctx.fillStyle = "rgba(0,0,0,0.18)";
   ctx.beginPath();
-  ctx.ellipse(0, 50, 28, 8, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 57, 27, 7, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "#2d2730";
-  ctx.lineWidth = 8;
+  ctx.lineWidth = 7;
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(-8, 22);
-  ctx.lineTo(seated ? -22 : -16 - walk * 8, seated ? 38 : 47);
-  ctx.moveTo(9, 23);
-  ctx.lineTo(seated ? 22 : 17 + walk * 8, seated ? 38 : 47);
+  ctx.moveTo(-7, 30);
+  ctx.lineTo(seated ? -21 : -14 - walk * 7, seated ? 45 : 55);
+  ctx.moveTo(8, 30);
+  ctx.lineTo(seated ? 21 : 15 + walk * 7, seated ? 45 : 55);
   ctx.stroke();
   ctx.fillStyle = body;
   ctx.beginPath();
-  ctx.ellipse(0, 16, 20, 28, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 22, 22, 30, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = skin;
   ctx.beginPath();
-  ctx.arc(0, -25, 20, 0, Math.PI * 2);
+  ctx.arc(0, -25, 23, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#28312e";
   ctx.beginPath();
-  ctx.arc(9, -27, 3.2, 0, Math.PI * 2);
+  ctx.arc(11, -27, 3.4, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = hair;
   ctx.beginPath();
-  ctx.ellipse(-8, -36, 22, 13, -0.22, Math.PI * 0.95, Math.PI * 2.08);
+  ctx.ellipse(-9, -38, 25, 14, -0.28, Math.PI * 0.92, Math.PI * 2.06);
+  ctx.lineTo(-22, -25);
+  ctx.quadraticCurveTo(-5, -31, 16, -42);
   ctx.fill();
   ctx.restore();
 
