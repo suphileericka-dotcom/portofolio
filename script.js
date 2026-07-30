@@ -705,9 +705,40 @@ function drawCoverForeground() {
     drawEllipse(x - 60, y - 322, 16, 28, ctx.fillStyle);
     drawEllipse(x + 38, y - 308, 14, 24, ctx.fillStyle);
     drawEllipse(x + 112, y - 244, 12, 22, ctx.fillStyle);
+    drawCoverFlowers(x - 170, y - 18);
+    drawCoverMushrooms(x + 160, y - 12);
     drawCoverLantern(x - 142, y - 98);
     ctx.restore();
   }
+}
+
+function drawCoverFlowers(x, y) {
+  ctx.save();
+  ctx.strokeStyle = "#6a7b39";
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 4; i += 1) {
+    const fx = x + i * 18;
+    ctx.beginPath();
+    ctx.moveTo(fx, y);
+    ctx.lineTo(fx + Math.sin(i) * 8, y - 34 - i * 3);
+    ctx.stroke();
+    drawEllipse(fx - 4, y - 38 - i * 3, 7, 7, "#ead68d");
+    drawEllipse(fx + 4, y - 38 - i * 3, 7, 7, "#ead68d");
+  }
+  ctx.restore();
+}
+
+function drawCoverMushrooms(x, y) {
+  ctx.save();
+  drawEllipse(x, y - 13, 14, 8, "#b76b45");
+  roundedRect(x - 4, y - 9, 8, 18, 4);
+  ctx.fillStyle = "#f1d59a";
+  ctx.fill();
+  drawEllipse(x + 28, y - 9, 12, 7, "#9f5941");
+  roundedRect(x + 25, y - 6, 7, 15, 4);
+  ctx.fillStyle = "#f1d59a";
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawCoverLantern(x, y) {
@@ -821,36 +852,29 @@ function drawRiver() {
 }
 
 function drawVillager(x, villager) {
-  const y = world.ground - 48;
+  const y = world.ground;
   const bob = Math.sin(state.time * 2 + x) * 3;
-  ctx.save();
-  ctx.translate(x, y + bob);
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  ctx.beginPath();
-  ctx.ellipse(0, 48, 20, 6, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#6a8a80";
-  roundedRect(-14, -3, 28, 38, 10);
-  ctx.fill();
-  ctx.fillStyle = "#e5b878";
-  ctx.beginPath();
-  ctx.arc(0, -22, 14, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#4a3632";
-  ctx.beginPath();
-  ctx.ellipse(0, -31, 16, 7, 0, Math.PI, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  drawCharacter({
+    x,
+    y: y + bob,
+    face: -1,
+    velocity: 0,
+    body: "#6a8a80",
+    skin: "#e5b878",
+    hair: "#4a3632",
+    label: "",
+    seated: false
+  });
 
   if (Math.abs(state.player.x - x) < 210) {
     ctx.save();
     ctx.font = "800 12px Nunito";
     ctx.fillStyle = "rgba(20, 34, 33, 0.72)";
-    roundedRect(x - 74, y - 82, 148, 26, 7);
+    roundedRect(x - 74, y - 126, 148, 26, 7);
     ctx.fill();
     ctx.fillStyle = "#f7f3df";
     ctx.textAlign = "center";
-    ctx.fillText(villager.role, x, y - 64);
+    ctx.fillText(villager.role, x, y - 108);
     ctx.restore();
   }
 }
@@ -956,9 +980,17 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
   ctx.beginPath();
   ctx.ellipse(0, 22, 22, 30, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.beginPath();
+  ctx.ellipse(-7, 10, 8, 16, -0.2, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = skin;
   ctx.beginPath();
   ctx.arc(0, -25, 23, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255, 239, 177, 0.22)";
+  ctx.beginPath();
+  ctx.ellipse(-8, -31, 8, 6, -0.4, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#28312e";
   ctx.beginPath();
@@ -975,7 +1007,7 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
   if (label && Math.abs(x - state.player.x) < 260) {
     ctx.save();
     ctx.font = "800 11px Nunito";
-    ctx.fillStyle = "rgba(20, 34, 33, 0.7)";
+    ctx.fillStyle = "rgba(20, 34, 33, 0.52)";
     roundedRect(x - 44, baseY - 66, 88, 22, 7);
     ctx.fill();
     ctx.fillStyle = "#f7f3df";
