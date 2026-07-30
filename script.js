@@ -462,16 +462,30 @@ function drawParallaxTrees(colors) {
 
 function drawGround(colors) {
   const h = window.innerHeight;
-  ctx.fillStyle = "#253b28";
-  ctx.fillRect(0, world.ground, window.innerWidth, h - world.ground);
-  ctx.fillStyle = "#c49b5c";
-  ctx.fillRect(0, world.ground - 14, window.innerWidth, 38);
-  ctx.fillStyle = "#6d7a35";
-  for (let x = -20; x < window.innerWidth + 30; x += 28) {
-    drawEllipse(x, world.ground + 26, 18, 13, ctx.fillStyle);
+  const w = window.innerWidth;
+  ctx.fillStyle = "#241f18";
+  ctx.fillRect(0, world.ground + 34, w, h - world.ground - 34);
+  ctx.fillStyle = "#5f6f31";
+  ctx.fillRect(0, world.ground + 10, w, 42);
+  ctx.fillStyle = "#c6a15f";
+  ctx.fillRect(0, world.ground - 18, w, 42);
+  ctx.fillStyle = "#d1b06b";
+  ctx.fillRect(0, world.ground - 13, w, 13);
+  ctx.fillStyle = "#53672d";
+  for (let x = -24; x < w + 34; x += 30) {
+    drawEllipse(x, world.ground + 20, 21, 14, ctx.fillStyle);
+  }
+  ctx.fillStyle = "#6e7f34";
+  for (let x = -12; x < w + 24; x += 24) {
+    drawEllipse(x, world.ground + 3, 16, 10, ctx.fillStyle);
   }
   ctx.save();
   ctx.translate(-state.camera.x, 0);
+  for (let x = Math.floor(state.camera.x / 74) * 74 - 90; x < state.camera.x + window.innerWidth + 120; x += 74) {
+    const y = world.ground - 4 + Math.sin(x * 0.03) * 4;
+    drawEllipse(x + 14, y, 10, 4, "rgba(103, 82, 49, 0.22)");
+    drawEllipse(x + 42, y + 9, 7, 3, "rgba(103, 82, 49, 0.16)");
+  }
   ctx.fillStyle = colors.grass;
   for (let x = Math.floor(state.camera.x / 18) * 18 - 40; x < state.camera.x + window.innerWidth + 60; x += 18) {
     const sway = Math.sin(x * 0.04 + state.time * 2 * colors.wind) * 4 * colors.wind;
@@ -602,75 +616,138 @@ function drawCollectibleIcon(item, index, x, y) {
   const baseId = baseDiscoveryId(item.id);
   ctx.save();
   ctx.translate(x, y);
-  const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, baseId === "stone" ? 26 : 42);
-  glow.addColorStop(0, baseId === "stone" ? "rgba(255, 245, 210, 0.18)" : "rgba(255, 226, 112, 0.34)");
-  glow.addColorStop(1, "rgba(255, 226, 112, 0)");
+  ctx.scale(1.08, 1.08);
+  const isMagic = baseId === "mushroom" || baseId === "star";
+  const glow = ctx.createRadialGradient(0, 0, 5, 0, 0, isMagic ? 48 : 34);
+  glow.addColorStop(0, isMagic ? "rgba(255, 229, 118, 0.48)" : "rgba(255, 240, 190, 0.18)");
+  glow.addColorStop(1, "rgba(255, 229, 118, 0)");
   ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.arc(0, 0, 42, 0, Math.PI * 2);
+  ctx.arc(0, 0, isMagic ? 48 : 34, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
   ctx.beginPath();
-  ctx.ellipse(0, 18, 18, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 22, 22, 6, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.5;
   ctx.lineJoin = "round";
-  ctx.strokeStyle = "rgba(255, 248, 210, 0.78)";
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(46, 38, 25, 0.18)";
   if (baseId === "leaf") {
     ctx.save();
-    ctx.rotate(-0.42);
-    drawEllipse(0, 0, 20, 10, "#9fb04d");
+    ctx.rotate(-0.52);
+    ctx.fillStyle = "#9cab3c";
     ctx.beginPath();
-    ctx.moveTo(-14, 4);
-    ctx.lineTo(15, -5);
+    ctx.moveTo(-22, 10);
+    ctx.bezierCurveTo(-14, -12, 10, -20, 24, -8);
+    ctx.bezierCurveTo(15, 10, -4, 20, -22, 10);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = "#62742c";
+    ctx.lineWidth = 2.3;
+    ctx.beginPath();
+    ctx.moveTo(-22, 10);
+    ctx.lineTo(21, -7);
+    ctx.moveTo(-2, 2);
+    ctx.lineTo(0, 11);
+    ctx.moveTo(8, -2);
+    ctx.lineTo(13, 5);
     ctx.stroke();
     ctx.restore();
   } else if (baseId === "stone") {
-    drawEllipse(0, 0, 20, 12, "#9a927c");
-    drawEllipse(-5, -4, 8, 3, "rgba(255,255,255,0.22)");
-  } else if (baseId === "feather") {
-    ctx.fillStyle = "#f7efd3";
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 8, 23, 0.65, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(-8, 16);
-    ctx.lineTo(8, -17);
+    ctx.save();
+    ctx.rotate(-0.1);
+    drawEllipse(0, 1, 25, 15, "#a59c83");
     ctx.stroke();
-  } else if (baseId === "shell") {
-    ctx.fillStyle = "#e9b883";
+    drawEllipse(-8, -4, 10, 4, "rgba(255,255,255,0.24)");
+    drawEllipse(8, 5, 7, 3, "rgba(72,58,41,0.13)");
+    ctx.restore();
+  } else if (baseId === "feather") {
+    ctx.save();
+    ctx.rotate(0.52);
+    ctx.fillStyle = "#f4e7bf";
     ctx.beginPath();
-    ctx.arc(0, 5, 20, Math.PI, Math.PI * 2);
-    ctx.lineTo(18, 9);
-    ctx.lineTo(-18, 9);
+    ctx.moveTo(0, -29);
+    ctx.bezierCurveTo(18, -19, 14, 12, 0, 27);
+    ctx.bezierCurveTo(-14, 10, -17, -18, 0, -29);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = "#d8bd7c";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -27);
+    ctx.lineTo(0, 30);
+    for (let i = -18; i <= 15; i += 8) {
+      ctx.moveTo(0, i);
+      ctx.lineTo(i < 0 ? -9 : 9, i + 7);
+    }
+    ctx.stroke();
+    ctx.restore();
+  } else if (baseId === "shell") {
+    ctx.fillStyle = "#e9ad79";
+    ctx.beginPath();
+    ctx.moveTo(-27, 12);
+    ctx.quadraticCurveTo(-23, -11, 0, -21);
+    ctx.quadraticCurveTo(23, -11, 27, 12);
+    ctx.quadraticCurveTo(5, 20, -27, 12);
     ctx.closePath();
     ctx.fill();
-    for (let i = -2; i <= 2; i += 1) {
+    ctx.stroke();
+    ctx.strokeStyle = "#c88362";
+    ctx.lineWidth = 2;
+    for (let i = -3; i <= 3; i += 1) {
       ctx.beginPath();
-      ctx.moveTo(0, 4);
-      ctx.lineTo(i * 7, -11);
+      ctx.moveTo(0, 13);
+      ctx.quadraticCurveTo(i * 4, -4, i * 8, -15 + Math.abs(i) * 2);
       ctx.stroke();
     }
+    drawEllipse(0, 8, 24, 5, "rgba(255, 227, 174, 0.22)");
   } else if (baseId === "cone") {
-    drawEllipse(0, 1, 16, 22, "#4f7890");
-    ctx.fillStyle = "rgba(28, 60, 76, 0.45)";
-    for (let row = -12; row < 15; row += 6) {
-      drawEllipse(-5, row, 5, 4, ctx.fillStyle);
-      drawEllipse(5, row + 2, 5, 4, ctx.fillStyle);
-    }
-  } else if (baseId === "mushroom") {
-    drawEllipse(0, -7, 20, 12, "#f0bd6c");
-    ctx.fillStyle = "#fff3bd";
-    drawEllipse(-7, -10, 3, 3, ctx.fillStyle);
-    drawEllipse(6, -5, 3, 3, ctx.fillStyle);
-    roundedRect(-6, -2, 12, 22, 6);
-    ctx.fillStyle = "#fff1bc";
+    ctx.save();
+    ctx.fillStyle = "#4c8398";
+    ctx.beginPath();
+    ctx.moveTo(0, -27);
+    ctx.bezierCurveTo(23, -13, 25, 15, 0, 28);
+    ctx.bezierCurveTo(-25, 15, -23, -13, 0, -27);
     ctx.fill();
+    ctx.stroke();
+    const rows = [
+      [-8, -14, 8],
+      [-14, -6, 10],
+      [0, -5, 10],
+      [14, -6, 10],
+      [-10, 4, 11],
+      [8, 5, 11],
+      [-4, 15, 12],
+      [9, 17, 9]
+    ];
+    for (const [px, py, r] of rows) {
+      drawEllipse(px, py, r, 6, "#396b83");
+      drawEllipse(px - 2, py - 2, r * 0.55, 2.4, "rgba(128, 174, 190, 0.32)");
+    }
+    ctx.restore();
+  } else if (baseId === "mushroom") {
+    ctx.fillStyle = "#fff1b6";
+    roundedRect(-9, -2, 18, 27, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#f1c754";
+    ctx.beginPath();
+    ctx.moveTo(-27, -4);
+    ctx.quadraticCurveTo(-16, -27, 1, -29);
+    ctx.quadraticCurveTo(21, -27, 29, -4);
+    ctx.quadraticCurveTo(10, 6, -27, -4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    drawEllipse(-11, -12, 4, 4, "#fff5c8");
+    drawEllipse(3, -18, 3.5, 3.5, "#fff5c8");
+    drawEllipse(15, -8, 3, 3, "#fff5c8");
   } else if (baseId === "star") {
-    ctx.fillStyle = "#f4cc47";
+    ctx.fillStyle = "#f6cf36";
     ctx.beginPath();
     for (let point = 0; point < 10; point += 1) {
-      const radius = point % 2 === 0 ? 22 : 9;
+      const radius = point % 2 === 0 ? 28 : 12;
       const angle = -Math.PI / 2 + point * Math.PI / 5;
       const px = Math.cos(angle) * radius;
       const py = Math.sin(angle) * radius;
@@ -679,10 +756,20 @@ function drawCollectibleIcon(item, index, x, y) {
     }
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255, 245, 154, 0.38)";
+    ctx.beginPath();
+    ctx.moveTo(0, -18);
+    ctx.lineTo(5, -4);
+    ctx.lineTo(17, -3);
+    ctx.lineTo(7, 5);
+    ctx.lineTo(11, 18);
+    ctx.lineTo(0, 10);
+    ctx.closePath();
+    ctx.fill();
   } else {
     drawEllipse(0, 0, 10, 10, ["#f0bd6c", "#67b4c8", "#f7f3df", "#8ebf76", "#ce6f75"][index % 5]);
   }
-  ctx.stroke();
   ctx.restore();
 }
 
