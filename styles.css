@@ -559,6 +559,15 @@ h2 {
   font-weight: 900;
 }
 
+.album-section p + p {
+  margin-top: 0.35rem;
+}
+
+.album-section span {
+  color: var(--ink);
+  font-weight: 900;
+}
+
 .compact-dialog {
   width: min(30rem, calc(100vw - 1.4rem));
 }

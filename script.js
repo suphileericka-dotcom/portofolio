@@ -76,10 +76,14 @@ const state = {
   hiddenDiscoveryPopups: [],
   lanterns: [],
   helpedVillagers: [],
+  villagerRelations: {},
+  discoveredPlaces: [],
+  openedSecrets: [],
   activeQuest: null,
   completedQuests: 0,
   rewards: [],
   achievements: [],
+  companion: { unlocked: false, finds: 0, nextHelpAt: 0 },
   groupRest: 0,
   lastSeatActor: "",
   reactions: [],
@@ -165,7 +169,14 @@ const extraItemNames = [
   "Cristal d'aube", "Fleur solaire", "Graine de chemin", "Boussole des mousses", "Etoile de poche", "Clef de racine", "Fiole de vent", "Carte des lucioles", "Couronne ancienne", "Soleil tombe"
 ];
 
-const itemCatalog = discoveries.concat(extraItemNames.map((label, index) => {
+const seasonalEventItems = [
+  { id: "spring-bloom", label: "Fleur de printemps", rarity: "Rare", place: "Clairiere", season: "Printemps", text: "Elle n'apparait que quand les pluies douces reveillent les talus.", use: "Complete les evenements de printemps et attire les indices des habitants." },
+  { id: "summer-shell", label: "Coquillage d'ete", rarity: "Rare", place: "Riviere", season: "Ete", text: "Sa surface garde une chaleur de soleil, meme au bord de l'eau.", use: "Ouvre des souvenirs d'ete et aide les missions de riviere." },
+  { id: "autumn-maple", label: "Feuille d'automne", rarity: "Rare", place: "Foret", season: "Automne", text: "Une feuille rouge qui craque comme une petite lettre secrete.", use: "Revele les raccourcis caches sous les feuilles mortes." },
+  { id: "winter-crystal", label: "Cristal d'hiver", rarity: "Legendaire", place: "Montagne", season: "Hiver", text: "Un cristal froid qui garde la lumiere sans jamais fondre.", use: "Debloque les passages de neige et compte pour les grandes collections." }
+];
+
+const generatedCatalogItems = extraItemNames.map((label, index) => {
   const rarity = index >= 90 ? "Legendaire" : index % 5 === 1 ? "Rare" : "Commun";
   const places = ["Foret", "Village", "Riviere", "Montagne", "Clairiere"];
   return {
@@ -184,7 +195,9 @@ const itemCatalog = discoveries.concat(extraItemNames.map((label, index) => {
         ? "Aide a reparer, proteger ou comprendre certains passages."
         : "Complete l'album, sert aux missions simples et garde la memoire du voyage."
   };
-}));
+});
+
+const itemCatalog = discoveries.concat(generatedCatalogItems, seasonalEventItems);
 
 const lanterns = [
   { id: "lantern-1", x: 1180 },
@@ -254,7 +267,7 @@ function getProceduralDiscoveries() {
   const items = [];
   for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
     const chapter = chapterIndex + 4;
-    const local = itemCatalog[chapterIndex % itemCatalog.length];
+    const local = generatedCatalogItems[chapterIndex % generatedCatalogItems.length] || discoveries[chapterIndex % discoveries.length];
     const jitter = 160 + hashNumber(chapter * 3.1) * 520;
     items.push({
       id: makeId(local.id, chapter),
@@ -265,6 +278,33 @@ function getProceduralDiscoveries() {
       use: local.use,
       text: local.text
     });
+    const seasonItem = seasonalEventItems.find((entry) => entry.season === getSeason(chapter));
+    if (seasonItem && chapterIndex % 4 === 2) {
+      items.push({
+        ...seasonItem,
+        id: makeId(seasonItem.id, chapter),
+        x: world.firstRouteEnd + chapterIndex * world.chapterSize + 1320 + hashNumber(chapter * 7.7) * 420
+      });
+    }
+  }
+  return items;
+}
+
+function getProceduralSecretLocations() {
+  if (!isExpandedWorld() || state.completedQuests < 2) return [];
+  const relativeCamera = state.camera.x - world.firstRouteEnd;
+  const start = Math.max(0, Math.floor((relativeCamera - 800) / world.chapterSize));
+  const end = Math.floor((relativeCamera + window.innerWidth + 1200) / world.chapterSize);
+  const names = ["Sentier oublie", "Jardin sous la pluie", "Porte des lucioles", "Belvedere de neige"];
+  const items = [];
+  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
+    if (chapterIndex % 5 === 3) {
+      items.push({
+        id: makeId("secret", chapterIndex + 4),
+        x: world.firstRouteEnd + chapterIndex * world.chapterSize + 1720,
+        name: names[chapterIndex % names.length]
+      });
+    }
   }
   return items;
 }
@@ -667,6 +707,11 @@ function drawWorldObjects() {
     if (Math.abs(state.player.x - letter.x) < 76) drawPrompt(letter.x, y - 44, "E lire");
   });
 
+  getProceduralSecretLocations().forEach((secret) => {
+    drawSecretLocation(secret);
+    if (Math.abs(state.player.x - secret.x) < 100) drawPrompt(secret.x, world.ground - 138, "E explorer");
+  });
+
   butterflies.forEach((butterfly) => {
     const dist = Math.abs(state.player.x - butterfly.x);
     if (dist < 90) butterfly.scare = Math.min(1, butterfly.scare + 0.04);
@@ -693,7 +738,76 @@ function drawWorldObjects() {
 
   drawRiver();
   drawPartyCompanions();
+  drawCompanion();
   drawPlayer();
+  ctx.restore();
+}
+
+function drawSecretLocation(secret) {
+  const y = world.ground - 18;
+  const opened = state.openedSecrets.includes(secret.id);
+  ctx.save();
+  ctx.translate(secret.x, y);
+  const glow = ctx.createRadialGradient(0, -74, 8, 0, -74, opened ? 160 : 100);
+  glow.addColorStop(0, opened ? "rgba(180, 239, 184, 0.36)" : "rgba(240, 189, 108, 0.28)");
+  glow.addColorStop(1, "rgba(240, 189, 108, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(0, -74, opened ? 160 : 100, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = opened ? "#8ebf76" : "#8b6840";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.arc(0, -46, 44, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = opened ? "rgba(142, 191, 118, 0.22)" : "rgba(20, 34, 33, 0.58)";
+  roundedRect(-52, -52, 104, 72, 8);
+  ctx.fill();
+  ctx.fillStyle = "#f7f3df";
+  ctx.font = "800 12px Nunito";
+  ctx.textAlign = "center";
+  ctx.fillText(secret.name, 0, -76);
+  ctx.restore();
+}
+
+function drawCompanion() {
+  if (!state.companion.unlocked) return;
+  const p = state.player;
+  const x = p.x - p.face * 74 + Math.sin(state.time * 2.4) * 7;
+  const y = world.ground - 18 + Math.sin(state.time * 5) * 2;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(p.face, 1);
+  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  ctx.beginPath();
+  ctx.ellipse(0, 10, 25, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#c86f3f";
+  ctx.beginPath();
+  ctx.ellipse(0, -10, 26, 14, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(20, -17, 13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#f0bd6c";
+  ctx.beginPath();
+  ctx.moveTo(12, -28);
+  ctx.lineTo(17, -46);
+  ctx.lineTo(24, -27);
+  ctx.moveTo(24, -27);
+  ctx.lineTo(34, -43);
+  ctx.lineTo(34, -22);
+  ctx.fill();
+  ctx.strokeStyle = "#8b3d2b";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(-20, -12);
+  ctx.quadraticCurveTo(-45, -32, -56, -6);
+  ctx.stroke();
+  ctx.fillStyle = "#24312e";
+  ctx.beginPath();
+  ctx.arc(25, -19, 2.4, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -1305,10 +1419,12 @@ function update(dt) {
   const previousWeather = state.weather;
   state.chapter = getChapter();
   state.weather = getWeatherForChapter().id;
+  rememberPlace(getPlaceType());
   if (previousWeather !== state.weather) {
     announceWeather();
     advanceQuest("weather", 1);
   }
+  updateCompanion(dt);
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
   const targetZoom = restingTogether > 0 ? 1.08 : 1;
@@ -1346,6 +1462,13 @@ function interact() {
   const letter = getProceduralLetters().find((entry) => Math.abs(entry.x - p.x) < 78);
   if (letter) {
     readAncientLetter(letter);
+    saveGame();
+    return;
+  }
+
+  const secret = getProceduralSecretLocations().find((entry) => Math.abs(entry.x - p.x) < 105);
+  if (secret) {
+    exploreSecretLocation(secret);
     saveGame();
     return;
   }
@@ -1485,9 +1608,9 @@ function formatDiscoveryDate(itemId) {
   return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
 }
 
-function getSeason() {
+function getSeason(chapter = state.chapter) {
   const seasons = ["Printemps", "Ete", "Automne", "Hiver"];
-  return seasons[Math.floor((state.chapter - 1) / 3) % seasons.length];
+  return seasons[Math.floor((chapter - 1) / 3) % seasons.length];
 }
 
 function isNightPlace() {
@@ -1495,6 +1618,8 @@ function isNightPlace() {
 }
 
 function getPlaceType(x = state.player.x) {
+  const secret = getProceduralSecretLocations().find((entry) => state.openedSecrets.includes(entry.id) && Math.abs(x - entry.x) < 420);
+  if (secret) return "Lieu secret";
   const nearVillage = getProceduralVillages().some((village) => Math.abs(x - (village.x + 170)) < 620);
   if (nearVillage) return "Village";
   const riverX = isExpandedWorld()
@@ -1505,12 +1630,19 @@ function getPlaceType(x = state.player.x) {
   return "Foret";
 }
 
+function rememberPlace(place) {
+  if (!state.discoveredPlaces.includes(place)) state.discoveredPlaces.push(place);
+}
+
 function updateAchievements() {
   const achievements = [
     { id: "leaves-100", ok: (state.inventory.leaf || 0) >= 100, label: "100 feuilles ramassees" },
     { id: "helpers-50", ok: state.helpedVillagers.length >= 50, label: "50 habitants aides" },
     { id: "discoveries-25", ok: Object.keys(state.inventory).length >= 25, label: "25 objets differents decouverts" },
-    { id: "quests-10", ok: state.completedQuests >= 10, label: "10 missions terminees" }
+    { id: "quests-10", ok: state.completedQuests >= 10, label: "10 missions terminees" },
+    { id: "secrets-3", ok: state.openedSecrets.length >= 3, label: "3 lieux secrets explores" },
+    { id: "seasonal-4", ok: seasonalEventItems.every((item) => state.inventory[item.id] > 0), label: "Toutes les saisons collectionnees" },
+    { id: "friends-5", ok: Object.values(state.villagerRelations).some((count) => count >= 5), label: "Une grande amitie au village" }
   ];
   achievements.forEach((achievement) => {
     if (achievement.ok && !state.achievements.includes(achievement.id)) {
@@ -1518,6 +1650,42 @@ function updateAchievements() {
       showMessage(`Succes debloque: ${achievement.label}.`);
     }
   });
+}
+
+function updateCompanion(dt) {
+  if (!state.companion.unlocked || state.time < state.companion.nextHelpAt) return;
+  state.companion.nextHelpAt = state.time + 55 + hashNumber(state.time + state.player.x) * 45;
+  if (state.activeQuest && state.activeQuest.progress < state.activeQuest.target) {
+    advanceQuest(state.activeQuest.type, 1);
+    if (state.activeQuest) showMessage("Ton compagnon trouve une piste et t'aide dans la mission.");
+    state.companion.finds += 1;
+    saveGame();
+    return;
+  }
+  const common = itemCatalog.filter((item) => item.rarity === "Commun");
+  const item = common[Math.floor(hashNumber(state.player.x + state.time) * common.length) % common.length];
+  if (item) {
+    collectDiscovery({ ...item, id: makeId(item.id, state.chapter + state.companion.finds + 80) }, true);
+    state.companion.finds += 1;
+    showMessage(`Ton compagnon a trouve ${item.label.toLowerCase()} pres du chemin.`);
+    saveGame();
+  }
+}
+
+function exploreSecretLocation(secret) {
+  const firstOpen = !state.openedSecrets.includes(secret.id);
+  if (firstOpen) {
+    state.openedSecrets.push(secret.id);
+    rememberPlace(secret.name);
+    advanceQuest("secret", 1);
+    const legendary = itemCatalog.find((item) => item.rarity === "Legendaire") || discoveries[discoveries.length - 1];
+    collectDiscovery({ ...legendary, id: makeId(legendary.id, state.chapter + state.openedSecrets.length + 120), place: "Lieu secret" }, true);
+    showMessage(`${secret.name} s'ouvre. Un objet legendaire rejoint ton album.`);
+  } else {
+    showMessage(`${secret.name} est deja ouvert. Le passage reste dans ton album.`);
+  }
+  updateAchievements();
+  playSoftPing();
 }
 
 function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
@@ -1528,7 +1696,8 @@ function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
     { label: "Traverser trois villages", type: "talkVillager", target: 3 },
     { label: "Decouvrir une nouvelle meteo", type: "weather", target: 1 },
     { label: "Trouver un coquillage", type: "collect:shell", target: 1 },
-    { label: "Ramasser cinq objets", type: "collectAny", target: 5 }
+    { label: "Ramasser cinq objets", type: "collectAny", target: 5 },
+    { label: "Explorer un lieu secret", type: "secret", target: 1 }
   ];
   const template = templates[Math.floor(hashNumber(seed) * templates.length) % templates.length];
   return {
@@ -1561,6 +1730,10 @@ function completeQuest() {
   state.activeQuest = null;
   const reward = grantQuestReward();
   state.completedQuests += 1;
+  if (!state.companion.unlocked) {
+    state.companion.unlocked = true;
+    state.companion.nextHelpAt = state.time + 35;
+  }
   showMessage(`Mission terminee: ${label}. Recompense mystere: ${reward}.`);
   playSoftPing();
   updateAchievements();
@@ -1577,6 +1750,12 @@ function grantQuestReward() {
     itemCatalog.filter((item) => item.rarity === wanted).slice(0, count).forEach((item, index) => {
       collectDiscovery({ ...item, id: makeId(item.id, state.chapter + index + state.completedQuests + 20) }, true);
     });
+  } else if (reward === "un habitant special") {
+    state.villagerRelations["Habitant special"] = Math.max(state.villagerRelations["Habitant special"] || 0, 1);
+  } else if (reward === "une meteo rare") {
+    rememberPlace("Meteo rare");
+  } else if (reward === "une decoration") {
+    rememberPlace("Decoration du camp");
   }
   return reward;
 }
@@ -1625,11 +1804,15 @@ function closeDiscoveryPopup() {
 
 function openVillagerHelp(villager) {
   const alreadyHelped = state.helpedVillagers.includes(villager.villageId);
+  const relationKey = villager.role;
+  state.villagerRelations[relationKey] = (state.villagerRelations[relationKey] || 0) + 1;
+  const meetings = state.villagerRelations[relationKey];
+  const relationLine = getVillagerRelationLine(villager, meetings);
   ui.villagerTitle.textContent = villager.role;
   ui.giveItemButton.disabled = alreadyHelped;
   ui.giveItemButton.style.opacity = alreadyHelped ? "0.55" : "1";
   if (alreadyHelped) {
-    ui.villagerText.textContent = `${villager.line} Il te remercie encore. Le village se souvient de ton aide.`;
+    ui.villagerText.textContent = `${relationLine} Il te remercie encore. Le village se souvient de ton aide.`;
   } else {
     const requests = [
       "Il demande de l'aide pour retrouver un sentier disparu.",
@@ -1637,10 +1820,22 @@ function openVillagerHelp(villager) {
       "Il signale une zone ou la meteo change sans prevenir.",
       "Elle cherche un voyageur pour verifier que les lanternes brillent encore."
     ];
-    ui.villagerText.textContent = `${villager.line} ${requests[Math.round(villager.x / 97) % requests.length]}`;
+    const questHint = meetings >= 3 && !state.activeQuest
+      ? "Comme il te connait mieux, il pourra te confier une mission si tu l'aides."
+      : "";
+    ui.villagerText.textContent = `${relationLine} ${requests[Math.round(villager.x / 97) % requests.length]} ${questHint}`.trim();
   }
   pendingVillagerHelp = villager;
+  updateAchievements();
+  saveGame();
   ui.villagerDialog.showModal();
+}
+
+function getVillagerRelationLine(villager, meetings) {
+  if (meetings >= 5) return `${villager.line} Il t'appelle par ton nom et partage un secret qu'il gardait pour les voyageurs patients.`;
+  if (meetings >= 3) return `${villager.line} Il te reconnait aussitot et parle avec plus de confiance.`;
+  if (meetings >= 2) return `${villager.line} Il sourit: vous vous etes deja croises sur le chemin.`;
+  return villager.line;
 }
 
 function givePendingItem() {
@@ -1653,11 +1848,17 @@ function givePendingItem() {
   }
   state.helpedVillagers.push(pendingVillagerHelp.villageId);
   advanceQuest("helpVillager", 1);
+  const meetings = state.villagerRelations[pendingVillagerHelp.role] || 0;
+  if (!state.activeQuest && meetings >= 3) {
+    state.activeQuest = makeQuest(pendingVillagerHelp.x + meetings);
+    showMessage(`${pendingVillagerHelp.role} te confie une mission: ${state.activeQuest.label}.`);
+  } else {
+    showMessage(`${pendingVillagerHelp.role} te remercie. Le monde devient un peu plus vivant.`);
+  }
   syncAction("help-villager", {
     villageId: pendingVillagerHelp.villageId
   });
   ui.villagerDialog.close();
-  showMessage(`${pendingVillagerHelp.role} te remercie. Le monde devient un peu plus vivant.`);
   pendingVillagerHelp = null;
   playSoftPing();
   updateAchievements();
@@ -1706,6 +1907,9 @@ function buildJournal() {
   const uniqueFound = Object.keys(state.inventory).length;
   const playHours = Math.floor(state.time / 3600);
   const playMinutes = Math.floor((state.time % 3600) / 60).toString().padStart(2, "0");
+  const knownVillagers = Object.keys(state.villagerRelations).length;
+  const knownPlaces = state.discoveredPlaces.length;
+  const seasonalFound = seasonalEventItems.filter((item) => state.inventory[item.id] > 0).length;
   const summary = document.createElement("article");
   summary.className = "journal-item journal-summary";
   summary.innerHTML = `
@@ -1715,12 +1919,33 @@ function buildJournal() {
     <p>Meteo : ${getWeatherForChapter().label}</p>
     <p>Lieu : ${getPlaceType()}</p>
     <p>Decouvertes : ${uniqueFound} / ${itemCatalog.length}</p>
-    <p>Habitants rencontres : ${state.helpedVillagers.length}</p>
+    <p>Habitants rencontres : ${knownVillagers} / ${villagers.length}</p>
+    <p>Lieux decouverts : ${knownPlaces}</p>
     <p>Missions terminees : ${state.completedQuests}</p>
+    <p>Evenements saisonniers : ${seasonalFound} / ${seasonalEventItems.length}</p>
+    <p>Succes : ${state.achievements.length}</p>
+    <p>Compagnon : ${state.companion.unlocked ? `present, ${state.companion.finds} aide(s)` : "a rencontrer apres une mission"}</p>
     <p>Temps joue : ${playHours} h ${playMinutes}</p>
     <p>${state.activeQuest ? `Mission active : ${state.activeQuest.label} (${state.activeQuest.progress} / ${state.activeQuest.target})` : "Aucune mission active"}</p>
   `;
   ui.journalList.appendChild(summary);
+  appendAlbumSection("Album des saisons", seasonalEventItems.map((item) => ({
+    title: state.inventory[item.id] ? item.label : "????",
+    text: `${item.season} - ${state.inventory[item.id] ? item.text : "Objet saisonnier pas encore decouvert."}`
+  })));
+  appendAlbumSection("Habitants", villagers.map((villager) => {
+    const meetings = state.villagerRelations[villager.role] || 0;
+    return {
+      title: meetings ? villager.role : "????",
+      text: meetings ? `${meetings} rencontre(s). ${getVillagerRelationLine(villager, meetings)}` : "Habitant pas encore rencontre."
+    };
+  }));
+  appendAlbumSection("Lieux", state.discoveredPlaces.length
+    ? state.discoveredPlaces.map((place) => ({ title: place, text: "Lieu inscrit dans ton voyage." }))
+    : [{ title: "????", text: "Aucun lieu special inscrit pour le moment." }]);
+  appendAlbumSection("Succes", state.achievements.length
+    ? state.achievements.map((id) => ({ title: id.replace(/-/g, " "), text: "Succes debloque." }))
+    : [{ title: "????", text: "Les succes apparaitront avec tes grands objectifs." }]);
   if (foundItems.length === 0) {
     const entry = document.createElement("article");
     entry.className = "journal-item";
@@ -1748,6 +1973,13 @@ function buildJournal() {
   });
 }
 
+function appendAlbumSection(title, rows) {
+  const section = document.createElement("article");
+  section.className = "journal-item album-section";
+  section.innerHTML = `<strong>${title}</strong>${rows.map((row) => `<p><span>${row.title}</span> - ${row.text}</p>`).join("")}`;
+  ui.journalList.appendChild(section);
+}
+
 function startGame(reset = false) {
   savePlayerProfile();
   if (reset) resetGame();
@@ -1768,10 +2000,14 @@ function resetGame() {
   state.hiddenDiscoveryPopups = [];
   state.lanterns = [];
   state.helpedVillagers = [];
+  state.villagerRelations = {};
+  state.discoveredPlaces = [];
+  state.openedSecrets = [];
   state.activeQuest = null;
   state.completedQuests = 0;
   state.rewards = [];
   state.achievements = [];
+  state.companion = { unlocked: false, finds: 0, nextHelpAt: 0 };
   state.groupRest = 0;
   state.reactions = [];
   state.time = 0;
@@ -1793,10 +2029,14 @@ function saveGame() {
     hiddenDiscoveryPopups: state.hiddenDiscoveryPopups,
     lanterns: state.lanterns,
     helpedVillagers: state.helpedVillagers,
+    villagerRelations: state.villagerRelations,
+    discoveredPlaces: state.discoveredPlaces,
+    openedSecrets: state.openedSecrets,
     activeQuest: state.activeQuest,
     completedQuests: state.completedQuests,
     rewards: state.rewards,
     achievements: state.achievements,
+    companion: state.companion,
     groupRest: state.groupRest,
     reactions: state.reactions,
     startedAtLeastOnce: state.startedAtLeastOnce,
@@ -1825,10 +2065,16 @@ function loadGame() {
     state.hiddenDiscoveryPopups = Array.isArray(payload.hiddenDiscoveryPopups) ? payload.hiddenDiscoveryPopups : [];
     state.lanterns = Array.isArray(payload.lanterns) ? payload.lanterns : [];
     state.helpedVillagers = Array.isArray(payload.helpedVillagers) ? payload.helpedVillagers : [];
+    state.villagerRelations = payload.villagerRelations && typeof payload.villagerRelations === "object" ? payload.villagerRelations : {};
+    state.discoveredPlaces = Array.isArray(payload.discoveredPlaces) ? payload.discoveredPlaces : [];
+    state.openedSecrets = Array.isArray(payload.openedSecrets) ? payload.openedSecrets : [];
     state.activeQuest = payload.activeQuest && typeof payload.activeQuest === "object" ? payload.activeQuest : null;
     state.completedQuests = Number.isFinite(payload.completedQuests) ? payload.completedQuests : 0;
     state.rewards = Array.isArray(payload.rewards) ? payload.rewards : [];
     state.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
+    state.companion = payload.companion && typeof payload.companion === "object"
+      ? { unlocked: Boolean(payload.companion.unlocked), finds: payload.companion.finds || 0, nextHelpAt: payload.companion.nextHelpAt || 0 }
+      : { unlocked: false, finds: 0, nextHelpAt: 0 };
     state.groupRest = Number.isFinite(payload.groupRest) ? payload.groupRest : 0;
     state.reactions = Array.isArray(payload.reactions) ? payload.reactions : [];
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
