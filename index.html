@@ -52,7 +52,7 @@
     </div>
 
     <aside id="message" class="message" aria-live="polite"></aside>
-    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.9</aside>
+    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.10</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -167,6 +167,10 @@
             </label>
             <button id="joinPartyButton" class="secondary-button" type="button">Rejoindre</button>
           </div>
+          <label class="field-row server-row">
+            <span>Serveur amis</span>
+            <input id="realtimeServerInput" type="url" inputmode="url" placeholder="https://serveur-bosquet.example.com">
+          </label>
         </section>
         <button id="resetButton" class="danger-button" type="button">Recommencer la promenade</button>
       </form>
@@ -176,7 +180,7 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.9").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.10").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});

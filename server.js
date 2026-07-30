@@ -15,6 +15,10 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(__dirname));
 
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, service: "bosquet-lent-realtime", parties: Object.keys(parties).length });
+});
+
 const parties = loadParties();
 
 function loadParties() {

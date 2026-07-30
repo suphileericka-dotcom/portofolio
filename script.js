@@ -30,6 +30,7 @@ const ui = {
   leavePartyButton: document.getElementById("leavePartyButton"),
   leavePartyOptionsButton: document.getElementById("leavePartyOptionsButton"),
   partyStatus: document.getElementById("partyStatus"),
+  realtimeServerInput: document.getElementById("realtimeServerInput"),
   partyLabel: document.getElementById("partyLabel"),
   reactionButton: document.getElementById("reactionButton"),
   reactionMenu: document.getElementById("reactionMenu"),
@@ -50,6 +51,7 @@ const ui = {
 const saveKey = "bosquet-lent-save";
 const optionsKey = "bosquet-lent-options";
 const playerKey = "bosquet-lent-player";
+const realtimeServerKey = "bosquet-lent-realtime-server";
 const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
@@ -2255,9 +2257,13 @@ function updatePartyUi() {
   const inParty = Boolean(state.party.code);
   const count = state.party.members.length || (inParty ? 1 : 0);
   ui.partyLabel.textContent = inParty ? `Code ${state.party.code}` : "Solo";
+  const serverUrl = getRealtimeServerUrl();
+  const needsServer = !canLoadRealtimeScript() && !serverUrl;
   ui.partyStatus.textContent = inParty
     ? `Code ${state.party.code} - ${count} / 4 joueurs. La partie commence vraiment a partir de 2 joueurs.`
-    : net.statusMessage || "Partie entre amis - cree une partie ou rejoins une partie.";
+    : net.statusMessage || (needsServer
+      ? "Partie entre amis - ajoute un serveur amis pour jouer depuis ce lien."
+      : "Partie entre amis - cree une partie ou rejoins une partie.");
   ui.partyCodeInput.value = inParty ? state.party.code : ui.partyCodeInput.value;
   ui.leavePartyButton.classList.toggle("is-visible", inParty);
   ui.leavePartyOptionsButton.classList.toggle("is-visible", inParty);
@@ -2320,6 +2326,7 @@ function playGroupMeetTransition(count) {
 }
 
 function canLoadRealtimeScript() {
+  if (getRealtimeServerUrl()) return true;
   const host = window.location.hostname;
   return host === "localhost"
     || host === "127.0.0.1"
@@ -2328,11 +2335,50 @@ function canLoadRealtimeScript() {
     || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
 }
 
+function normalizeRealtimeServerUrl(value) {
+  const trimmed = String(value || "").trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    return url.origin;
+  } catch {
+    return "";
+  }
+}
+
+function getRealtimeServerUrl() {
+  return normalizeRealtimeServerUrl(localStorage.getItem(realtimeServerKey));
+}
+
+function loadRealtimeServerSetting() {
+  ui.realtimeServerInput.value = getRealtimeServerUrl();
+}
+
+function saveRealtimeServerSetting() {
+  const url = normalizeRealtimeServerUrl(ui.realtimeServerInput.value);
+  if (url) {
+    localStorage.setItem(realtimeServerKey, url);
+    ui.realtimeServerInput.value = url;
+  } else {
+    localStorage.removeItem(realtimeServerKey);
+    ui.realtimeServerInput.value = "";
+  }
+  if (net.socket) {
+    net.socket.disconnect();
+    net.socket = null;
+  }
+  net.connected = false;
+  setupRealtime();
+  updatePartyUi();
+}
+
 function loadRealtimeScript() {
   if (realtimeScriptLoading || !canLoadRealtimeScript()) return false;
   realtimeScriptLoading = true;
   const script = document.createElement("script");
-  script.src = "/socket.io/socket.io.js";
+  const serverUrl = getRealtimeServerUrl();
+  script.src = `${serverUrl || ""}/socket.io/socket.io.js`;
   script.onload = () => {
     realtimeScriptLoading = false;
     setupRealtime();
@@ -2353,7 +2399,8 @@ function setupRealtime() {
     updatePartyUi();
     return;
   }
-  net.socket = window.io();
+  const serverUrl = getRealtimeServerUrl();
+  net.socket = window.io(serverUrl || undefined, { transports: ["websocket", "polling"] });
   net.socket.on("connect", () => {
     net.connected = true;
     net.statusMessage = "";
@@ -2715,6 +2762,7 @@ ui.createPartyButton.addEventListener("click", createParty);
 ui.joinPartyButton.addEventListener("click", joinParty);
 ui.leavePartyButton.addEventListener("click", leaveParty);
 ui.leavePartyOptionsButton.addEventListener("click", leaveParty);
+ui.realtimeServerInput.addEventListener("change", saveRealtimeServerSetting);
 ui.reactionButton.addEventListener("click", () => {
   ui.reactionMenu.classList.toggle("is-visible");
 });
@@ -2771,6 +2819,7 @@ ui.resetDiscoveryTipsButton.addEventListener("click", () => {
 
 loadPlayerProfile();
 loadOptions();
+loadRealtimeServerSetting();
 const hasSave = loadGame();
 ui.nicknameInput.value = state.playerProfile.nickname;
 ui.partyCodeInput.value = state.party.code || "";

@@ -149,6 +149,10 @@ h2 {
   text-transform: uppercase;
 }
 
+.server-row {
+  margin-top: 0.8rem;
+}
+
 .options-section {
   margin-top: 1.1rem;
   padding-top: 1rem;
