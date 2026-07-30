@@ -7,8 +7,15 @@ const ui = {
   continueButton: document.getElementById("continueButton"),
   journalButton: document.getElementById("journalButton"),
   optionsButton: document.getElementById("optionsButton"),
+  infoButton: document.getElementById("infoButton"),
   muteButton: document.getElementById("muteButton"),
   journalDialog: document.getElementById("journalDialog"),
+  discoveryDialog: document.getElementById("discoveryDialog"),
+  discoveryTitle: document.getElementById("discoveryTitle"),
+  discoveryBody: document.getElementById("discoveryBody"),
+  hideDiscoveryPopup: document.getElementById("hideDiscoveryPopup"),
+  continueDiscoveryButton: document.getElementById("continueDiscoveryButton"),
+  infoDialog: document.getElementById("infoDialog"),
   optionsDialog: document.getElementById("optionsDialog"),
   journalList: document.getElementById("journalList"),
   resetButton: document.getElementById("resetButton"),
@@ -31,8 +38,11 @@ const ui = {
   villagerText: document.getElementById("villagerText"),
   giveItemButton: document.getElementById("giveItemButton"),
   refuseHelpButton: document.getElementById("refuseHelpButton"),
+  soundEnabledToggle: document.getElementById("soundEnabledToggle"),
   musicVolume: document.getElementById("musicVolume"),
   natureVolume: document.getElementById("natureVolume"),
+  effectsVolume: document.getElementById("effectsVolume"),
+  resetDiscoveryTipsButton: document.getElementById("resetDiscoveryTipsButton"),
   mobilePad: document.getElementById("mobilePad"),
   padKnob: document.getElementById("padKnob")
 };
@@ -49,6 +59,8 @@ let lastTime = 0;
 let running = false;
 let messageTimer = 0;
 let pendingVillagerHelp = null;
+let pendingDiscoveryPopup = null;
+let audioSceneKey = "";
 const net = { socket: null, connected: false, lastMoveSent: 0, lastMemberCount: 0, statusMessage: "" };
 
 const state = {
@@ -59,15 +71,22 @@ const state = {
   weather: "clear",
   cinematicPlayed: false,
   discoveries: [],
+  inventory: {},
+  discoveryDates: {},
+  hiddenDiscoveryPopups: [],
   lanterns: [],
   helpedVillagers: [],
+  activeQuest: null,
+  completedQuests: 0,
+  rewards: [],
+  achievements: [],
   groupRest: 0,
   lastSeatActor: "",
   reactions: [],
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur" },
   party: { code: "", members: [], minPlayers: 2, maxPlayers: 4 },
-  options: { music: 0.1, nature: 0.16, muted: false, audioVersion: 3 }
+  options: { music: 0.1, nature: 0.16, effects: 0.25, muted: false, audioVersion: 5 }
 };
 
 const biomes = [
@@ -88,12 +107,20 @@ const weatherTypes = [
 const weatherSchedule = ["clear", "rain", "clear", "mist", "clear", "wind", "clear", "snow", "clear", "clear"];
 
 const villagers = [
-  { role: "Tisserande d'ombres", line: "Elle dit que les chemins longs finissent par raconter ton nom." },
-  { role: "Facteur des collines", line: "Il porte des lettres sans adresse, seulement des intuitions." },
-  { role: "Gardienne du puits", line: "Elle garde les questions jusqu'a ce que quelqu'un ose les poser." },
-  { role: "Enfant aux lucioles", line: "Il connait une chanson qui ouvre les barrieres fatiguees." },
-  { role: "Cartographe sans carte", line: "Il dessine le monde apres l'avoir oublie." },
-  { role: "Boulangere de pluie", line: "Son pain rechauffe les poches quand la meteo tourne." }
+  { role: "Pecheur", line: "Tu cherches quelque chose ? J'ai entendu dire que des champignons lumineux poussent pres de la riviere lorsqu'il pleut." },
+  { role: "Vieille dame", line: "Les vieilles pierres n'oublient jamais les pas gentils. Reviens quand le vent tournera vers l'ouest." },
+  { role: "Garde forestier", line: "Si tu suis le vent vers l'ouest, tu trouveras peut-etre un ancien sentier oublie." },
+  { role: "Enfant", line: "La nuit, les lucioles dessinent parfois des fleches au-dessus des fougeres." },
+  { role: "Musicien", line: "Quand la pluie tombe doucement, les cloches du village sonnent plus loin que d'habitude." },
+  { role: "Marchand", line: "Je ne vends rien aujourd'hui. Je collectionne seulement les histoires que les voyageurs me confient." },
+  { role: "Facteur", line: "Une lettre ancienne apparait parfois la ou personne ne l'attend. Elle choisit son porteur." },
+  { role: "Apiculteur", line: "Les fleurs les plus calmes poussent au printemps, quand les abeilles dansent bas." },
+  { role: "Jardinier", line: "La mousse revient toujours pres des raccourcis que les cartes ont oublies." },
+  { role: "Voyageur", line: "J'ai traverse trois villages sous la brume. Le dernier avait une porte sans mur." },
+  { role: "Randonneur", line: "Les montagnes gardent des cristaux apres la neige, surtout au matin." },
+  { role: "Artiste", line: "Je peins les meteo rares. Elles ne restent jamais assez longtemps." },
+  { role: "Botaniste", line: "Une feuille nervuree peut proteger une carte fragile de la pluie. C'est un tres bon debut." },
+  { role: "Vieux sage", line: "Aide les gens sans attendre de cadeau. Le monde, lui, se souviendra." }
 ];
 
 const villagerNeeds = [
@@ -115,15 +142,49 @@ const riddles = [
 ];
 
 const discoveries = [
-  { id: "leaf", x: 860, label: "Feuille nervuree", text: "Une feuille rare, brillante comme du papier dore." },
-  { id: "stone", x: 1420, label: "Pierre polie", text: "Elle tient dans la paume et garde une fraicheur de ruisseau." },
-  { id: "feather", x: 2140, label: "Plume claire", text: "Un oiseau l'a laissee tomber sans se presser." },
-  { id: "moss", x: 3020, label: "Statue moussue", text: "Un visage ancien sourit sous les fougeres." },
-  { id: "shell", x: 3910, label: "Coquille de riviere", text: "Minuscule spirale trouvee au bord de l'eau." },
-  { id: "cone", x: 4740, label: "Pomme de pin bleue", text: "Sa couleur change legerement quand on la tourne." },
-  { id: "mushroom", x: 5660, label: "Champignon lueur", text: "Il emet une lumiere calme, presque musicale." },
-  { id: "star", x: 6520, label: "Eclat d'etoile", text: "Pose dans l'herbe comme un souvenir du ciel." }
+  { id: "leaf", x: 860, label: "Feuille nervuree", rarity: "Rare", place: "Foret", text: "Une feuille rare, brillante comme du papier dore.", use: "Repare les cartes fragiles, ouvre certains raccourcis et protege de la pluie." },
+  { id: "stone", x: 1420, label: "Pierre polie", rarity: "Commun", place: "Riviere", text: "Elle tient dans la paume et garde une fraicheur de ruisseau.", use: "Stabilise des mecanismes, des portes et des ponts anciens." },
+  { id: "feather", x: 2140, label: "Plume claire", rarity: "Rare", place: "Foret", text: "Un oiseau l'a laissee tomber sans se presser.", use: "Ecrit des messages et apaise certains habitants." },
+  { id: "moss", x: 3020, label: "Statue moussue", rarity: "Rare", place: "Village", text: "Un visage ancien sourit sous les fougeres.", use: "Reveille la memoire de lieux oublies." },
+  { id: "shell", x: 3910, label: "Coquille de riviere", rarity: "Rare", place: "Riviere", text: "Minuscule spirale trouvee au bord de l'eau.", use: "Comprend les rivieres, les puits, les passages humides et la pluie." },
+  { id: "cone", x: 4740, label: "Pomme de pin bleue", rarity: "Commun", place: "Foret", text: "Sa couleur change legerement quand on la tourne.", use: "Garde une chaleur douce contre la neige et le froid." },
+  { id: "mushroom", x: 5660, label: "Champignon lumineux", rarity: "Rare", place: "Riviere", text: "Il emet une lumiere calme, presque musicale.", use: "Sert de lampe calme contre la brume, la nuit et la neige." },
+  { id: "star", x: 6520, label: "Etoile tombee", rarity: "Legendaire", place: "Montagne", text: "Posee dans l'herbe comme un souvenir du ciel.", use: "Active les grands passages et garde une lumiere dans la brume." }
 ];
+
+const extraItemNames = [
+  "Feuille d'argent", "Fleur de trefle", "Branche souple", "Pierre de lune", "Galet rieur", "Roseau siffleur", "Fleur d'averse", "Baie douce", "Noisette claire", "Ecorce fine",
+  "Plume blanche", "Coquillage dore", "Champignon bleu", "Grain de pollen", "Fougère pliee", "Morceau d'ambre", "Ruban de lierre", "Bouton de rose", "Clochette seche", "Perle de rosée",
+  "Carte fragile", "Fragment de tuile", "Clef de mousse", "Fiole de brume", "Boussole fatiguee", "Lanterne miniature", "Bout de ficelle", "Pomme rouge", "Sachet de graines", "Petit miroir",
+  "Cristal de pluie", "Graine ancienne", "Fleur eternelle", "Boussole enchantee", "Papillon de verre", "Eclat de soleil", "Couronne de fougere", "Silex chanteur", "Charme de vent", "Plume d'aurore",
+  "Bouton de manteau", "Tasse fendue", "Jeton de village", "Clou dore", "Pinceau sec", "Note pliee", "Sifflet de bois", "Cordelette bleue", "Herbier vierge", "Pendentif simple",
+  "Fleur de neige", "Galet noir", "Bois flotte", "Champignon doux", "Feuille rouge", "Pierre plate", "Mousse de pont", "Aiguille de pin", "Coque vide", "Grain de sable",
+  "Etoffe verte", "Bague de cuivre", "Medaille sans nom", "Petale nacre", "Baton de marche", "Epi sauvage", "Larme d'orage", "Fragment d'etoile", "Fleur de minuit", "Sceau ancien",
+  "Cloche miniature", "Poussiere de carte", "Craie blanche", "Tambourin muet", "Bouton de nacre", "Gemme de source", "Rune lisse", "Bocal de lucioles", "Aile transparente", "Goutte suspendue",
+  "Fleur de colline", "Sapin miniature", "Feuille de saule", "Coquille bleue", "Pierre chaude", "Branche etoilee", "Plume sombre", "Baie d'hiver", "Herbe de pluie", "Morceau de nuage",
+  "Cristal d'aube", "Fleur solaire", "Graine de chemin", "Boussole des mousses", "Etoile de poche", "Clef de racine", "Fiole de vent", "Carte des lucioles", "Couronne ancienne", "Soleil tombe"
+];
+
+const itemCatalog = discoveries.concat(extraItemNames.map((label, index) => {
+  const rarity = index >= 90 ? "Legendaire" : index % 5 === 1 ? "Rare" : "Commun";
+  const places = ["Foret", "Village", "Riviere", "Montagne", "Clairiere"];
+  return {
+    id: `item-${index + 1}`,
+    label,
+    rarity,
+    place: places[index % places.length],
+    text: rarity === "Legendaire"
+      ? "Une trouvaille presque impossible, chaude comme un secret longtemps garde."
+      : rarity === "Rare"
+        ? "Un objet discret, mais assez singulier pour meriter une page du carnet."
+        : "Une petite chose du chemin, simple et rassurante.",
+    use: rarity === "Legendaire"
+      ? "Ouvre des lieux secrets, reveille des meteo rares et nourrit les grandes missions."
+      : rarity === "Rare"
+        ? "Aide a reparer, proteger ou comprendre certains passages."
+        : "Complete l'album, sert aux missions simples et garde la memoire du voyage."
+  };
+}));
 
 const lanterns = [
   { id: "lantern-1", x: 1180 },
@@ -193,18 +254,36 @@ function getProceduralDiscoveries() {
   const items = [];
   for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
     const chapter = chapterIndex + 4;
-    const local = discoveries[chapterIndex % discoveries.length];
+    const local = itemCatalog[chapterIndex % itemCatalog.length];
     const jitter = 160 + hashNumber(chapter * 3.1) * 520;
     items.push({
       id: makeId(local.id, chapter),
       x: world.firstRouteEnd + chapterIndex * world.chapterSize + jitter,
-      label: chapter <= discoveries.length ? local.label : `${local.label} ${chapter}`,
-      text: chapter <= discoveries.length
-        ? local.text
-        : `${local.text} Ce fragment semble venir d'une partie qui n'avait pas encore de nom.`
+      label: local.label,
+      rarity: local.rarity,
+      place: local.place,
+      use: local.use,
+      text: local.text
     });
   }
   return items;
+}
+
+function getProceduralLetters() {
+  if (!isExpandedWorld()) return [];
+  const relativeCamera = state.camera.x - world.firstRouteEnd;
+  const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
+  const end = Math.floor((relativeCamera + window.innerWidth + 900) / world.chapterSize);
+  const letters = [];
+  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
+    if (chapterIndex % 3 === 1) {
+      letters.push({
+        id: makeId("ancient-letter", chapterIndex + 4),
+        x: world.firstRouteEnd + chapterIndex * world.chapterSize + 1010 + hashNumber(chapterIndex + 22) * 210
+      });
+    }
+  }
+  return letters;
 }
 
 function getProceduralLanterns() {
@@ -582,6 +661,12 @@ function drawWorldObjects() {
     if (Math.abs(state.player.x - item.x) < 70) drawPrompt(item.x, y - 42, "E ramasser");
   });
 
+  getProceduralLetters().forEach((letter, index) => {
+    const y = world.ground - 26 + Math.sin(state.time * 1.8 + index) * 4;
+    drawLetterIcon(letter.x, y);
+    if (Math.abs(state.player.x - letter.x) < 76) drawPrompt(letter.x, y - 44, "E lire");
+  });
+
   butterflies.forEach((butterfly) => {
     const dist = Math.abs(state.player.x - butterfly.x);
     if (dist < 90) butterfly.scare = Math.min(1, butterfly.scare + 0.04);
@@ -609,6 +694,33 @@ function drawWorldObjects() {
   drawRiver();
   drawPartyCompanions();
   drawPlayer();
+  ctx.restore();
+}
+
+function drawLetterIcon(x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, 42);
+  glow.addColorStop(0, "rgba(240, 189, 108, 0.42)");
+  glow.addColorStop(1, "rgba(240, 189, 108, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(0, 0, 42, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#e8d49a";
+  roundedRect(-18, -18, 36, 28, 4);
+  ctx.fill();
+  ctx.strokeStyle = "#8b6840";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-15, -14);
+  ctx.lineTo(0, -1);
+  ctx.lineTo(15, -14);
+  ctx.moveTo(-15, 7);
+  ctx.lineTo(-3, -4);
+  ctx.moveTo(15, 7);
+  ctx.lineTo(3, -4);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -1193,7 +1305,10 @@ function update(dt) {
   const previousWeather = state.weather;
   state.chapter = getChapter();
   state.weather = getWeatherForChapter().id;
-  if (previousWeather !== state.weather) announceWeather();
+  if (previousWeather !== state.weather) {
+    announceWeather();
+    advanceQuest("weather", 1);
+  }
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
   const targetZoom = restingTogether > 0 ? 1.08 : 1;
@@ -1223,16 +1338,23 @@ function interact() {
     .find((entry) => Math.abs(entry.x - p.x) < 98);
   if (villageNeed) {
     openVillagerHelp(villageNeed);
+    advanceQuest("talkVillager", 1);
+    saveGame();
+    return;
+  }
+
+  const letter = getProceduralLetters().find((entry) => Math.abs(entry.x - p.x) < 78);
+  if (letter) {
+    readAncientLetter(letter);
     saveGame();
     return;
   }
 
   const item = getProceduralDiscoveries().find((entry) => !hasCollectedDiscovery(entry) && Math.abs(entry.x - p.x) < 78);
   if (item) {
-    state.discoveries.push(item.id);
+    const showedPopup = collectDiscovery(item);
     syncAction("collect", { itemId: item.id });
-    showMessage(`${item.label}: ${item.text}`);
-    playSoftPing();
+    if (!showedPopup) playSoftPing();
     saveGame();
     return;
   }
@@ -1305,7 +1427,8 @@ function announceWeather() {
 function baseDiscoveryId(id) {
   if (typeof id !== "string") return "";
   const parts = id.split("-");
-  return parts.length > 1 ? parts.slice(0, -1).join("-") : id;
+  if (parts.length > 1 && /^\d+$/.test(parts[parts.length - 1])) return parts.slice(0, -1).join("-");
+  return id;
 }
 
 function hasCollectedBaseItem(itemId) {
@@ -1329,23 +1452,192 @@ function hasCollectedDiscovery(item) {
   return state.discoveries.includes(item.id) || state.discoveries.includes(normalizeDiscoveryId(item.id));
 }
 
+function getCatalogItem(itemId) {
+  return itemCatalog.find((entry) => entry.id === baseDiscoveryId(itemId))
+    || discoveries.find((entry) => entry.id === baseDiscoveryId(itemId))
+    || null;
+}
+
 function getItemUse(itemId) {
+  const item = getCatalogItem(itemId);
+  if (item && item.use) return item.use;
   const need = villagerNeeds.find((entry) => entry.itemId === baseDiscoveryId(itemId));
-  return need ? need.use : "servira peut-etre plus loin sur la route";
+  return need ? need.use : "Servira peut-etre plus loin sur la route.";
+}
+
+function getItemSymbol(item) {
+  const rarity = item.rarity || (getCatalogItem(item.id) || {}).rarity || "Commun";
+  const baseId = baseDiscoveryId(item.id);
+  if (baseId.includes("leaf")) return "L";
+  if (baseId.includes("mushroom")) return "M";
+  if (baseId.includes("star")) return "*";
+  if (baseId.includes("shell")) return "C";
+  if (rarity === "Legendaire") return "*";
+  if (rarity === "Rare") return "+";
+  return "o";
+}
+
+function formatDiscoveryDate(itemId) {
+  const raw = state.discoveryDates[baseDiscoveryId(itemId)];
+  if (!raw) return "Inconnue";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "Inconnue";
+  return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+function getSeason() {
+  const seasons = ["Printemps", "Ete", "Automne", "Hiver"];
+  return seasons[Math.floor((state.chapter - 1) / 3) % seasons.length];
+}
+
+function isNightPlace() {
+  return getBiome(state.player.x).name.toLowerCase().includes("nuit");
+}
+
+function getPlaceType(x = state.player.x) {
+  const nearVillage = getProceduralVillages().some((village) => Math.abs(x - (village.x + 170)) < 620);
+  if (nearVillage) return "Village";
+  const riverX = isExpandedWorld()
+    ? Math.floor((x - world.firstRouteEnd) / 4200) * 4200 + world.firstRouteEnd + 3820
+    : 3820;
+  if (Math.abs(x - riverX) < 520) return "Riviere";
+  if (getBiome(x).name.toLowerCase().includes("nuit") || state.chapter % 8 === 0) return "Montagne";
+  return "Foret";
+}
+
+function updateAchievements() {
+  const achievements = [
+    { id: "leaves-100", ok: (state.inventory.leaf || 0) >= 100, label: "100 feuilles ramassees" },
+    { id: "helpers-50", ok: state.helpedVillagers.length >= 50, label: "50 habitants aides" },
+    { id: "discoveries-25", ok: Object.keys(state.inventory).length >= 25, label: "25 objets differents decouverts" },
+    { id: "quests-10", ok: state.completedQuests >= 10, label: "10 missions terminees" }
+  ];
+  achievements.forEach((achievement) => {
+    if (achievement.ok && !state.achievements.includes(achievement.id)) {
+      state.achievements.push(achievement.id);
+      showMessage(`Succes debloque: ${achievement.label}.`);
+    }
+  });
+}
+
+function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
+  const templates = [
+    { label: "Aider trois habitants", type: "helpVillager", target: 3 },
+    { label: "Trouver deux champignons", type: "collect:mushroom", target: 2 },
+    { label: "Ramasser cinq feuilles", type: "collect:leaf", target: 5 },
+    { label: "Traverser trois villages", type: "talkVillager", target: 3 },
+    { label: "Decouvrir une nouvelle meteo", type: "weather", target: 1 },
+    { label: "Trouver un coquillage", type: "collect:shell", target: 1 },
+    { label: "Ramasser cinq objets", type: "collectAny", target: 5 }
+  ];
+  const template = templates[Math.floor(hashNumber(seed) * templates.length) % templates.length];
+  return {
+    id: `quest-${Date.now()}-${Math.floor(hashNumber(seed + 2) * 10000)}`,
+    label: template.label,
+    type: template.type,
+    target: template.target,
+    progress: 0
+  };
+}
+
+function readAncientLetter(letter) {
+  if (state.activeQuest) {
+    showMessage("Tu as deja une mission en cours. Termine-la avant d'en recevoir une nouvelle.");
+    return;
+  }
+  state.activeQuest = makeQuest(letter.x);
+  showMessage(`Lettre ancienne: nouvelle mission - ${state.activeQuest.label}.`);
+  playSoftPing();
+}
+
+function advanceQuest(type, amount = 1) {
+  if (!state.activeQuest || state.activeQuest.type !== type) return;
+  state.activeQuest.progress = Math.min(state.activeQuest.target, state.activeQuest.progress + amount);
+  if (state.activeQuest.progress >= state.activeQuest.target) completeQuest();
+}
+
+function completeQuest() {
+  const label = state.activeQuest.label;
+  state.activeQuest = null;
+  const reward = grantQuestReward();
+  state.completedQuests += 1;
+  showMessage(`Mission terminee: ${label}. Recompense mystere: ${reward}.`);
+  playSoftPing();
+  updateAchievements();
+  saveGame();
+}
+
+function grantQuestReward() {
+  const choices = ["2 objets rares", "3 objets communs", "une etoile", "un habitant special", "une meteo rare", "une decoration"];
+  const reward = choices[Math.floor(hashNumber(Date.now() + state.player.x) * choices.length) % choices.length];
+  state.rewards.push({ label: reward, at: new Date().toISOString() });
+  if (reward === "2 objets rares" || reward === "3 objets communs") {
+    const wanted = reward === "2 objets rares" ? "Rare" : "Commun";
+    const count = reward === "2 objets rares" ? 2 : 3;
+    itemCatalog.filter((item) => item.rarity === wanted).slice(0, count).forEach((item, index) => {
+      collectDiscovery({ ...item, id: makeId(item.id, state.chapter + index + state.completedQuests + 20) }, true);
+    });
+  }
+  return reward;
+}
+
+function collectDiscovery(item, quiet = false) {
+  const baseId = baseDiscoveryId(item.id);
+  const firstTime = !hasCollectedBaseItem(baseId);
+  state.discoveries.push(item.id);
+  state.inventory[baseId] = (state.inventory[baseId] || 0) + 1;
+  if (firstTime) state.discoveryDates[baseId] = new Date().toISOString();
+  advanceQuest("collectAny", 1);
+  advanceQuest(`collect:${baseId}`, 1);
+  if (item.place === "Riviere") advanceQuest("collectRiver", 1);
+  if (!quiet && !state.hiddenDiscoveryPopups.includes(baseId)) {
+    openDiscoveryPopup(item);
+    updateAchievements();
+    return true;
+  } else if (!quiet) {
+    showMessage(`${item.label}: ${item.text}`);
+  }
+  updateAchievements();
+  return false;
+}
+
+function openDiscoveryPopup(item) {
+  const baseId = baseDiscoveryId(item.id);
+  pendingDiscoveryPopup = baseId;
+  ui.discoveryTitle.textContent = item.label;
+  ui.hideDiscoveryPopup.checked = false;
+  ui.discoveryBody.innerHTML = `
+    <div class="discovery-icon">${getItemSymbol(item)}</div>
+    <p>${item.text}</p>
+    <p><strong>Rareté</strong> ${item.rarity || "Commun"}</p>
+    <p><strong>Utilité</strong> ${getItemUse(item.id)}</p>
+  `;
+  ui.discoveryDialog.showModal();
+}
+
+function closeDiscoveryPopup() {
+  if (pendingDiscoveryPopup && ui.hideDiscoveryPopup.checked && !state.hiddenDiscoveryPopups.includes(pendingDiscoveryPopup)) {
+    state.hiddenDiscoveryPopups.push(pendingDiscoveryPopup);
+    saveGame();
+  }
+  pendingDiscoveryPopup = null;
 }
 
 function openVillagerHelp(villager) {
   const alreadyHelped = state.helpedVillagers.includes(villager.villageId);
-  const hasItem = hasCollectedBaseItem(villager.need.itemId);
   ui.villagerTitle.textContent = villager.role;
-  ui.giveItemButton.disabled = alreadyHelped || !hasItem;
-  ui.giveItemButton.style.opacity = alreadyHelped || !hasItem ? "0.55" : "1";
+  ui.giveItemButton.disabled = alreadyHelped;
+  ui.giveItemButton.style.opacity = alreadyHelped ? "0.55" : "1";
   if (alreadyHelped) {
-    ui.villagerText.textContent = `${villager.line} Tu l'as deja aide. Le village se souvient de ton geste.`;
-  } else if (hasItem) {
-    ui.villagerText.textContent = `${villager.line} Il te demande: "Vous avez ${villager.need.itemLabel} ? J'en aurais besoin pour ${villager.need.need}." Tu peux lui donner, ou garder l'objet.`;
+    ui.villagerText.textContent = `${villager.line} Il te remercie encore. Le village se souvient de ton aide.`;
   } else {
-    ui.villagerText.textContent = `${villager.line} Il te demande: "Vous avez ${villager.need.itemLabel} ? J'en aurais besoin pour ${villager.need.need}." Tu ne l'as pas encore dans ton carnet.`;
+    const requests = [
+      "Il demande de l'aide pour retrouver un sentier disparu.",
+      "Elle aimerait que quelqu'un ecoute une vieille legende jusqu'au bout.",
+      "Il signale une zone ou la meteo change sans prevenir.",
+      "Elle cherche un voyageur pour verifier que les lanternes brillent encore."
+    ];
+    ui.villagerText.textContent = `${villager.line} ${requests[Math.round(villager.x / 97) % requests.length]}`;
   }
   pendingVillagerHelp = villager;
   ui.villagerDialog.showModal();
@@ -1359,20 +1651,16 @@ function givePendingItem() {
     pendingVillagerHelp = null;
     return;
   }
-  if (!hasCollectedBaseItem(pendingVillagerHelp.need.itemId)) {
-    showMessage("Tu n'as pas encore cet objet dans ton carnet.");
-    return;
-  }
   state.helpedVillagers.push(pendingVillagerHelp.villageId);
+  advanceQuest("helpVillager", 1);
   syncAction("help-villager", {
-    villageId: pendingVillagerHelp.villageId,
-    itemId: pendingVillagerHelp.need.itemId,
-    itemLabel: pendingVillagerHelp.need.itemLabel
+    villageId: pendingVillagerHelp.villageId
   });
   ui.villagerDialog.close();
-  showMessage(`${pendingVillagerHelp.role} accepte ${pendingVillagerHelp.need.itemLabel}. Le village se souviendra de ce geste.`);
+  showMessage(`${pendingVillagerHelp.role} te remercie. Le monde devient un peu plus vivant.`);
   pendingVillagerHelp = null;
   playSoftPing();
+  updateAchievements();
   saveGame();
 }
 
@@ -1381,7 +1669,7 @@ function refusePendingHelp() {
   const name = pendingVillagerHelp.role;
   ui.villagerDialog.close();
   pendingVillagerHelp = null;
-  showMessage(`${name} hoche la tete. Tu gardes ton objet et tu peux continuer.`);
+  showMessage(`${name} hoche la tete et reprend son histoire plus doucement.`);
 }
 
 function playRouteEndCinematic() {
@@ -1415,9 +1703,23 @@ function buildJournal() {
   ui.journalList.innerHTML = "";
   const foundItems = state.discoveries.slice(-18).reverse();
   const visibleItems = getProceduralDiscoveries();
+  const uniqueFound = Object.keys(state.inventory).length;
+  const playHours = Math.floor(state.time / 3600);
+  const playMinutes = Math.floor((state.time % 3600) / 60).toString().padStart(2, "0");
   const summary = document.createElement("article");
   summary.className = "journal-item journal-summary";
-  summary.innerHTML = `<strong>Progression</strong><p>Partie ${state.chapter} - ${getBiome(state.player.x).name} - ${getWeatherForChapter().label}. ${state.discoveries.length} decouvertes dans le carnet. ${state.helpedVillagers.length} habitants aides.</p>`;
+  summary.innerHTML = `
+    <strong>Mon voyage</strong>
+    <p>Jour ${state.chapter}</p>
+    <p>Saison : ${getSeason()}</p>
+    <p>Meteo : ${getWeatherForChapter().label}</p>
+    <p>Lieu : ${getPlaceType()}</p>
+    <p>Decouvertes : ${uniqueFound} / ${itemCatalog.length}</p>
+    <p>Habitants rencontres : ${state.helpedVillagers.length}</p>
+    <p>Missions terminees : ${state.completedQuests}</p>
+    <p>Temps joue : ${playHours} h ${playMinutes}</p>
+    <p>${state.activeQuest ? `Mission active : ${state.activeQuest.label} (${state.activeQuest.progress} / ${state.activeQuest.target})` : "Aucune mission active"}</p>
+  `;
   ui.journalList.appendChild(summary);
   if (foundItems.length === 0) {
     const entry = document.createElement("article");
@@ -1426,11 +1728,22 @@ function buildJournal() {
     ui.journalList.appendChild(entry);
   }
   foundItems.forEach((id) => {
-    const baseItem = discoveries.find((entry) => entry.id === baseDiscoveryId(id));
+    const baseItem = getCatalogItem(id);
     const item = visibleItems.find((entry) => entry.id === id) || baseItem || { label: id.replace(/-/g, " "), text: "Une trace retrouvee dans une ancienne partie du chemin." };
     const entry = document.createElement("article");
-    entry.className = "journal-item";
-    entry.innerHTML = `<strong>${item.label}</strong><p>${item.text}</p><p>Utilite: ${getItemUse(id)}.</p>`;
+    entry.className = "journal-item journal-card";
+    entry.innerHTML = `
+      <div class="journal-object-image">${getItemSymbol(item)}</div>
+      <div>
+        <strong>${item.label}</strong>
+        <p>Rarete : ${item.rarity || "Commun"}</p>
+        <p>${item.text}</p>
+        <p>Utilite : ${getItemUse(id)}</p>
+        <p>Lieu : ${item.place || "Chemin"}</p>
+        <p>Nombre possede : ${state.inventory[baseDiscoveryId(id)] || 1}</p>
+        <p>Date de decouverte : ${formatDiscoveryDate(id)}</p>
+      </div>
+    `;
     ui.journalList.appendChild(entry);
   });
 }
@@ -1450,10 +1763,18 @@ function resetGame() {
   state.player.x = 380;
   state.player.vx = 0;
   state.discoveries = [];
+  state.inventory = {};
+  state.discoveryDates = {};
+  state.hiddenDiscoveryPopups = [];
   state.lanterns = [];
   state.helpedVillagers = [];
+  state.activeQuest = null;
+  state.completedQuests = 0;
+  state.rewards = [];
+  state.achievements = [];
   state.groupRest = 0;
   state.reactions = [];
+  state.time = 0;
   state.camera.x = 0;
   state.chapter = 1;
   state.weather = "clear";
@@ -1465,9 +1786,17 @@ function resetGame() {
 function saveGame() {
   const payload = {
     x: state.player.x,
+    time: state.time,
     discoveries: state.discoveries,
+    inventory: state.inventory,
+    discoveryDates: state.discoveryDates,
+    hiddenDiscoveryPopups: state.hiddenDiscoveryPopups,
     lanterns: state.lanterns,
     helpedVillagers: state.helpedVillagers,
+    activeQuest: state.activeQuest,
+    completedQuests: state.completedQuests,
+    rewards: state.rewards,
+    achievements: state.achievements,
     groupRest: state.groupRest,
     reactions: state.reactions,
     startedAtLeastOnce: state.startedAtLeastOnce,
@@ -1489,9 +1818,17 @@ function loadGame() {
   try {
     const payload = JSON.parse(raw);
     state.player.x = payload.x || 380;
+    state.time = Number.isFinite(payload.time) ? payload.time : 0;
     state.discoveries = Array.isArray(payload.discoveries) ? payload.discoveries.map(normalizeDiscoveryId) : [];
+    state.inventory = payload.inventory && typeof payload.inventory === "object" ? payload.inventory : rebuildInventory(state.discoveries);
+    state.discoveryDates = payload.discoveryDates && typeof payload.discoveryDates === "object" ? payload.discoveryDates : {};
+    state.hiddenDiscoveryPopups = Array.isArray(payload.hiddenDiscoveryPopups) ? payload.hiddenDiscoveryPopups : [];
     state.lanterns = Array.isArray(payload.lanterns) ? payload.lanterns : [];
     state.helpedVillagers = Array.isArray(payload.helpedVillagers) ? payload.helpedVillagers : [];
+    state.activeQuest = payload.activeQuest && typeof payload.activeQuest === "object" ? payload.activeQuest : null;
+    state.completedQuests = Number.isFinite(payload.completedQuests) ? payload.completedQuests : 0;
+    state.rewards = Array.isArray(payload.rewards) ? payload.rewards : [];
+    state.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
     state.groupRest = Number.isFinite(payload.groupRest) ? payload.groupRest : 0;
     state.reactions = Array.isArray(payload.reactions) ? payload.reactions : [];
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
@@ -1503,6 +1840,14 @@ function loadGame() {
   } catch {
     return false;
   }
+}
+
+function rebuildInventory(ids) {
+  return ids.reduce((inventory, id) => {
+    const baseId = baseDiscoveryId(id);
+    inventory[baseId] = (inventory[baseId] || 0) + 1;
+    return inventory;
+  }, {});
 }
 
 function normalizeParty(party) {
@@ -1579,7 +1924,7 @@ function createParty() {
   state.party = { code: makePartyCode(), members: [getNetworkPlayer()], minPlayers: 2, maxPlayers: 4 };
   ui.partyCodeInput.value = state.party.code;
   updatePartyUi();
-  showMessage(`Partie locale creee: ${state.party.code}. Pour inviter un telephone, lance npm start et ouvre l'adresse du PC.`);
+  showMessage(`Partie entre amis creee: ${state.party.code}. Partage ce code avec tes amis.`);
   saveGame();
 }
 
@@ -1591,7 +1936,7 @@ function joinParty() {
   }
   savePlayerProfile();
   if (!net.connected) {
-    showMessage("Serveur non connecte: ouvre le jeu depuis l'adresse du PC, par exemple http://IP_DU_PC:3000.");
+    showMessage("Partie entre amis indisponible pour le moment. Tu peux continuer en solo.");
     return;
   }
   if (net.connected) {
@@ -1636,7 +1981,7 @@ function updatePartyUi() {
   ui.partyLabel.textContent = inParty ? `Code ${state.party.code}` : "Solo";
   ui.partyStatus.textContent = inParty
     ? `Code ${state.party.code} - ${count} / 4 joueurs. La partie commence vraiment a partir de 2 joueurs.`
-    : net.statusMessage || "Solo - cree une partie ou entre le code d'un ami.";
+    : net.statusMessage || "Partie entre amis - cree une partie ou rejoins une partie.";
   ui.partyCodeInput.value = inParty ? state.party.code : ui.partyCodeInput.value;
   ui.leavePartyButton.classList.toggle("is-visible", inParty);
   ui.leavePartyOptionsButton.classList.toggle("is-visible", inParty);
@@ -1700,7 +2045,7 @@ function playGroupMeetTransition(count) {
 
 function setupRealtime() {
   if (!window.io) {
-    net.statusMessage = "Serveur temps reel absent. Pour le multi, lance npm start et ouvre http://IP_DU_PC:3000.";
+    net.statusMessage = "Partie entre amis";
     updatePartyUi();
     return;
   }
@@ -1718,7 +2063,7 @@ function setupRealtime() {
   });
   net.socket.on("connect_error", () => {
     net.connected = false;
-    net.statusMessage = "Serveur inaccessible. Le telephone doit ouvrir l'adresse reseau du PC, pas localhost.";
+    net.statusMessage = "Partie entre amis indisponible";
     updatePartyUi();
   });
   net.socket.on("party:created", ({ snapshot }) => {
@@ -1748,6 +2093,7 @@ function syncAction(type, payload = {}) {
 function loadOptions() {
   const raw = localStorage.getItem(optionsKey);
   if (!raw) {
+    syncOptionControls();
     updateMuteButton();
     return;
   }
@@ -1755,18 +2101,20 @@ function loadOptions() {
     const payload = JSON.parse(raw);
     state.options.music = Number.isFinite(payload.music) ? payload.music : state.options.music;
     state.options.nature = Number.isFinite(payload.nature) ? payload.nature : state.options.nature;
+    state.options.effects = Number.isFinite(payload.effects) ? payload.effects : state.options.effects;
     state.options.muted = Boolean(payload.muted);
-    if (payload.audioVersion !== 3) {
+    if (payload.audioVersion !== 5) {
       state.options.music = Math.min(state.options.music, 0.1);
       state.options.nature = Math.min(state.options.nature, 0.16);
-      state.options.audioVersion = 3;
+      state.options.effects = Math.min(state.options.effects, 0.25);
+      state.options.audioVersion = 5;
       saveOptions();
     }
-    ui.musicVolume.value = state.options.music;
-    ui.natureVolume.value = state.options.nature;
+    syncOptionControls();
     updateMuteButton();
   } catch {
     localStorage.removeItem(optionsKey);
+    syncOptionControls();
     updateMuteButton();
   }
 }
@@ -1775,10 +2123,23 @@ function saveOptions() {
   localStorage.setItem(optionsKey, JSON.stringify(state.options));
 }
 
+function syncOptionControls() {
+  ui.musicVolume.value = state.options.music;
+  ui.natureVolume.value = state.options.nature;
+  ui.effectsVolume.value = state.options.effects;
+  ui.soundEnabledToggle.checked = !state.options.muted;
+}
+
+function isAudioMuted() {
+  return state.options.muted
+    || (state.options.music <= 0 && state.options.nature <= 0 && state.options.effects <= 0);
+}
+
 function updateMuteButton() {
   ui.muteButton.classList.toggle("is-muted", state.options.muted);
   ui.muteButton.title = state.options.muted ? "Remettre le son" : "Couper le son";
   ui.muteButton.setAttribute("aria-label", ui.muteButton.title);
+  if (ui.soundEnabledToggle) ui.soundEnabledToggle.checked = !state.options.muted;
 }
 
 function setupAudio() {
@@ -1789,6 +2150,7 @@ function setupAudio() {
   const master = context.createGain();
   const music = context.createGain();
   const nature = context.createGain();
+  const effects = context.createGain();
   const lfo = context.createOscillator();
   const filter = context.createBiquadFilter();
   const toneA = context.createOscillator();
@@ -1805,6 +2167,10 @@ function setupAudio() {
   toneB.frequency.value = 196;
   toneC.type = "sine";
   toneC.frequency.value = 261.63;
+  master.gain.value = 0;
+  music.gain.value = 0;
+  nature.gain.value = 0;
+  effects.gain.value = 0;
   filter.type = "lowpass";
   filter.frequency.value = 360;
   lfo.frequency.value = 0.04;
@@ -1818,6 +2184,7 @@ function setupAudio() {
   filter.connect(nature);
   music.connect(master);
   nature.connect(master);
+  effects.connect(master);
   master.connect(context.destination);
   toneA.start();
   toneB.start();
@@ -1825,7 +2192,9 @@ function setupAudio() {
   noise.start();
   lfo.start();
 
-  audio = { context, master, music, nature, filter };
+  audio = { context, master, music, nature, effects, filter };
+  audio.tones = [toneA, toneB, toneC];
+  audio.nextAmbient = 0;
   updateAudio();
 }
 
@@ -1833,14 +2202,135 @@ function updateAudio() {
   const streamDistance = Math.abs(state.player.x - 3820);
   const stream = Math.max(0, 1 - streamDistance / 900);
   const now = audio.context.currentTime;
-  const mute = state.options.muted ? 0 : 1;
-  audio.music.gain.setTargetAtTime(mute * state.options.music * (0.018 + state.player.rest * 0.012), now, 1.4);
-  audio.nature.gain.setTargetAtTime(mute * state.options.nature * (0.014 + stream * 0.035), now, 1.2);
-  audio.filter.frequency.setTargetAtTime(190 + stream * 360, now, 0.9);
+  const mute = isAudioMuted() ? 0 : 1;
+  const scene = getAudioScene();
+  if (scene.key !== audioSceneKey) {
+    audioSceneKey = scene.key;
+    audio.tones.forEach((tone, index) => tone.frequency.setTargetAtTime(scene.notes[index], now, 1.8));
+  }
+  const musicVolume = state.options.music <= 0 ? 0 : state.options.music * scene.musicLevel * (0.08 + state.player.rest * 0.02);
+  const natureVolume = state.options.nature <= 0 ? 0 : state.options.nature * scene.natureLevel * (0.05 + stream * 0.06);
+  const effectsVolume = state.options.effects <= 0 ? 0 : state.options.effects;
+  audio.master.gain.setTargetAtTime(mute, now, mute <= 0 ? 0.01 : 0.15);
+  audio.music.gain.setTargetAtTime(musicVolume, now, state.options.music <= 0 ? 0.02 : 1.4);
+  audio.nature.gain.setTargetAtTime(natureVolume, now, state.options.nature <= 0 ? 0.02 : 1.2);
+  audio.effects.gain.setTargetAtTime(effectsVolume, now, state.options.effects <= 0 ? 0.01 : 0.08);
+  audio.filter.frequency.setTargetAtTime(scene.filter + stream * 360, now, 0.9);
+  if (mute > 0 && state.options.nature > 0 && now >= audio.nextAmbient) {
+    playAmbientCue(scene);
+    audio.nextAmbient = now + scene.interval;
+  }
+}
+
+function getAudioScene() {
+  const season = getSeason();
+  const weather = getWeatherForChapter().id;
+  const place = getPlaceType();
+  const night = isNightPlace();
+  const scene = {
+    key: `${season}-${weather}-${place}-${night ? "night" : "day"}`,
+    notes: [130.81, 196, 261.63],
+    filter: 220,
+    musicLevel: 1,
+    natureLevel: 1,
+    ambient: "birds",
+    interval: 5.5
+  };
+  if (season === "Printemps") {
+    scene.notes = [146.83, 220, 329.63];
+    scene.filter = 420;
+    scene.natureLevel = 1.2;
+  } else if (season === "Ete") {
+    scene.notes = [164.81, 246.94, 329.63];
+    scene.filter = 360;
+  } else if (season === "Automne") {
+    scene.notes = [123.47, 185, 277.18];
+    scene.filter = 260;
+  } else {
+    scene.notes = [110, 164.81, 220];
+    scene.filter = 180;
+    scene.musicLevel = 0.82;
+  }
+  if (weather === "rain") {
+    scene.notes = scene.notes.map((note) => note * 0.94);
+    scene.filter = 720;
+    scene.natureLevel = 1.65;
+    scene.ambient = "rain-wind";
+    scene.interval = 2.4;
+  } else if (weather === "wind") {
+    scene.notes = scene.notes.map((note) => note * 1.08);
+    scene.filter = 540;
+    scene.natureLevel = 1.35;
+    scene.ambient = "wind";
+    scene.interval = 3.2;
+  } else if (weather === "snow") {
+    scene.notes = scene.notes.map((note) => note * 0.88);
+    scene.filter = 150;
+    scene.natureLevel = 0.72;
+    scene.ambient = "snow";
+    scene.interval = 7;
+  } else if (weather === "mist") {
+    scene.filter = 130;
+    scene.musicLevel = 0.75;
+    scene.ambient = "mist";
+    scene.interval = 6.4;
+  }
+  if (night) {
+    scene.notes = [98, 146.83, 196];
+    scene.filter = Math.min(scene.filter, 210);
+    scene.natureLevel += 0.38;
+    scene.ambient = "crickets";
+    scene.interval = 1.8;
+  }
+  if (place === "Village") {
+    scene.notes = [174.61, 220, 349.23];
+    scene.musicLevel += 0.18;
+    scene.ambient = "village";
+    scene.interval = 4.6;
+  } else if (place === "Riviere") {
+    scene.filter += 260;
+    scene.natureLevel += 0.42;
+    scene.ambient = weather === "rain" ? "rain-wind" : "river";
+    scene.interval = 2.8;
+  } else if (place === "Montagne") {
+    scene.notes = scene.notes.map((note) => note * 0.82);
+    scene.musicLevel = Math.max(0.55, scene.musicLevel - 0.16);
+    scene.ambient = weather === "snow" ? "snow" : "wind";
+    scene.interval = 4;
+  }
+  return scene;
+}
+
+function playAmbientCue(scene) {
+  if (!audio || isAudioMuted() || state.options.nature <= 0) return;
+  const now = audio.context.currentTime;
+  const gain = audio.context.createGain();
+  const oscillator = audio.context.createOscillator();
+  oscillator.type = scene.ambient === "rain-wind" || scene.ambient === "wind" ? "sawtooth" : "sine";
+  const frequencies = {
+    birds: [880, 1174.66],
+    "rain-wind": [180, 95],
+    wind: [146.83, 110],
+    crickets: [1760, 1567.98],
+    village: [523.25, 392],
+    river: [329.63, 246.94],
+    snow: [220, 164.81],
+    mist: [261.63, 196]
+  };
+  const pair = frequencies[scene.ambient] || frequencies.birds;
+  oscillator.frequency.setValueAtTime(pair[0], now);
+  oscillator.frequency.exponentialRampToValueAtTime(pair[1], now + 0.28);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.018, now + 0.04);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + (scene.ambient === "village" ? 1.1 : 0.42));
+  oscillator.connect(gain);
+  gain.connect(audio.nature);
+  oscillator.start(now);
+  oscillator.stop(now + (scene.ambient === "village" ? 1.2 : 0.5));
 }
 
 function playSoftPing() {
-  if (!audio) return;
+  if (!audio || isAudioMuted() || state.options.effects <= 0) return;
   const oscillator = audio.context.createOscillator();
   const gain = audio.context.createGain();
   oscillator.type = "sine";
@@ -1850,7 +2340,7 @@ function playSoftPing() {
   gain.gain.exponentialRampToValueAtTime(0.035, audio.context.currentTime + 0.04);
   gain.gain.exponentialRampToValueAtTime(0.0001, audio.context.currentTime + 0.5);
   oscillator.connect(gain);
-  gain.connect(audio.master);
+  gain.connect(audio.effects);
   oscillator.start();
   oscillator.stop(audio.context.currentTime + 0.55);
 }
@@ -1933,9 +2423,17 @@ ui.journalButton.addEventListener("click", () => {
   buildJournal();
   ui.journalDialog.showModal();
 });
+ui.infoButton.addEventListener("click", () => ui.infoDialog.showModal());
+ui.discoveryDialog.addEventListener("close", closeDiscoveryPopup);
 ui.optionsButton.addEventListener("click", () => ui.optionsDialog.showModal());
 ui.muteButton.addEventListener("click", () => {
   state.options.muted = !state.options.muted;
+  updateMuteButton();
+  saveOptions();
+  if (audio) updateAudio();
+});
+ui.soundEnabledToggle.addEventListener("change", () => {
+  state.options.muted = !ui.soundEnabledToggle.checked;
   updateMuteButton();
   saveOptions();
   if (audio) updateAudio();
@@ -1955,6 +2453,16 @@ ui.natureVolume.addEventListener("input", () => {
   state.options.nature = Number(ui.natureVolume.value);
   saveOptions();
   if (audio) updateAudio();
+});
+ui.effectsVolume.addEventListener("input", () => {
+  state.options.effects = Number(ui.effectsVolume.value);
+  saveOptions();
+  if (audio) updateAudio();
+});
+ui.resetDiscoveryTipsButton.addEventListener("click", () => {
+  state.hiddenDiscoveryPopups = [];
+  saveGame();
+  showMessage("Les explications des objets sont reactivees.");
 });
 
 loadPlayerProfile();

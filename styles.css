@@ -525,6 +525,25 @@ h2 {
   background: rgba(240, 189, 108, 0.12);
 }
 
+.journal-card {
+  display: grid;
+  grid-template-columns: 4.6rem 1fr;
+  gap: 0.85rem;
+}
+
+.journal-object-image {
+  width: 4.6rem;
+  height: 4.6rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(240, 189, 108, 0.28);
+  background: rgba(240, 189, 108, 0.13);
+  color: var(--sun);
+  font-size: 1.6rem;
+  font-weight: 900;
+}
+
 .compact-dialog {
   width: min(30rem, calc(100vw - 1.4rem));
 }
@@ -533,6 +552,67 @@ h2 {
   margin: 0;
   color: var(--muted);
   line-height: 1.55;
+}
+
+.discovery-body {
+  display: grid;
+  gap: 0.6rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.discovery-body p {
+  margin: 0;
+}
+
+.discovery-body strong {
+  color: var(--sun);
+}
+
+.discovery-icon {
+  width: 5rem;
+  height: 5rem;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 0.2rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(240, 189, 108, 0.35);
+  background: rgba(240, 189, 108, 0.13);
+  color: var(--sun);
+  font-size: 1.9rem;
+  font-weight: 900;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.info-button {
+  width: 2.4rem;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.info-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.wide-button {
+  width: 100%;
+  justify-content: center;
+  margin: 0.35rem 0 0.2rem;
+}
+
+.option-toggle {
+  margin-top: 0;
 }
 
 .choice-actions {
@@ -578,6 +658,10 @@ input[type="range"] {
   .sound-button {
     width: 2.35rem;
     padding: 0;
+  }
+
+  .journal-card {
+    grid-template-columns: 1fr;
   }
 
   .reaction-button {
