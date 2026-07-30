@@ -67,14 +67,14 @@ const state = {
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur" },
   party: { code: "", members: [], minPlayers: 2, maxPlayers: 4 },
-  options: { music: 0.22, nature: 0.32, muted: false, audioVersion: 2 }
+  options: { music: 0.1, nature: 0.16, muted: false, audioVersion: 3 }
 };
 
 const biomes = [
-  { at: 0, name: "Bosquet vert", sky: "#8db9b2", haze: "#e5cf91", tree: "#245343", leaf: "#6f9d68", grass: "#87ac6d" },
-  { at: 1800, name: "Clairiere fleurie", sky: "#b5cba8", haze: "#f2c98e", tree: "#4d6c45", leaf: "#9aaf67", grass: "#b8a75f" },
-  { at: 3600, name: "Sous-bois frais", sky: "#8bb0bc", haze: "#d8e5ed", tree: "#2d4c57", leaf: "#6f8a8d", grass: "#7a9a8f" },
-  { at: 5400, name: "Nuit aux champignons", sky: "#24324f", haze: "#a7d9c4", tree: "#172a38", leaf: "#3f6a75", grass: "#486d69" }
+  { at: 0, name: "Bosquet vert", sky: "#f0d99c", haze: "#c6cf8d", tree: "#3d512a", leaf: "#6d7f3f", grass: "#8d9b45" },
+  { at: 1800, name: "Clairiere fleurie", sky: "#efd39a", haze: "#b9c78f", tree: "#4b5e2d", leaf: "#7f8c4a", grass: "#a2a55a" },
+  { at: 3600, name: "Sous-bois frais", sky: "#d9cf96", haze: "#a8bf94", tree: "#2d5545", leaf: "#5f876c", grass: "#7f9b61" },
+  { at: 5400, name: "Nuit aux champignons", sky: "#4f6b70", haze: "#91b69c", tree: "#173629", leaf: "#315d4a", grass: "#536f3e" }
 ];
 
 const weatherTypes = [
@@ -339,33 +339,59 @@ function drawBackground(colors) {
   const gradient = ctx.createLinearGradient(0, 0, 0, h);
   gradient.addColorStop(0, colors.sky);
   gradient.addColorStop(0.58, colors.haze);
-  gradient.addColorStop(1, "#22322c");
+  gradient.addColorStop(1, "#9a8f61");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, w, h);
 
   ctx.save();
-  ctx.translate(-state.camera.x * 0.08, 0);
-  for (let i = -1; i < 9; i += 1) {
-    const mx = i * 540;
-    ctx.fillStyle = "rgba(64, 83, 82, 0.24)";
-    ctx.beginPath();
-    ctx.moveTo(mx - 80, h * 0.55);
-    ctx.quadraticCurveTo(mx + 210, h * 0.23, mx + 560, h * 0.55);
-    ctx.closePath();
-    ctx.fill();
-  }
+  ctx.globalAlpha = 0.7;
+  drawCloud(w * 0.68, h * 0.17, w * 0.18);
+  drawCloud(w * 0.92, h * 0.25, w * 0.11);
   ctx.restore();
 
   ctx.save();
-  ctx.globalAlpha = 0.2 + Math.sin(state.time * 0.08) * 0.06;
-  ctx.strokeStyle = "#fff8d8";
-  ctx.lineWidth = 30;
-  for (let i = 0; i < 4; i += 1) {
-    const x = (i * 320 + state.time * 8) % (w + 360) - 160;
+  ctx.translate(-state.camera.x * 0.05, 0);
+  drawRoundedHill(-120, h * 0.56, 520, h * 0.22, "rgba(115, 139, 78, 0.42)");
+  drawRoundedHill(260, h * 0.5, 520, h * 0.28, "rgba(126, 153, 96, 0.38)");
+  drawRoundedHill(700, h * 0.58, 620, h * 0.2, "rgba(99, 129, 75, 0.4)");
+  drawDistantVillage(w * 0.9 + state.camera.x * 0.05, h * 0.58);
+  ctx.restore();
+}
+
+function drawCloud(x, y, size) {
+  ctx.fillStyle = "rgba(255, 247, 212, 0.6)";
+  drawEllipse(x, y, size * 0.35, size * 0.12, ctx.fillStyle);
+  drawEllipse(x - size * 0.2, y + size * 0.01, size * 0.22, size * 0.09, ctx.fillStyle);
+  drawEllipse(x + size * 0.22, y + size * 0.02, size * 0.24, size * 0.09, ctx.fillStyle);
+}
+
+function drawRoundedHill(x, y, width, height, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y + height);
+  ctx.quadraticCurveTo(x + width * 0.5, y - height, x + width, y + height);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawDistantVillage(x, y) {
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  for (let i = 0; i < 5; i += 1) {
+    const hx = x + i * 54;
+    const houseH = 34 + (i % 2) * 18;
+    ctx.fillStyle = "#d7c27d";
+    roundedRect(hx - 18, y - houseH, 36, houseH, 3);
+    ctx.fill();
+    ctx.fillStyle = "#9c5638";
     ctx.beginPath();
-    ctx.moveTo(x, -40);
-    ctx.lineTo(x - 150, h * 0.82);
-    ctx.stroke();
+    ctx.moveTo(hx - 24, y - houseH);
+    ctx.lineTo(hx, y - houseH - 26);
+    ctx.lineTo(hx + 24, y - houseH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "rgba(255, 226, 112, 0.82)";
+    ctx.fillRect(hx - 5, y - houseH + 13, 10, 10);
   }
   ctx.restore();
 }
@@ -389,12 +415,16 @@ function drawParallaxTrees(colors) {
         const x = tree.x + layer * 95 + repeat * repeatWidth;
         if (x + tree.w < visibleStart || x > visibleEnd) continue;
         const base = h * 0.74 + Math.sin(tree.x + repeat) * 18;
-        ctx.fillStyle = colors.tree;
-        roundedRect(x - 8, base - tree.h * 0.68, 16, tree.h * 0.7, 7);
+        ctx.fillStyle = layer === 2 ? "#4a2c1b" : colors.tree;
+        roundedRect(x - 10, base - tree.h * 0.62, 20, tree.h * 0.64, 9);
         ctx.fill();
-        drawEllipse(x, base - tree.h * 0.72, tree.w * 0.72, tree.h * 0.28, colors.leaf);
-        drawEllipse(x - tree.w * 0.34, base - tree.h * 0.58, tree.w * 0.46, tree.h * 0.22, colors.leaf);
-        drawEllipse(x + tree.w * 0.34, base - tree.h * 0.55, tree.w * 0.5, tree.h * 0.23, colors.leaf);
+        const leaf = layer === 2 ? colors.leaf : blendHex(colors.leaf, "#c2c98d", 0.18);
+        drawEllipse(x, base - tree.h * 0.72, tree.w * 0.78, tree.h * 0.3, leaf);
+        drawEllipse(x - tree.w * 0.36, base - tree.h * 0.56, tree.w * 0.5, tree.h * 0.24, leaf);
+        drawEllipse(x + tree.w * 0.36, base - tree.h * 0.55, tree.w * 0.54, tree.h * 0.24, leaf);
+        ctx.fillStyle = "rgba(31, 55, 31, 0.28)";
+        drawEllipse(x - tree.w * 0.12, base - tree.h * 0.78, tree.w * 0.12, tree.h * 0.04, ctx.fillStyle);
+        drawEllipse(x + tree.w * 0.28, base - tree.h * 0.68, tree.w * 0.1, tree.h * 0.04, ctx.fillStyle);
       }
     }
     ctx.restore();
@@ -403,8 +433,14 @@ function drawParallaxTrees(colors) {
 
 function drawGround(colors) {
   const h = window.innerHeight;
-  ctx.fillStyle = "#20382f";
+  ctx.fillStyle = "#253b28";
   ctx.fillRect(0, world.ground, window.innerWidth, h - world.ground);
+  ctx.fillStyle = "#c49b5c";
+  ctx.fillRect(0, world.ground - 14, window.innerWidth, 38);
+  ctx.fillStyle = "#6d7a35";
+  for (let x = -20; x < window.innerWidth + 30; x += 28) {
+    drawEllipse(x, world.ground + 26, 18, 13, ctx.fillStyle);
+  }
   ctx.save();
   ctx.translate(-state.camera.x, 0);
   ctx.fillStyle = colors.grass;
@@ -486,14 +522,7 @@ function drawWorldObjects() {
     const collected = hasCollectedDiscovery(item);
     if (collected) return;
     const y = world.ground - 20 + Math.sin(state.time * 2 + index) * 5;
-    const color = ["#f0bd6c", "#67b4c8", "#f7f3df", "#8ebf76", "#ce6f75"][index % 5];
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(item.x, y, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.45)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    drawCollectibleIcon(item, index, item.x, y);
     if (Math.abs(state.player.x - item.x) < 70) drawPrompt(item.x, y - 42, "E ramasser");
   });
 
@@ -524,6 +553,65 @@ function drawWorldObjects() {
   drawRiver();
   drawPartyCompanions();
   drawPlayer();
+  ctx.restore();
+}
+
+function drawCollectibleIcon(item, index, x, y) {
+  const baseId = baseDiscoveryId(item.id);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255, 248, 210, 0.72)";
+  if (baseId === "leaf") {
+    drawEllipse(0, 0, 16, 8, "#9fb04d");
+    ctx.beginPath();
+    ctx.moveTo(-10, 6);
+    ctx.lineTo(11, -7);
+    ctx.stroke();
+  } else if (baseId === "stone") {
+    drawEllipse(0, 0, 15, 9, "#9a927c");
+  } else if (baseId === "feather") {
+    ctx.fillStyle = "#f7efd3";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 7, 18, 0.65, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (baseId === "shell") {
+    ctx.fillStyle = "#e7b879";
+    ctx.beginPath();
+    ctx.arc(0, 4, 15, Math.PI, Math.PI * 2);
+    ctx.lineTo(14, 7);
+    ctx.lineTo(-14, 7);
+    ctx.closePath();
+    ctx.fill();
+  } else if (baseId === "cone") {
+    drawEllipse(0, 1, 12, 16, "#4f7890");
+    ctx.fillStyle = "rgba(28, 60, 76, 0.45)";
+    for (let row = -8; row < 10; row += 6) {
+      drawEllipse(-4, row, 4, 3, ctx.fillStyle);
+      drawEllipse(4, row + 2, 4, 3, ctx.fillStyle);
+    }
+  } else if (baseId === "mushroom") {
+    drawEllipse(0, -5, 16, 9, "#f0bd6c");
+    roundedRect(-5, -2, 10, 18, 5);
+    ctx.fillStyle = "#fff1bc";
+    ctx.fill();
+  } else if (baseId === "star") {
+    ctx.fillStyle = "#f4cc47";
+    ctx.beginPath();
+    for (let point = 0; point < 10; point += 1) {
+      const radius = point % 2 === 0 ? 17 : 7;
+      const angle = -Math.PI / 2 + point * Math.PI / 5;
+      const px = Math.cos(angle) * radius;
+      const py = Math.sin(angle) * radius;
+      if (point === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    drawEllipse(0, 0, 10, 10, ["#f0bd6c", "#67b4c8", "#f7f3df", "#8ebf76", "#ce6f75"][index % 5]);
+  }
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -733,7 +821,7 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
   ctx.ellipse(0, 50, 28, 8, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "#2d2730";
-  ctx.lineWidth = 7;
+  ctx.lineWidth = 8;
   ctx.lineCap = "round";
   ctx.beginPath();
   ctx.moveTo(-8, 22);
@@ -742,19 +830,20 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
   ctx.lineTo(seated ? 22 : 17 + walk * 8, seated ? 38 : 47);
   ctx.stroke();
   ctx.fillStyle = body;
-  roundedRect(-17, -5, 34, 39, 13);
+  ctx.beginPath();
+  ctx.ellipse(0, 16, 20, 28, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = skin;
   ctx.beginPath();
-  ctx.arc(0, -23, 18, 0, Math.PI * 2);
+  ctx.arc(0, -25, 20, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#28312e";
   ctx.beginPath();
-  ctx.arc(8, -26, 3, 0, Math.PI * 2);
+  ctx.arc(9, -27, 3.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = hair;
   ctx.beginPath();
-  ctx.ellipse(-3, -37, 20, 10, -0.2, Math.PI, Math.PI * 2);
+  ctx.ellipse(-8, -36, 22, 13, -0.22, Math.PI * 0.95, Math.PI * 2.08);
   ctx.fill();
   ctx.restore();
 
@@ -1423,10 +1512,10 @@ function loadOptions() {
     state.options.music = Number.isFinite(payload.music) ? payload.music : state.options.music;
     state.options.nature = Number.isFinite(payload.nature) ? payload.nature : state.options.nature;
     state.options.muted = Boolean(payload.muted);
-    if (payload.audioVersion !== 2) {
-      state.options.music = Math.min(state.options.music, 0.22);
-      state.options.nature = Math.min(state.options.nature, 0.32);
-      state.options.audioVersion = 2;
+    if (payload.audioVersion !== 3) {
+      state.options.music = Math.min(state.options.music, 0.1);
+      state.options.nature = Math.min(state.options.nature, 0.16);
+      state.options.audioVersion = 3;
       saveOptions();
     }
     ui.musicVolume.value = state.options.music;
@@ -1501,9 +1590,9 @@ function updateAudio() {
   const stream = Math.max(0, 1 - streamDistance / 900);
   const now = audio.context.currentTime;
   const mute = state.options.muted ? 0 : 1;
-  audio.music.gain.setTargetAtTime(mute * state.options.music * (0.035 + state.player.rest * 0.03), now, 1.2);
-  audio.nature.gain.setTargetAtTime(mute * state.options.nature * (0.025 + stream * 0.08), now, 1);
-  audio.filter.frequency.setTargetAtTime(240 + stream * 520, now, 0.8);
+  audio.music.gain.setTargetAtTime(mute * state.options.music * (0.018 + state.player.rest * 0.012), now, 1.4);
+  audio.nature.gain.setTargetAtTime(mute * state.options.nature * (0.014 + stream * 0.035), now, 1.2);
+  audio.filter.frequency.setTargetAtTime(190 + stream * 360, now, 0.9);
 }
 
 function playSoftPing() {
