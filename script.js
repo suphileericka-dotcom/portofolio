@@ -61,6 +61,7 @@ let messageTimer = 0;
 let pendingVillagerHelp = null;
 let pendingDiscoveryPopup = null;
 let audioSceneKey = "";
+let realtimeScriptLoading = false;
 const net = { socket: null, connected: false, lastMoveSent: 0, lastMemberCount: 0, statusMessage: "" };
 
 const state = {
@@ -1392,9 +1393,37 @@ function draw() {
   updatePartyUi();
 }
 
+function isModalOpen() {
+  return Boolean(
+    ui.discoveryDialog.open
+    || ui.villagerDialog.open
+    || ui.journalDialog.open
+    || ui.optionsDialog.open
+    || ui.infoDialog.open
+    || ui.cinematic.classList.contains("is-visible")
+  );
+}
+
+function clearMovementIntent() {
+  pointer.active = false;
+  pointer.worldX = state.player.x;
+  joystick.active = false;
+  joystick.x = 0;
+  joystick.y = 0;
+  ui.padKnob.style.transform = "translate(-50%, -50%)";
+  state.player.vx = 0;
+}
+
 function update(dt) {
   state.time += dt;
   const p = state.player;
+  if (isModalOpen()) {
+    clearMovementIntent();
+    p.y = world.ground;
+    if (audio) updateAudio();
+    autosave();
+    return;
+  }
   let input = 0;
   if (keys.has("ArrowLeft") || keys.has("q") || keys.has("Q") || keys.has("a") || keys.has("A")) input -= 1;
   if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) input += 1;
@@ -1443,6 +1472,7 @@ function update(dt) {
 }
 
 function interact() {
+  clearMovementIntent();
   const p = state.player;
   const villageNeed = getProceduralVillages()
     .map((village) => ({
@@ -2289,8 +2319,36 @@ function playGroupMeetTransition(count) {
   }, 2200);
 }
 
+function canLoadRealtimeScript() {
+  const host = window.location.hostname;
+  return host === "localhost"
+    || host === "127.0.0.1"
+    || host.startsWith("192.168.")
+    || host.startsWith("10.")
+    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
+}
+
+function loadRealtimeScript() {
+  if (realtimeScriptLoading || !canLoadRealtimeScript()) return false;
+  realtimeScriptLoading = true;
+  const script = document.createElement("script");
+  script.src = "/socket.io/socket.io.js";
+  script.onload = () => {
+    realtimeScriptLoading = false;
+    setupRealtime();
+  };
+  script.onerror = () => {
+    realtimeScriptLoading = false;
+    net.statusMessage = "Partie entre amis";
+    updatePartyUi();
+  };
+  document.body.appendChild(script);
+  return true;
+}
+
 function setupRealtime() {
   if (!window.io) {
+    if (loadRealtimeScript()) return;
     net.statusMessage = "Partie entre amis";
     updatePartyUi();
     return;
