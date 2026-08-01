@@ -29,6 +29,13 @@ const ui = {
   villagerText: document.getElementById("villagerText"),
   giveItemButton: document.getElementById("giveItemButton"),
   refuseHelpButton: document.getElementById("refuseHelpButton"),
+  questDialog: document.getElementById("questDialog"),
+  questDialogBody: document.getElementById("questDialogBody"),
+  startQuestButton: document.getElementById("startQuestButton"),
+  questCompleteDialog: document.getElementById("questCompleteDialog"),
+  questCompleteBody: document.getElementById("questCompleteBody"),
+  claimQuestRewardButton: document.getElementById("claimQuestRewardButton"),
+  missionTracker: document.getElementById("missionTracker"),
   soundEnabledToggle: document.getElementById("soundEnabledToggle"),
   musicVolume: document.getElementById("musicVolume"),
   natureVolume: document.getElementById("natureVolume"),
@@ -45,6 +52,8 @@ const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
 const joystick = { active: false, id: null, x: 0, y: 0 };
+const discoveryRespawnSeconds = 45;
+const letterRespawnDelaySeconds = 35;
 let audio = null;
 let lastTime = 0;
 let running = false;
@@ -68,10 +77,14 @@ const state = {
   helpedVillagers: [],
   villagerRelations: {},
   discoveredPlaces: [],
+  visitedVillages: [],
   openedSecrets: [],
   activeQuest: null,
+  pendingQuestReward: null,
+  nextLetterAt: 0,
   completedQuests: 0,
   rewards: [],
+  discoveryRespawns: {},
   achievements: [],
   companion: { unlocked: false, finds: 0, nextHelpAt: 0 },
   startedAtLeastOnce: false,
@@ -296,7 +309,10 @@ function getProceduralSecretLocations() {
 }
 
 function getProceduralLetters() {
-  if (!isExpandedWorld()) return [];
+  if (state.activeQuest || state.pendingQuestReward || state.time < state.nextLetterAt) return [];
+  if (!isExpandedWorld()) {
+    return [{ id: "ancient-letter-start", x: 1240 }];
+  }
   const relativeCamera = state.camera.x - world.firstRouteEnd;
   const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
   const end = Math.floor((relativeCamera + window.innerWidth + 900) / world.chapterSize);
@@ -1301,6 +1317,8 @@ function draw() {
 function isModalOpen() {
   return Boolean(
     ui.discoveryDialog.open
+    || ui.questDialog.open
+    || ui.questCompleteDialog.open
     || ui.villagerDialog.open
     || ui.journalDialog.open
     || ui.optionsDialog.open
@@ -1326,6 +1344,7 @@ function update(dt) {
     clearMovementIntent();
     p.y = world.ground;
     if (audio) updateAudio();
+    updateMissionTracker();
     autosave();
     return;
   }
@@ -1365,6 +1384,7 @@ function update(dt) {
   state.camera.x = Math.max(0, state.camera.x);
 
   if (audio) updateAudio();
+  updateMissionTracker();
   autosave();
 }
 
@@ -1380,8 +1400,12 @@ function interact() {
     }))
     .find((entry) => Math.abs(entry.x - p.x) < 98);
   if (villageNeed) {
-    openVillagerHelp(villageNeed);
     advanceQuest("talkVillager", 1);
+    if (state.pendingQuestReward) {
+      saveGame();
+      return;
+    }
+    openVillagerHelp(villageNeed);
     saveGame();
     return;
   }
@@ -1490,7 +1514,8 @@ function getWeatherProtection(weatherId = state.weather) {
 }
 
 function hasCollectedDiscovery(item) {
-  return state.discoveries.includes(item.id) || state.discoveries.includes(normalizeDiscoveryId(item.id));
+  const respawnAt = state.discoveryRespawns[item.id] || state.discoveryRespawns[normalizeDiscoveryId(item.id)] || 0;
+  return respawnAt > state.time;
 }
 
 function getCatalogItem(itemId) {
@@ -1573,13 +1598,7 @@ function updateAchievements() {
 function updateCompanion(dt) {
   if (!state.companion.unlocked || state.time < state.companion.nextHelpAt) return;
   state.companion.nextHelpAt = state.time + 55 + hashNumber(state.time + state.player.x) * 45;
-  if (state.activeQuest && state.activeQuest.progress < state.activeQuest.target) {
-    advanceQuest(state.activeQuest.type, 1);
-    if (state.activeQuest) showMessage("Ton compagnon trouve une piste et t'aide dans la mission.");
-    state.companion.finds += 1;
-    saveGame();
-    return;
-  }
+  if (state.activeQuest || state.pendingQuestReward) return;
   const common = itemCatalog.filter((item) => item.rarity === "Commun");
   const item = common[Math.floor(hashNumber(state.player.x + state.time) * common.length) % common.length];
   if (item) {
@@ -1606,87 +1625,189 @@ function exploreSecretLocation(secret) {
   playSoftPing();
 }
 
+const questTemplates = [
+  { title: "Collection de coquillages", description: "Ramasse 6 coquillages pendentifs d'exploration.", objective: "Ramasser 6 coquillages.", type: "collect:shell", target: 6 },
+  { title: "Herbier nervure", description: "Ramasse 5 feuilles nervurees pour completer une page du carnet.", objective: "Ramasser 5 feuilles nervurees.", type: "collect:leaf", target: 5 },
+  { title: "Lueurs du sous-bois", description: "Trouve 3 champignons lumineux pres des passages humides.", objective: "Trouver 3 champignons lumineux.", type: "collect:mushroom", target: 3 },
+  { title: "Pierres anciennes", description: "Ramasse 8 pierres anciennes ou polies sur le chemin.", objective: "Ramasser 8 pierres anciennes.", type: "collect:stone", target: 8 },
+  { title: "Fleurs sauvages", description: "Decouvre 4 fleurs sauvages pendant l'exploration.", objective: "Decouvrir 4 fleurs sauvages.", type: "collectFlower", target: 4 },
+  { title: "Voix du village", description: "Rencontre 5 habitants et ecoute leurs histoires.", objective: "Rencontrer 5 habitants.", type: "talkVillager", target: 5 },
+  { title: "Chemins nouveaux", description: "Explore 2 nouveaux villages sur la route.", objective: "Explorer 2 nouveaux villages.", type: "village", target: 2 }
+];
+
 function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
-  const templates = [
-    { label: "Aider trois habitants", type: "helpVillager", target: 3 },
-    { label: "Trouver deux champignons", type: "collect:mushroom", target: 2 },
-    { label: "Ramasser cinq feuilles", type: "collect:leaf", target: 5 },
-    { label: "Traverser trois villages", type: "talkVillager", target: 3 },
-    { label: "Decouvrir une nouvelle meteo", type: "weather", target: 1 },
-    { label: "Trouver un coquillage", type: "collect:shell", target: 1 },
-    { label: "Ramasser cinq objets", type: "collectAny", target: 5 },
-    { label: "Explorer un lieu secret", type: "secret", target: 1 }
-  ];
-  const template = templates[Math.floor(hashNumber(seed) * templates.length) % templates.length];
+  const template = questTemplates[Math.floor(hashNumber(seed) * questTemplates.length) % questTemplates.length];
   return {
     id: `quest-${Date.now()}-${Math.floor(hashNumber(seed + 2) * 10000)}`,
-    label: template.label,
+    title: template.title,
+    label: template.objective,
+    description: template.description,
+    objective: template.objective,
     type: template.type,
     target: template.target,
-    progress: 0
+    progress: 0,
+    rewardCount: 2
   };
 }
 
 function readAncientLetter(letter) {
-  if (state.activeQuest) {
-    showMessage("Tu as deja une mission en cours. Termine-la avant d'en recevoir une nouvelle.");
+  if (state.activeQuest || state.pendingQuestReward) {
+    showMessage("Tu as deja une mission en cours. Termine-la avant d'en commencer une nouvelle.");
     return;
   }
   state.activeQuest = makeQuest(letter.x);
-  showMessage(`Lettre ancienne: nouvelle mission - ${state.activeQuest.label}.`);
+  state.nextLetterAt = Number.POSITIVE_INFINITY;
+  openQuestPopup(state.activeQuest);
   playSoftPing();
+  updateMissionTracker();
 }
 
 function advanceQuest(type, amount = 1) {
   if (!state.activeQuest || state.activeQuest.type !== type) return;
   state.activeQuest.progress = Math.min(state.activeQuest.target, state.activeQuest.progress + amount);
+  showMessage(`Mission: ${state.activeQuest.objective} ${state.activeQuest.progress} / ${state.activeQuest.target}`);
+  updateMissionTracker();
   if (state.activeQuest.progress >= state.activeQuest.target) completeQuest();
 }
 
 function completeQuest() {
-  const label = state.activeQuest.label;
+  const quest = state.activeQuest;
   state.activeQuest = null;
-  const reward = grantQuestReward();
+  const rewardItems = grantQuestReward();
   state.completedQuests += 1;
+  state.pendingQuestReward = {
+    questTitle: quest.title || quest.label,
+    rewardItems,
+    completedAt: state.time
+  };
   if (!state.companion.unlocked) {
     state.companion.unlocked = true;
     state.companion.nextHelpAt = state.time + 35;
   }
-  showMessage(`Mission terminee: ${label}. Recompense mystere: ${reward}.`);
+  openQuestCompletePopup(state.pendingQuestReward);
   playSoftPing();
+  updateMissionTracker();
   updateAchievements();
   saveGame();
 }
 
 function grantQuestReward() {
-  const choices = ["2 objets rares", "3 objets communs", "une etoile", "un habitant special", "une meteo rare", "une decoration"];
-  const reward = choices[Math.floor(hashNumber(Date.now() + state.player.x) * choices.length) % choices.length];
-  state.rewards.push({ label: reward, at: new Date().toISOString() });
-  if (reward === "2 objets rares" || reward === "3 objets communs") {
-    const wanted = reward === "2 objets rares" ? "Rare" : "Commun";
-    const count = reward === "2 objets rares" ? 2 : 3;
-    itemCatalog.filter((item) => item.rarity === wanted).slice(0, count).forEach((item, index) => {
-      collectDiscovery({ ...item, id: makeId(item.id, state.chapter + index + state.completedQuests + 20) }, true);
-    });
-  } else if (reward === "un habitant special") {
-    state.villagerRelations["Habitant special"] = Math.max(state.villagerRelations["Habitant special"] || 0, 1);
-  } else if (reward === "une meteo rare") {
-    rememberPlace("Meteo rare");
-  } else if (reward === "une decoration") {
-    rememberPlace("Decoration du camp");
+  const seed = Date.now() + state.player.x + state.completedQuests * 19;
+  const pool = itemCatalog.filter((item) => item.id !== "star");
+  const rewardItems = [];
+  for (let index = 0; index < 2; index += 1) {
+    const item = pool[Math.floor(hashNumber(seed + index * 11) * pool.length) % pool.length];
+    const rewardItem = { ...item, id: makeId(item.id, state.chapter + state.completedQuests + index + 60) };
+    rewardItems.push(rewardItem);
+    collectDiscovery(rewardItem, true);
   }
-  return reward;
+  const label = rewardItems.map((item) => item.label).join(", ");
+  state.rewards.push({ label: `2 objets aleatoires: ${label}`, items: rewardItems.map((item) => item.id), at: new Date().toISOString() });
+  return rewardItems;
+}
+
+function openQuestPopup(quest) {
+  ui.questDialogBody.innerHTML = `
+    <p><strong>Mission :</strong> ${quest.title}</p>
+    <p>${quest.description}</p>
+    <p><strong>Objectif precis :</strong> ${quest.objective}</p>
+    <p><strong>Progression :</strong> ${quest.progress} / ${quest.target}</p>
+    <p><strong>Recompense :</strong> 2 objets aleatoires</p>
+  `;
+  ui.questDialog.showModal();
+}
+
+function openQuestCompletePopup(reward) {
+  const rewardItems = reward.rewardItems || [];
+  ui.questCompleteBody.innerHTML = `
+    <p><strong>${reward.questTitle}</strong></p>
+    <p>Recompense :</p>
+    <ul class="mission-reward-list">
+      ${rewardItems.map((item) => `<li>${item.label}</li>`).join("")}
+    </ul>
+  `;
+  ui.questCompleteDialog.showModal();
+}
+
+function claimQuestReward() {
+  if (!state.pendingQuestReward) return;
+  state.pendingQuestReward = null;
+  state.nextLetterAt = state.time + letterRespawnDelaySeconds;
+  updateMissionTracker();
+  saveGame();
+  showMessage("Recompense validee. Une nouvelle enveloppe pourra apparaitre plus tard.");
+}
+
+function updateMissionTracker() {
+  if (state.activeQuest) {
+    ui.missionTracker.innerHTML = `
+      <strong>Mission</strong>
+      <span>${state.activeQuest.objective}</span>
+      <span>${state.activeQuest.progress} / ${state.activeQuest.target}</span>
+    `;
+    ui.missionTracker.classList.add("is-visible");
+    return;
+  }
+  if (state.pendingQuestReward) {
+    ui.missionTracker.innerHTML = `
+      <strong>Mission terminee</strong>
+      <span>Recompense a valider</span>
+    `;
+    ui.missionTracker.classList.add("is-visible");
+    return;
+  }
+  ui.missionTracker.classList.remove("is-visible");
+}
+
+function normalizeQuest(quest) {
+  if (!quest || typeof quest !== "object") return null;
+  const matchingTemplate = questTemplates.find((template) => template.type === quest.type && template.target === quest.target);
+  const title = quest.title || (matchingTemplate && matchingTemplate.title) || "Mission";
+  const objective = quest.objective || quest.label || (matchingTemplate && matchingTemplate.objective) || "Objectif de mission";
+  return {
+    ...quest,
+    title,
+    label: objective,
+    description: quest.description || (matchingTemplate && matchingTemplate.description) || objective,
+    objective,
+    progress: Number.isFinite(quest.progress) ? quest.progress : 0,
+    target: Number.isFinite(quest.target) ? quest.target : 1,
+    rewardCount: Number.isFinite(quest.rewardCount) ? quest.rewardCount : 2
+  };
+}
+
+function isFlowerDiscovery(item) {
+  const label = (item.label || "").toLowerCase();
+  const id = baseDiscoveryId(item.id);
+  return id.includes("flower") || id.includes("bloom") || label.includes("fleur");
+}
+
+function getQuestCollectTypes(item) {
+  const baseId = baseDiscoveryId(item.id);
+  const label = (item.label || "").toLowerCase();
+  const types = new Set([`collect:${baseId}`]);
+  if (label.includes("coquillage") || label.includes("coquille")) types.add("collect:shell");
+  if (label.includes("feuille")) types.add("collect:leaf");
+  if (label.includes("champignon")) types.add("collect:mushroom");
+  if (label.includes("pierre") || label.includes("galet")) types.add("collect:stone");
+  return Array.from(types);
 }
 
 function collectDiscovery(item, quiet = false) {
   const baseId = baseDiscoveryId(item.id);
   const firstTime = !hasCollectedBaseItem(baseId);
+  if (!quiet) state.discoveryRespawns[item.id] = state.time + discoveryRespawnSeconds;
   state.discoveries.push(item.id);
   state.inventory[baseId] = (state.inventory[baseId] || 0) + 1;
   if (firstTime) state.discoveryDates[baseId] = new Date().toISOString();
   advanceQuest("collectAny", 1);
-  advanceQuest(`collect:${baseId}`, 1);
+  getQuestCollectTypes(item).forEach((type) => advanceQuest(type, 1));
+  if (isFlowerDiscovery(item)) advanceQuest("collectFlower", 1);
   if (item.place === "Riviere") advanceQuest("collectRiver", 1);
+  if (!quiet && state.pendingQuestReward) {
+    updateAchievements();
+    return true;
+  }
   if (!quiet && !state.hiddenDiscoveryPopups.includes(baseId)) {
     openDiscoveryPopup(item);
     updateAchievements();
@@ -1724,6 +1845,14 @@ function openVillagerHelp(villager) {
   const alreadyHelped = state.helpedVillagers.includes(villager.villageId);
   const relationKey = villager.role;
   state.villagerRelations[relationKey] = (state.villagerRelations[relationKey] || 0) + 1;
+  if (!state.visitedVillages.includes(villager.villageId)) {
+    state.visitedVillages.push(villager.villageId);
+    advanceQuest("village", 1);
+    if (state.pendingQuestReward) {
+      saveGame();
+      return;
+    }
+  }
   const meetings = state.villagerRelations[relationKey];
   const relationLine = getVillagerRelationLine(villager, meetings);
   ui.villagerTitle.textContent = villager.role;
@@ -1738,10 +1867,7 @@ function openVillagerHelp(villager) {
       "Il signale une zone ou la meteo change sans prevenir.",
       "Elle cherche un voyageur pour verifier que les lanternes brillent encore."
     ];
-    const questHint = meetings >= 3 && !state.activeQuest
-      ? "Comme il te connait mieux, il pourra te confier une mission si tu l'aides."
-      : "";
-    ui.villagerText.textContent = `${relationLine} ${requests[Math.round(villager.x / 97) % requests.length]} ${questHint}`.trim();
+    ui.villagerText.textContent = `${relationLine} ${requests[Math.round(villager.x / 97) % requests.length]}`.trim();
   }
   pendingVillagerHelp = villager;
   updateAchievements();
@@ -1766,13 +1892,7 @@ function givePendingItem() {
   }
   state.helpedVillagers.push(pendingVillagerHelp.villageId);
   advanceQuest("helpVillager", 1);
-  const meetings = state.villagerRelations[pendingVillagerHelp.role] || 0;
-  if (!state.activeQuest && meetings >= 3) {
-    state.activeQuest = makeQuest(pendingVillagerHelp.x + meetings);
-    showMessage(`${pendingVillagerHelp.role} te confie une mission: ${state.activeQuest.label}.`);
-  } else {
-    showMessage(`${pendingVillagerHelp.role} te remercie. Le monde devient un peu plus vivant.`);
-  }
+  showMessage(`${pendingVillagerHelp.role} te remercie. Le monde devient un peu plus vivant.`);
   ui.villagerDialog.close();
   pendingVillagerHelp = null;
   playSoftPing();
@@ -1902,7 +2022,12 @@ function startGame(reset = false) {
   ui.startScreen.classList.add("is-hidden");
   running = true;
   setupAudio();
-  showMessage("Fleches, ZQSD ou clic pour marcher. Espace ou E pour interagir.");
+  updateMissionTracker();
+  if (state.pendingQuestReward) {
+    openQuestCompletePopup(state.pendingQuestReward);
+  } else {
+    showMessage("Fleches, ZQSD ou clic pour marcher. Espace ou E pour interagir.");
+  }
   saveGame();
 }
 
@@ -1917,10 +2042,14 @@ function resetGame() {
   state.helpedVillagers = [];
   state.villagerRelations = {};
   state.discoveredPlaces = [];
+  state.visitedVillages = [];
   state.openedSecrets = [];
   state.activeQuest = null;
+  state.pendingQuestReward = null;
+  state.nextLetterAt = 0;
   state.completedQuests = 0;
   state.rewards = [];
+  state.discoveryRespawns = {};
   state.achievements = [];
   state.companion = { unlocked: false, finds: 0, nextHelpAt: 0 };
   state.time = 0;
@@ -1944,10 +2073,14 @@ function saveGame() {
     helpedVillagers: state.helpedVillagers,
     villagerRelations: state.villagerRelations,
     discoveredPlaces: state.discoveredPlaces,
+    visitedVillages: state.visitedVillages,
     openedSecrets: state.openedSecrets,
     activeQuest: state.activeQuest,
+    pendingQuestReward: state.pendingQuestReward,
+    nextLetterAt: state.nextLetterAt,
     completedQuests: state.completedQuests,
     rewards: state.rewards,
+    discoveryRespawns: state.discoveryRespawns,
     achievements: state.achievements,
     companion: state.companion,
     startedAtLeastOnce: state.startedAtLeastOnce,
@@ -1977,10 +2110,14 @@ function loadGame() {
     state.helpedVillagers = Array.isArray(payload.helpedVillagers) ? payload.helpedVillagers : [];
     state.villagerRelations = payload.villagerRelations && typeof payload.villagerRelations === "object" ? payload.villagerRelations : {};
     state.discoveredPlaces = Array.isArray(payload.discoveredPlaces) ? payload.discoveredPlaces : [];
+    state.visitedVillages = Array.isArray(payload.visitedVillages) ? payload.visitedVillages : [];
     state.openedSecrets = Array.isArray(payload.openedSecrets) ? payload.openedSecrets : [];
-    state.activeQuest = payload.activeQuest && typeof payload.activeQuest === "object" ? payload.activeQuest : null;
+    state.activeQuest = normalizeQuest(payload.activeQuest);
+    state.pendingQuestReward = payload.pendingQuestReward && typeof payload.pendingQuestReward === "object" ? payload.pendingQuestReward : null;
+    state.nextLetterAt = Number.isFinite(payload.nextLetterAt) ? payload.nextLetterAt : 0;
     state.completedQuests = Number.isFinite(payload.completedQuests) ? payload.completedQuests : 0;
     state.rewards = Array.isArray(payload.rewards) ? payload.rewards : [];
+    state.discoveryRespawns = payload.discoveryRespawns && typeof payload.discoveryRespawns === "object" ? payload.discoveryRespawns : {};
     state.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
     state.companion = payload.companion && typeof payload.companion === "object"
       ? { unlocked: Boolean(payload.companion.unlocked), finds: payload.companion.finds || 0, nextHelpAt: payload.companion.nextHelpAt || 0 }
@@ -2361,6 +2498,10 @@ ui.nicknameInput.addEventListener("change", () => {
 });
 ui.giveItemButton.addEventListener("click", givePendingItem);
 ui.refuseHelpButton.addEventListener("click", refusePendingHelp);
+ui.claimQuestRewardButton.addEventListener("click", claimQuestReward);
+ui.missionTracker.addEventListener("click", () => {
+  if (state.pendingQuestReward && !ui.questCompleteDialog.open) openQuestCompletePopup(state.pendingQuestReward);
+});
 ui.journalButton.addEventListener("click", () => {
   buildJournal();
   ui.journalDialog.showModal();
@@ -2413,6 +2554,7 @@ const hasSave = loadGame();
 ui.nicknameInput.value = state.playerProfile.nickname;
 ui.continueButton.disabled = !hasSave;
 ui.continueButton.style.opacity = hasSave ? "1" : "0.55";
+updateMissionTracker();
 resize();
 draw();
 requestAnimationFrame(loop);

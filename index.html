@@ -42,7 +42,8 @@
     </section>
 
     <aside id="message" class="message" aria-live="polite"></aside>
-    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.11</aside>
+    <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
+    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.12</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -76,6 +77,32 @@
         </label>
         <div class="choice-actions">
           <button id="continueDiscoveryButton" class="primary-button" value="close" type="submit">Continuer</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="questDialog" class="panel-dialog compact-dialog mission-dialog">
+      <form method="dialog">
+        <header class="panel-header">
+          <h2 id="questDialogTitle">&#128220; Nouvelle mission</h2>
+          <button class="close-button" value="close" type="submit">Fermer</button>
+        </header>
+        <div id="questDialogBody" class="mission-body"></div>
+        <div class="choice-actions">
+          <button id="startQuestButton" class="primary-button" value="close" type="submit">Commencer</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="questCompleteDialog" class="panel-dialog compact-dialog mission-dialog">
+      <form method="dialog">
+        <header class="panel-header">
+          <h2>&#127881; Mission terminee !</h2>
+          <button class="close-button" value="close" type="submit">Fermer</button>
+        </header>
+        <div id="questCompleteBody" class="mission-body"></div>
+        <div class="choice-actions">
+          <button id="claimQuestRewardButton" class="primary-button" value="close" type="submit">Valider la recompense</button>
         </div>
       </form>
     </dialog>
@@ -150,7 +177,7 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.11").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.12").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});
