@@ -24,16 +24,6 @@ const ui = {
   cinematicText: document.getElementById("cinematicText"),
   nicknameInput: document.getElementById("nicknameInput"),
   anonymousId: document.getElementById("anonymousId"),
-  createPartyButton: document.getElementById("createPartyButton"),
-  partyCodeInput: document.getElementById("partyCodeInput"),
-  joinPartyButton: document.getElementById("joinPartyButton"),
-  leavePartyButton: document.getElementById("leavePartyButton"),
-  leavePartyOptionsButton: document.getElementById("leavePartyOptionsButton"),
-  partyStatus: document.getElementById("partyStatus"),
-  realtimeServerInput: document.getElementById("realtimeServerInput"),
-  partyLabel: document.getElementById("partyLabel"),
-  reactionButton: document.getElementById("reactionButton"),
-  reactionMenu: document.getElementById("reactionMenu"),
   villagerDialog: document.getElementById("villagerDialog"),
   villagerTitle: document.getElementById("villagerTitle"),
   villagerText: document.getElementById("villagerText"),
@@ -51,7 +41,6 @@ const ui = {
 const saveKey = "bosquet-lent-save";
 const optionsKey = "bosquet-lent-options";
 const playerKey = "bosquet-lent-player";
-const realtimeServerKey = "bosquet-lent-realtime-server";
 const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
@@ -63,8 +52,6 @@ let messageTimer = 0;
 let pendingVillagerHelp = null;
 let pendingDiscoveryPopup = null;
 let audioSceneKey = "";
-let realtimeScriptLoading = false;
-const net = { socket: null, connected: false, lastMoveSent: 0, lastMemberCount: 0, statusMessage: "" };
 
 const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0 },
@@ -87,12 +74,8 @@ const state = {
   rewards: [],
   achievements: [],
   companion: { unlocked: false, finds: 0, nextHelpAt: 0 },
-  groupRest: 0,
-  lastSeatActor: "",
-  reactions: [],
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur" },
-  party: { code: "", members: [], minPlayers: 2, maxPlayers: 4 },
   options: { music: 0.1, nature: 0.16, effects: 0.25, muted: false, audioVersion: 5 }
 };
 
@@ -740,7 +723,6 @@ function drawWorldObjects() {
   });
 
   drawRiver();
-  drawPartyCompanions();
   drawCompanion();
   drawPlayer();
   ctx.restore();
@@ -1085,68 +1067,6 @@ function drawCoverLantern(x, y) {
   ctx.restore();
 }
 
-function getPartyCompanions() {
-  if (!state.party.code) return [];
-  const colors = ["#67b4c8", "#8ebf76", "#b98ad6"];
-  const members = Array.isArray(state.party.members) ? state.party.members : [];
-  const remoteMembers = members
-    .map((member) => (typeof member === "string" ? { id: member, nickname: "Ami" } : member))
-    .filter((member) => member.id && member.id !== state.playerProfile.id)
-    .slice(0, 3);
-  return remoteMembers.map((member, index) => ({
-    id: member.id,
-    label: member.nickname || ["Ami 1", "Ami 2", "Ami 3"][index],
-    x: Number.isFinite(member.x) ? member.x : state.player.x - 70 - index * 54 + Math.sin(state.time * 1.5 + index) * 8,
-    y: world.ground,
-    face: member.face || state.player.face,
-    body: colors[index],
-    seated: Boolean(member.resting) || state.groupRest > 0.18
-  }));
-}
-
-function drawPartyCompanions() {
-  const companions = getPartyCompanions();
-  companions.forEach((companion, index) => {
-    const reaction = getActiveReactionFor(companion.id);
-    drawCharacter({
-      x: companion.x,
-      y: companion.y,
-      face: companion.face,
-      velocity: state.player.vx * 0.65,
-      body: companion.body,
-      skin: "#e7b879",
-      hair: "#2d4c57",
-      label: companion.label,
-      reaction,
-      seated: companion.seated
-    });
-    if (state.groupRest > 0.4 && index === 0) {
-      drawPrompt(companion.x, companion.y - 108, "se repose");
-    }
-  });
-  const ownReaction = getActiveReactionFor(state.playerProfile.id);
-  if (ownReaction) drawReactionBubble(state.player.x, state.player.y - 132, ownReaction);
-}
-
-function getActiveReactionFor(actorId) {
-  for (let index = state.reactions.length - 1; index >= 0; index -= 1) {
-    const reaction = state.reactions[index];
-    if (reaction.actorId === actorId && reaction.until > state.time) return reaction.symbol;
-  }
-  return "";
-}
-
-function sendReaction(symbol) {
-  if (!state.party.code) {
-    showMessage("Rejoins ou cree une partie pour envoyer des reactions au groupe.");
-    return;
-  }
-  state.reactions.push({ actorId: state.playerProfile.id, symbol, until: state.time + 4 });
-  syncAction("reaction", { symbol, until: Date.now() + 4000 });
-  ui.reactionMenu.classList.remove("is-visible");
-  showMessage(`Reaction envoyee au groupe: ${symbol}`);
-}
-
 function drawRiver() {
   const riverX = isExpandedWorld()
     ? Math.floor((state.camera.x + window.innerWidth / 2 - world.firstRouteEnd) / 4200) * 4200 + world.firstRouteEnd + 3820
@@ -1273,7 +1193,7 @@ function drawPlayer() {
   });
 }
 
-function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = "#f0bd6c", hair = "#22322c", label = "", reaction = "", seated = false }) {
+function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = "#f0bd6c", hair = "#22322c", label = "", seated = false }) {
   const walk = seated ? 0 : Math.sin(state.time * 10) * Math.min(1, Math.abs(velocity) / 190);
   const baseY = y - 52 + (seated ? 10 : 0);
   ctx.save();
@@ -1331,20 +1251,6 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
     ctx.fillText(label.slice(0, 12), x, baseY - 51);
     ctx.restore();
   }
-
-  if (reaction) drawReactionBubble(x, baseY - 86, reaction);
-}
-
-function drawReactionBubble(x, y, reaction) {
-  ctx.save();
-  ctx.font = "800 22px Nunito";
-  ctx.fillStyle = "rgba(20, 34, 33, 0.78)";
-  roundedRect(x - 22, y - 26, 44, 38, 10);
-  ctx.fill();
-  ctx.fillStyle = "#f7f3df";
-  ctx.textAlign = "center";
-  ctx.fillText(reaction, x, y);
-  ctx.restore();
 }
 
 function drawOverlay() {
@@ -1368,10 +1274,9 @@ function drawOverlay() {
     ctx.fill();
     ctx.restore();
   }
-  const restingTogether = Math.max(state.player.rest, state.groupRest);
-  if (restingTogether > 0) {
+  if (state.player.rest > 0) {
     ctx.save();
-    ctx.globalAlpha = restingTogether * 0.24;
+    ctx.globalAlpha = state.player.rest * 0.24;
     ctx.fillStyle = "#f7f3df";
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
@@ -1391,8 +1296,6 @@ function draw() {
   ctx.restore();
   drawOverlay();
   drawWeather();
-  ui.partyLabel.textContent = state.party.code ? `Code ${state.party.code}` : "Solo";
-  updatePartyUi();
 }
 
 function isModalOpen() {
@@ -1436,8 +1339,7 @@ function update(dt) {
   const weather = getWeatherForChapter();
   const protectedFromWeather = getWeatherProtection(weather.id);
   const weatherSlowdown = !protectedFromWeather && (weather.id === "rain" || weather.id === "snow") ? 0.82 : 1;
-  const restingTogether = Math.max(p.rest, state.groupRest);
-  const maxSpeed = (restingTogether > 0.15 ? 55 : 185) * weatherSlowdown;
+  const maxSpeed = (p.rest > 0.15 ? 55 : 185) * weatherSlowdown;
   const target = input * maxSpeed;
   p.vx += (target - p.vx) * Math.min(1, dt * 5.5);
   p.x += p.vx * dt;
@@ -1445,8 +1347,6 @@ function update(dt) {
   p.y = world.ground;
   if (Math.abs(p.vx) > 5) p.face = Math.sign(p.vx);
   p.rest = Math.max(0, p.rest - dt * 0.35);
-  state.groupRest = Math.max(0, state.groupRest - dt * 0.28);
-  state.reactions = state.reactions.filter((reaction) => reaction.until > state.time);
   const previousWeather = state.weather;
   state.chapter = getChapter();
   state.weather = getWeatherForChapter().id;
@@ -1458,16 +1358,11 @@ function update(dt) {
   updateCompanion(dt);
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
-  const targetZoom = restingTogether > 0 ? 1.08 : 1;
+  const targetZoom = p.rest > 0 ? 1.08 : 1;
   state.camera.zoom += (targetZoom - state.camera.zoom) * Math.min(1, dt * 2.5);
   const targetCamera = p.x - window.innerWidth * 0.45;
   state.camera.x += (targetCamera - state.camera.x) * Math.min(1, dt * 2.8);
   state.camera.x = Math.max(0, state.camera.x);
-
-  if (state.party.code && net.connected && state.time - net.lastMoveSent > 0.18) {
-    net.lastMoveSent = state.time;
-    syncAction("move", { x: p.x, face: p.face, resting: p.rest > 0.15 });
-  }
 
   if (audio) updateAudio();
   autosave();
@@ -1508,7 +1403,6 @@ function interact() {
   const item = getProceduralDiscoveries().find((entry) => !hasCollectedDiscovery(entry) && Math.abs(entry.x - p.x) < 78);
   if (item) {
     const showedPopup = collectDiscovery(item);
-    syncAction("collect", { itemId: item.id });
     if (!showedPopup) playSoftPing();
     saveGame();
     return;
@@ -1517,7 +1411,6 @@ function interact() {
   const lantern = getProceduralLanterns().find((entry) => !state.lanterns.includes(entry.id) && Math.abs(entry.x - p.x) < 86);
   if (lantern) {
     state.lanterns.push(lantern.id);
-    syncAction("lantern", { lanternId: lantern.id });
     showMessage("La lanterne s'allume. Le sentier respire un peu plus chaud.");
     playSoftPing();
     saveGame();
@@ -1527,14 +1420,7 @@ function interact() {
   const rest = getProceduralRests().find((entry) => Math.abs(entry.x - p.x) < 98);
   if (rest) {
     p.rest = 1;
-    if (state.party.code) {
-      state.groupRest = 1;
-      state.lastSeatActor = state.playerProfile.nickname;
-      syncAction("rest", { actorName: state.playerProfile.nickname, restLabel: rest.label });
-      showMessage(`${state.playerProfile.nickname} s'assoit sur le ${rest.label}. Le groupe ralentit avec lui.`);
-    } else {
-      showMessage(`Tu t'assois un instant sur le ${rest.label}. Tout ralentit.`);
-    }
+    showMessage(`Tu t'assois un instant sur le ${rest.label}. Tout ralentit.`);
     saveGame();
     return;
   }
@@ -1887,9 +1773,6 @@ function givePendingItem() {
   } else {
     showMessage(`${pendingVillagerHelp.role} te remercie. Le monde devient un peu plus vivant.`);
   }
-  syncAction("help-villager", {
-    villageId: pendingVillagerHelp.villageId
-  });
   ui.villagerDialog.close();
   pendingVillagerHelp = null;
   playSoftPing();
@@ -2040,8 +1923,6 @@ function resetGame() {
   state.rewards = [];
   state.achievements = [];
   state.companion = { unlocked: false, finds: 0, nextHelpAt: 0 };
-  state.groupRest = 0;
-  state.reactions = [];
   state.time = 0;
   state.camera.x = 0;
   state.chapter = 1;
@@ -2069,11 +1950,8 @@ function saveGame() {
     rewards: state.rewards,
     achievements: state.achievements,
     companion: state.companion,
-    groupRest: state.groupRest,
-    reactions: state.reactions,
     startedAtLeastOnce: state.startedAtLeastOnce,
     cinematicPlayed: state.cinematicPlayed,
-    party: state.party,
     playerId: state.playerProfile.id,
     nickname: state.playerProfile.nickname
   };
@@ -2107,11 +1985,8 @@ function loadGame() {
     state.companion = payload.companion && typeof payload.companion === "object"
       ? { unlocked: Boolean(payload.companion.unlocked), finds: payload.companion.finds || 0, nextHelpAt: payload.companion.nextHelpAt || 0 }
       : { unlocked: false, finds: 0, nextHelpAt: 0 };
-    state.groupRest = Number.isFinite(payload.groupRest) ? payload.groupRest : 0;
-    state.reactions = Array.isArray(payload.reactions) ? payload.reactions : [];
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
     state.cinematicPlayed = Boolean(payload.cinematicPlayed) && state.player.x >= world.firstRouteEnd;
-    state.party = normalizeParty(payload.party);
     state.chapter = getChapter(state.player.x);
     if (payload.nickname) state.playerProfile.nickname = payload.nickname;
     return true;
@@ -2126,23 +2001,6 @@ function rebuildInventory(ids) {
     inventory[baseId] = (inventory[baseId] || 0) + 1;
     return inventory;
   }, {});
-}
-
-function normalizeParty(party) {
-  if (!party || typeof party !== "object") return { code: "", members: [], minPlayers: 2, maxPlayers: 4 };
-  const members = Array.isArray(party.members)
-    ? party.members
-      .filter(Boolean)
-      .map((member) => (typeof member === "string" ? { id: member, nickname: "Ami" } : member))
-      .filter((member) => member.id)
-      .slice(0, 4)
-    : [];
-  return {
-    code: typeof party.code === "string" ? party.code.slice(0, 6).toUpperCase() : "",
-    members,
-    minPlayers: 2,
-    maxPlayers: 4
-  };
 }
 
 function normalizeDiscoveryId(id) {
@@ -2182,263 +2040,6 @@ function savePlayerProfile() {
   const nickname = ui.nicknameInput.value.trim().slice(0, 18) || "Voyageur";
   state.playerProfile.nickname = nickname;
   localStorage.setItem(playerKey, JSON.stringify(state.playerProfile));
-}
-
-function makePartyCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  do {
-    code = Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
-  } while (code === state.party.code);
-  return code;
-}
-
-function createParty() {
-  savePlayerProfile();
-  if (net.connected) {
-    net.socket.emit("party:create", { player: getNetworkPlayer() });
-    return;
-  }
-  state.party = { code: makePartyCode(), members: [getNetworkPlayer()], minPlayers: 2, maxPlayers: 4 };
-  ui.partyCodeInput.value = state.party.code;
-  updatePartyUi();
-  showMessage(`Partie entre amis creee: ${state.party.code}. Partage ce code avec tes amis.`);
-  saveGame();
-}
-
-function joinParty() {
-  const code = ui.partyCodeInput.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
-  if (code.length !== 6) {
-    showMessage("Entre un code de partie a 6 caracteres pour rejoindre un ami.");
-    return;
-  }
-  savePlayerProfile();
-  if (!net.connected) {
-    showMessage("Partie entre amis indisponible pour le moment. Tu peux continuer en solo.");
-    return;
-  }
-  if (net.connected) {
-    net.socket.emit("party:join", { code, player: getNetworkPlayer() });
-    return;
-  }
-  const sameParty = state.party.code === code;
-  const members = sameParty ? [...(state.party.members || [])] : [];
-  const alreadyInside = members.some((member) => (typeof member === "string" ? member : member.id) === state.playerProfile.id);
-  if (!alreadyInside && members.length >= 4) {
-    showMessage("Cette partie est pleine. Maximum 4 joueurs.");
-    return;
-  }
-  state.party = {
-    code,
-    members: mergeMembers([...members, getNetworkPlayer()]).slice(0, 4),
-    minPlayers: 2,
-    maxPlayers: 4
-  };
-  ui.partyCodeInput.value = code;
-  updatePartyUi();
-  showMessage(`Tu as rejoint la partie ${code}. Elle accepte 2 a 4 joueurs.`);
-  saveGame();
-}
-
-function leaveParty() {
-  if (!state.party.code) {
-    showMessage("Tu joues deja en solo.");
-    return;
-  }
-  if (net.connected) net.socket.emit("party:leave", { code: state.party.code, playerId: state.playerProfile.id });
-  state.party = { code: "", members: [], minPlayers: 2, maxPlayers: 4 };
-  ui.partyCodeInput.value = "";
-  updatePartyUi();
-  saveGame();
-  showMessage("Tu as quitte la partie. Tu continues seul(e).");
-}
-
-function updatePartyUi() {
-  const inParty = Boolean(state.party.code);
-  const count = state.party.members.length || (inParty ? 1 : 0);
-  ui.partyLabel.textContent = inParty ? `Code ${state.party.code}` : "Solo";
-  const serverUrl = getRealtimeServerUrl();
-  const needsServer = !canLoadRealtimeScript() && !serverUrl;
-  ui.partyStatus.textContent = inParty
-    ? `Code ${state.party.code} - ${count} / 4 joueurs. La partie commence vraiment a partir de 2 joueurs.`
-    : net.statusMessage || (needsServer
-      ? "Partie entre amis - ajoute un serveur amis pour jouer depuis ce lien."
-      : "Partie entre amis - cree une partie ou rejoins une partie.");
-  ui.partyCodeInput.value = inParty ? state.party.code : ui.partyCodeInput.value;
-  ui.leavePartyButton.classList.toggle("is-visible", inParty);
-  ui.leavePartyOptionsButton.classList.toggle("is-visible", inParty);
-}
-
-function getNetworkPlayer() {
-  return {
-    id: state.playerProfile.id,
-    nickname: state.playerProfile.nickname,
-    x: state.player.x,
-    face: state.player.face,
-    resting: state.player.rest > 0.15
-  };
-}
-
-function mergeMembers(members) {
-  const byId = new Map();
-  members.forEach((member) => {
-    const resolved = typeof member === "string" ? { id: member, nickname: "Ami" } : member;
-    if (resolved && resolved.id) byId.set(resolved.id, { ...(byId.get(resolved.id) || {}), ...resolved });
-  });
-  return Array.from(byId.values()).slice(0, 4);
-}
-
-function applyServerSnapshot(snapshot) {
-  if (!snapshot || typeof snapshot !== "object") return;
-  const previousCount = state.party.members.length || 0;
-  state.party = normalizeParty(snapshot.party || state.party);
-  state.discoveries = Array.isArray(snapshot.discoveries) ? snapshot.discoveries : state.discoveries;
-  state.lanterns = Array.isArray(snapshot.lanterns) ? snapshot.lanterns : state.lanterns;
-  state.helpedVillagers = Array.isArray(snapshot.helpedVillagers) ? snapshot.helpedVillagers : state.helpedVillagers;
-  state.groupRest = Number.isFinite(snapshot.groupRest) ? Math.max(state.groupRest, snapshot.groupRest) : state.groupRest;
-  if (Array.isArray(snapshot.reactions)) {
-    state.reactions = snapshot.reactions.map((reaction) => ({
-      actorId: reaction.actorId,
-      symbol: reaction.symbol,
-      until: reaction.until > 100000 ? state.time + Math.max(0.5, (reaction.until - Date.now()) / 1000) : reaction.until
-    }));
-  }
-  updatePartyUi();
-  const nextCount = state.party.members.length || 0;
-  if (running && nextCount > previousCount && nextCount >= 2) {
-    playGroupMeetTransition(nextCount);
-  }
-  net.lastMemberCount = nextCount;
-  saveGame();
-}
-
-function playGroupMeetTransition(count) {
-  running = false;
-  ui.cinematic.classList.add("is-visible");
-  ui.cinematicText.textContent = count === 2
-    ? "Vous vous retrouvez sur le sentier."
-    : `Vous etes maintenant ${count} sur la route.`;
-  setTimeout(() => {
-    ui.cinematic.classList.remove("is-visible");
-    running = true;
-    showMessage(`${count} joueur${count > 1 ? "s" : ""} dans la partie. Vous avancez ensemble.`);
-  }, 2200);
-}
-
-function canLoadRealtimeScript() {
-  if (getRealtimeServerUrl()) return true;
-  const host = window.location.hostname;
-  return host === "localhost"
-    || host === "127.0.0.1"
-    || host.startsWith("192.168.")
-    || host.startsWith("10.")
-    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
-}
-
-function normalizeRealtimeServerUrl(value) {
-  const trimmed = String(value || "").trim().replace(/\/+$/, "");
-  if (!trimmed) return "";
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
-    return url.origin;
-  } catch {
-    return "";
-  }
-}
-
-function getRealtimeServerUrl() {
-  return normalizeRealtimeServerUrl(localStorage.getItem(realtimeServerKey));
-}
-
-function loadRealtimeServerSetting() {
-  ui.realtimeServerInput.value = getRealtimeServerUrl();
-}
-
-function saveRealtimeServerSetting() {
-  const url = normalizeRealtimeServerUrl(ui.realtimeServerInput.value);
-  if (url) {
-    localStorage.setItem(realtimeServerKey, url);
-    ui.realtimeServerInput.value = url;
-  } else {
-    localStorage.removeItem(realtimeServerKey);
-    ui.realtimeServerInput.value = "";
-  }
-  if (net.socket) {
-    net.socket.disconnect();
-    net.socket = null;
-  }
-  net.connected = false;
-  setupRealtime();
-  updatePartyUi();
-}
-
-function loadRealtimeScript() {
-  if (realtimeScriptLoading || !canLoadRealtimeScript()) return false;
-  realtimeScriptLoading = true;
-  const script = document.createElement("script");
-  const serverUrl = getRealtimeServerUrl();
-  script.src = `${serverUrl || ""}/socket.io/socket.io.js`;
-  script.onload = () => {
-    realtimeScriptLoading = false;
-    setupRealtime();
-  };
-  script.onerror = () => {
-    realtimeScriptLoading = false;
-    net.statusMessage = "Partie entre amis";
-    updatePartyUi();
-  };
-  document.body.appendChild(script);
-  return true;
-}
-
-function setupRealtime() {
-  if (!window.io) {
-    if (loadRealtimeScript()) return;
-    net.statusMessage = "Partie entre amis";
-    updatePartyUi();
-    return;
-  }
-  const serverUrl = getRealtimeServerUrl();
-  net.socket = window.io(serverUrl || undefined, { transports: ["websocket", "polling"] });
-  net.socket.on("connect", () => {
-    net.connected = true;
-    net.statusMessage = "";
-    if (state.party.code) {
-      net.socket.emit("party:join", { code: state.party.code, player: getNetworkPlayer() });
-    }
-  });
-  net.socket.on("disconnect", () => {
-    net.connected = false;
-    showMessage("Connexion serveur perdue. La partie continue en local en attendant.");
-  });
-  net.socket.on("connect_error", () => {
-    net.connected = false;
-    net.statusMessage = "Partie entre amis indisponible";
-    updatePartyUi();
-  });
-  net.socket.on("party:created", ({ snapshot }) => {
-    applyServerSnapshot(snapshot);
-    ui.partyCodeInput.value = state.party.code;
-    showMessage(`Partie creee: ${state.party.code}. Partage ce code avec tes amis.`);
-  });
-  net.socket.on("party:joined", ({ snapshot }) => {
-    applyServerSnapshot(snapshot);
-    ui.partyCodeInput.value = state.party.code;
-    showMessage(`Tu as rejoint la partie ${state.party.code}.`);
-  });
-  net.socket.on("party:snapshot", ({ snapshot }) => applyServerSnapshot(snapshot));
-  net.socket.on("party:error", ({ message }) => showMessage(message || "Impossible de rejoindre cette partie."));
-}
-
-function syncAction(type, payload = {}) {
-  if (!net.connected || !state.party.code) return false;
-  net.socket.emit("party:action", {
-    code: state.party.code,
-    player: getNetworkPlayer(),
-    action: { type, payload }
-  });
-  return true;
 }
 
 function loadOptions() {
@@ -2758,17 +2359,6 @@ ui.nicknameInput.addEventListener("change", () => {
   savePlayerProfile();
   saveGame();
 });
-ui.createPartyButton.addEventListener("click", createParty);
-ui.joinPartyButton.addEventListener("click", joinParty);
-ui.leavePartyButton.addEventListener("click", leaveParty);
-ui.leavePartyOptionsButton.addEventListener("click", leaveParty);
-ui.realtimeServerInput.addEventListener("change", saveRealtimeServerSetting);
-ui.reactionButton.addEventListener("click", () => {
-  ui.reactionMenu.classList.toggle("is-visible");
-});
-ui.reactionMenu.querySelectorAll("button").forEach((button) => {
-  button.addEventListener("click", () => sendReaction(button.dataset.reaction));
-});
 ui.giveItemButton.addEventListener("click", givePendingItem);
 ui.refuseHelpButton.addEventListener("click", refusePendingHelp);
 ui.journalButton.addEventListener("click", () => {
@@ -2819,12 +2409,8 @@ ui.resetDiscoveryTipsButton.addEventListener("click", () => {
 
 loadPlayerProfile();
 loadOptions();
-loadRealtimeServerSetting();
 const hasSave = loadGame();
 ui.nicknameInput.value = state.playerProfile.nickname;
-ui.partyCodeInput.value = state.party.code || "";
-updatePartyUi();
-setupRealtime();
 ui.continueButton.disabled = !hasSave;
 ui.continueButton.style.opacity = hasSave ? "1" : "0.55";
 resize();

@@ -34,25 +34,15 @@
 
     <section class="hud" aria-live="polite">
       <div class="hud-group">
-        <span id="partyLabel" class="hud-pill">Solo</span>
-        <button id="leavePartyButton" class="party-exit" type="button" title="Quitter la partie" aria-label="Quitter la partie">x</button>
-        <button id="reactionButton" class="reaction-button" type="button" title="Reactions" aria-label="Reactions">:)</button>
         <button id="muteButton" class="sound-button" type="button" title="Couper le son" aria-label="Couper le son">Son</button>
         <button id="infoButton" class="icon-button info-button" type="button" title="Informations" aria-label="Informations">ℹ️</button>
         <button id="journalButton" class="icon-button" type="button" title="Carnet">Carnet</button>
         <button id="optionsButton" class="icon-button" type="button" title="Options">Options</button>
       </div>
     </section>
-    <div id="reactionMenu" class="reaction-menu" aria-label="Choisir une reaction">
-      <button type="button" data-reaction=":)">:)</button>
-      <button type="button" data-reaction="!">!</button>
-      <button type="button" data-reaction="?">?</button>
-      <button type="button" data-reaction="<3">&lt;3</button>
-      <button type="button" data-reaction="*">*</button>
-    </div>
 
     <aside id="message" class="message" aria-live="polite"></aside>
-    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.10</aside>
+    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.11</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -117,7 +107,6 @@
           <li>Completer des missions.</li>
           <li>Collectionner toutes les decouvertes.</li>
           <li>Les sauvegardes sont automatiques.</li>
-          <li>Le multijoueur permet d'explorer avec des amis.</li>
         </ul>
       </form>
     </dialog>
@@ -153,25 +142,6 @@
           </label>
           <p id="anonymousId" class="identity-note"></p>
         </section>
-        <section class="options-section" aria-label="Partie entre amis">
-          <div class="party-heading">
-            <h3>Partie entre amis</h3>
-            <button id="leavePartyOptionsButton" class="mini-close-button" type="button" title="Quitter la partie" aria-label="Quitter la partie">x</button>
-          </div>
-          <p id="partyStatus" class="identity-note">Solo</p>
-          <div class="party-card">
-            <button id="createPartyButton" class="secondary-button" type="button">Creer une partie</button>
-            <label class="field-row">
-              <span>Code ami</span>
-              <input id="partyCodeInput" type="text" maxlength="6" inputmode="text" placeholder="X8P4K2">
-            </label>
-            <button id="joinPartyButton" class="secondary-button" type="button">Rejoindre</button>
-          </div>
-          <label class="field-row server-row">
-            <span>Serveur amis</span>
-            <input id="realtimeServerInput" type="url" inputmode="url" placeholder="https://serveur-bosquet.example.com">
-          </label>
-        </section>
         <button id="resetButton" class="danger-button" type="button">Recommencer la promenade</button>
       </form>
     </dialog>
@@ -180,7 +150,7 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.10").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.11").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});
