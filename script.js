@@ -63,6 +63,10 @@ const discoveryRespawnSeconds = 45;
 const letterRespawnDelaySeconds = 35;
 const maxVisibleDiscoveries = 8;
 const minDiscoverySpacing = 145;
+const missionItemSpacing = 1050;
+const missionItemFirstDistance = 760;
+const missionItemRevealDelay = 22;
+const farFutureTime = 1000000000;
 const playerAppearanceOptions = {
   skin: {
     warm: "#f0bd6c",
@@ -378,28 +382,41 @@ function buildChapterDiscoveries(chapterIndex) {
 
 function ensureMissionDiscoveryItems() {
   if (!state.activeQuest || !state.activeQuest.itemId) return;
-  const remaining = Math.max(0, state.activeQuest.target - state.activeQuest.progress);
-  if (!remaining) return;
   const templateItem = getMissionCatalogItem(state.activeQuest.itemId);
   if (!templateItem) return;
-  const questSpawnX = ensureActiveQuestSpawnX();
-  Array.from({ length: remaining }, (_, index) => {
-    const slot = state.activeQuest.progress + index;
+  const slots = ensureActiveQuestMissionSlots();
+  slots.forEach((slotX, slot) => {
     const id = makeId(templateItem.id, 9000 + state.completedQuests * 100 + slot);
     if (!state.worldDiscoveries[id]) {
       state.worldDiscoveries[id] = {
         ...templateItem,
         id,
-        x: questSpawnX + slot * 300,
-        place: state.activeQuest.spawnPlace,
+        x: slotX,
+        place: getPlaceType(slotX),
         visualType: state.activeQuest.itemId,
         missionItem: true,
         zoneKey: `mission-${state.activeQuest.id}`,
+        hiddenUntil: slot === 0 ? 0 : farFutureTime,
         createdAt: state.time + slot * 0.001
       };
       saveGame();
-    };
+    } else if (!state.worldDiscoveries[id].collected) {
+      const canReveal = slot <= state.activeQuest.progress && state.time >= (state.activeQuest.nextMissionRevealAt || 0);
+      if (slot === 0 || canReveal) state.worldDiscoveries[id].hiddenUntil = 0;
+    }
   });
+}
+
+function ensureActiveQuestMissionSlots() {
+  if (!state.activeQuest) return [];
+  if (!Array.isArray(state.activeQuest.missionSlots) || state.activeQuest.missionSlots.length < state.activeQuest.target) {
+    const baseX = Number.isFinite(state.activeQuest.spawnX) ? state.activeQuest.spawnX : state.player.x + missionItemFirstDistance;
+    state.activeQuest.missionSlots = Array.from({ length: state.activeQuest.target }, (_, index) => {
+      return Math.max(160, baseX + index * missionItemSpacing + hashNumber(baseX + index * 17) * 260);
+    }).sort((a, b) => a - b);
+    saveGame();
+  }
+  return state.activeQuest.missionSlots;
 }
 
 function ensureActiveQuestSpawnX() {
@@ -445,7 +462,7 @@ function limitVisibleDiscoveries(items) {
   const cameraStart = state.camera.x - 140;
   const cameraEnd = state.camera.x + window.innerWidth + 180;
   const visible = items
-    .filter((item) => !item.collected && item.x >= cameraStart && item.x <= cameraEnd)
+    .filter((item) => !item.collected && (item.hiddenUntil === undefined || item.hiddenUntil <= state.time) && item.x >= cameraStart && item.x <= cameraEnd)
     .sort((a, b) => Number(Boolean(b.missionItem)) - Number(Boolean(a.missionItem)) || Math.abs(a.x - state.player.x) - Math.abs(b.x - state.player.x));
   const picked = [];
   visible.forEach((item) => {
@@ -2089,18 +2106,24 @@ function exploreSecretLocation(secret) {
 }
 
 const questTemplates = [
-  { title: "Collection de coquillages", description: "Ramasse 6 coquillages pendentifs d'exploration.", objective: "Ramasser 6 coquillages.", type: "collect:shell", itemId: "shell", target: 6, hint: "Indice : les coquillages apparaissent pres de la riviere. Des coquillages de mission brillent sur le chemin tant que cette mission est active." },
-  { title: "Herbier nervure", description: "Ramasse 5 feuilles nervurees pour completer une page du carnet.", objective: "Ramasser 5 feuilles nervurees.", type: "collect:leaf", itemId: "leaf", target: 5, hint: "Indice : les feuilles nervurees apparaissent en foret et dans les clairieres. La mission en fait apparaitre assez pour la terminer." },
-  { title: "Lueurs du sous-bois", description: "Trouve 3 champignons lumineux pres des passages humides.", objective: "Trouver 3 champignons lumineux.", type: "collect:mushroom", itemId: "mushroom", target: 3, hint: "Indice : les champignons lumineux poussent dans les zones sombres ou humides. Pendant cette mission, de vrais champignons lumineux apparaissent devant toi." },
-  { title: "Pierres anciennes", description: "Ramasse 8 pierres anciennes ou polies sur le chemin.", objective: "Ramasser 8 pierres anciennes.", type: "collect:stone", itemId: "stone", target: 8, hint: "Indice : les pierres anciennes se trouvent pres des rivieres, des montagnes et des vieux sentiers. La mission garantit assez de pierres visibles." },
-  { title: "Fleurs sauvages", description: "Decouvre 4 fleurs sauvages pendant l'exploration.", objective: "Decouvrir 4 fleurs sauvages.", type: "collectFlower", itemId: "flower", target: 4, hint: "Indice : les fleurs sauvages aiment les clairieres et le printemps. La mission place des fleurs reconnaissables sur ta route." },
+  { title: "Collection de coquillages", description: "Ramasse 6 coquillages pendentifs d'exploration.", objective: "Ramasser 6 coquillages.", type: "collect:shell", itemId: "shell", target: 6, hint: "Indice : les coquillages apparaissent pres de la riviere. Ils sont repartis dans le monde et demandent un peu d'exploration." },
+  { title: "Herbier nervure", description: "Ramasse 5 feuilles nervurees pour completer une page du carnet.", objective: "Ramasser 5 feuilles nervurees.", type: "collect:leaf", itemId: "leaf", target: 5, hint: "Indice : les feuilles nervurees apparaissent en foret et dans les clairieres. Cherche-les dans plusieurs zones." },
+  { title: "Lueurs du sous-bois", description: "Trouve 3 champignons lumineux pres des passages humides.", objective: "Trouver 3 champignons lumineux.", type: "collect:mushroom", itemId: "mushroom", target: 3, hint: "Indice : les champignons lumineux poussent dans les zones sombres ou humides. Ils ne se trouvent pas tous au meme endroit." },
+  { title: "Pierres anciennes", description: "Ramasse 8 pierres anciennes ou polies sur le chemin.", objective: "Ramasser 8 pierres anciennes.", type: "collect:stone", itemId: "stone", target: 8, hint: "Indice : les pierres anciennes se trouvent pres des rivieres, des montagnes et des vieux sentiers. Continue d'explorer pour les retrouver." },
+  { title: "Fleurs sauvages", description: "Decouvre 4 fleurs sauvages pendant l'exploration.", objective: "Decouvrir 4 fleurs sauvages.", type: "collectFlower", itemId: "flower", target: 4, hint: "Indice : les fleurs sauvages aiment les clairieres et le printemps. Elles apparaissent naturellement sur la route." },
   { title: "Voix du village", description: "Rencontre 5 habitants et ecoute leurs histoires.", objective: "Rencontrer 5 habitants.", type: "talkVillager", target: 5, hint: "Indice : avance jusqu'aux villages et parle aux habitants quand l'invite apparait." },
   { title: "Chemins nouveaux", description: "Explore 2 nouveaux villages sur la route.", objective: "Explorer 2 nouveaux villages.", type: "village", target: 2, hint: "Indice : continue vers la droite. Chaque nouveau village visite fait avancer la mission." }
 ];
 
 function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
   const template = questTemplates[Math.floor(hashNumber(seed) * questTemplates.length) % questTemplates.length];
-  const spawnX = state.player.x + 360;
+  const spawnX = state.player.x + missionItemFirstDistance;
+  const missionSlots = template.itemId
+    ? Array.from({ length: template.target }, (_, index) => {
+      const distance = missionItemFirstDistance + index * missionItemSpacing + hashNumber(seed + index * 7) * 260;
+      return Math.max(160, state.player.x + distance);
+    }).sort((a, b) => a - b)
+    : [];
   return {
     id: `quest-${Date.now()}-${Math.floor(hashNumber(seed + 2) * 10000)}`,
     title: template.title,
@@ -2111,6 +2134,8 @@ function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
     itemId: template.itemId || "",
     spawnX,
     spawnPlace: getPlaceType(spawnX),
+    missionSlots,
+    nextMissionRevealAt: state.time,
     type: template.type,
     target: template.target,
     progress: 0,
@@ -2136,6 +2161,7 @@ function advanceQuest(type, amount = 1) {
   if (!state.activeQuest || state.activeQuest.type !== type) return;
   state.activeQuest.progress = Math.min(state.activeQuest.target, state.activeQuest.progress + amount);
   state.questLastProgressAt = state.time;
+  if (state.activeQuest.itemId) state.activeQuest.nextMissionRevealAt = state.time + missionItemRevealDelay;
   showMessage(`Mission: ${state.activeQuest.objective} ${state.activeQuest.progress} / ${state.activeQuest.target}`);
   updateMissionTracker();
   if (state.activeQuest.progress >= state.activeQuest.target) completeQuest();
@@ -2146,7 +2172,7 @@ function updateQuestHint() {
   if (state.time - state.questLastProgressAt < 32) return;
   if (state.time - state.lastQuestHintAt < 28) return;
   state.lastQuestHintAt = state.time;
-  showMessageFor(getQuestHint(state.activeQuest), 7200);
+  showMessageFor(getQuestSearchHint(state.activeQuest), 7200);
 }
 
 function updateWorldDiscoveries() {
@@ -2268,6 +2294,8 @@ function normalizeQuest(quest) {
     itemId: quest.itemId || (matchingTemplate && matchingTemplate.itemId) || "",
     spawnX: Number.isFinite(quest.spawnX) ? quest.spawnX : state.player.x + 360,
     spawnPlace: quest.spawnPlace || getPlaceType(Number.isFinite(quest.spawnX) ? quest.spawnX : state.player.x + 360),
+    missionSlots: Array.isArray(quest.missionSlots) ? quest.missionSlots : [],
+    nextMissionRevealAt: Number.isFinite(quest.nextMissionRevealAt) ? quest.nextMissionRevealAt : state.time,
     progress: Number.isFinite(quest.progress) ? quest.progress : 0,
     target: Number.isFinite(quest.target) ? quest.target : 1,
     rewardCount: Number.isFinite(quest.rewardCount) ? quest.rewardCount : 2
@@ -2281,6 +2309,28 @@ function getQuestHint(quest) {
   if (quest.type === "talkVillager") return "Indice : cherche les villages et parle aux habitants.";
   if (quest.type === "village") return "Indice : continue la route jusqu'au prochain village.";
   return "Indice : avance doucement, le monde fera apparaitre ce dont tu as besoin.";
+}
+
+function getQuestSearchHint(quest) {
+  if (!quest || !quest.itemId) return getQuestHint(quest);
+  ensureMissionDiscoveryItems();
+  const target = Object.values(state.worldDiscoveries)
+    .filter((item) => item.missionItem && item.zoneKey === `mission-${quest.id}` && !item.collected)
+    .sort((a, b) => Math.abs(a.x - state.player.x) - Math.abs(b.x - state.player.x))[0];
+  if (!target) return getQuestHint(quest);
+  const direction = target.x >= state.player.x ? "vers l'est" : "vers l'ouest";
+  const distance = Math.abs(target.x - state.player.x);
+  const type = getItemVisualType(target);
+  const objectLines = {
+    mushroom: "Tu as l'impression qu'un champignon pousse quelque part",
+    shell: "Le bruit de l'eau semble cacher un coquillage",
+    leaf: "Une feuille nervuree doit attendre sur le chemin",
+    stone: "Une pierre ancienne semble reposer plus loin",
+    flower: "Une fleur sauvage attire doucement ton regard"
+  };
+  const intro = objectLines[type] || "Quelque chose utile pour ta mission t'attend";
+  const range = distance > 1200 ? "loin" : "pas tres loin";
+  return `${intro} ${range}, ${direction}.`;
 }
 
 function isFlowerDiscovery(item) {
@@ -2306,10 +2356,10 @@ function collectDiscovery(item, quiet = false) {
   const firstTime = !hasCollectedBaseItem(baseId);
   if (!quiet) setPlayerAction((item.rarity === "Legendaire" || item.rarity === "Rare") ? "rare" : "pickup", 1.2);
   if (!quiet) {
-    state.discoveryRespawns[item.id] = state.time + discoveryRespawnSeconds;
+    if (!item.missionItem) state.discoveryRespawns[item.id] = state.time + discoveryRespawnSeconds;
     if (state.worldDiscoveries[item.id]) {
       state.worldDiscoveries[item.id].collected = true;
-      state.worldDiscoveries[item.id].respawnAt = state.time + discoveryRespawnSeconds;
+      state.worldDiscoveries[item.id].respawnAt = item.missionItem ? Number.POSITIVE_INFINITY : state.time + discoveryRespawnSeconds;
     }
   }
   state.discoveries.push(item.id);
