@@ -19,9 +19,6 @@ const ui = {
   encyclopediaDetailDialog: document.getElementById("encyclopediaDetailDialog"),
   encyclopediaDetailTitle: document.getElementById("encyclopediaDetailTitle"),
   encyclopediaDetailBody: document.getElementById("encyclopediaDetailBody"),
-  photoDetailDialog: document.getElementById("photoDetailDialog"),
-  photoDetailTitle: document.getElementById("photoDetailTitle"),
-  photoDetailBody: document.getElementById("photoDetailBody"),
   infoDialog: document.getElementById("infoDialog"),
   optionsDialog: document.getElementById("optionsDialog"),
   journalList: document.getElementById("journalList"),
@@ -166,7 +163,6 @@ const state = {
   discoveredPlaces: [],
   visitedVillages: [],
   journalEvents: [],
-  photoMemories: [],
   walkMemories: [],
   currentWalk: null,
   questLastProgressAt: 0,
@@ -1808,7 +1804,6 @@ function isModalOpen() {
   return Boolean(
     ui.discoveryDialog.open
     || ui.encyclopediaDetailDialog.open
-    || ui.photoDetailDialog.open
     || ui.questDialog.open
     || ui.questCompleteDialog.open
     || ui.villagerDialog.open
@@ -1863,7 +1858,6 @@ function update(dt) {
   state.chapter = getChapter();
   state.weather = getWeatherForChapter().id;
   rememberPlace(getPlaceType());
-  updatePhotoMilestones();
   if (previousWeather !== state.weather) {
     announceWeather();
     advanceQuest("weather", 1);
@@ -1991,7 +1985,6 @@ function announceWeather() {
   };
   showMessageFor(lines[weather.id] || weather.label, 25000);
   rememberJournalEvent(`${weather.label}: le paysage a change de rythme pendant la promenade.`);
-  addPhotoMemory({ key: `weather:${weather.id}`, weatherId: weather.id });
 }
 
 function baseDiscoveryId(id) {
@@ -2127,80 +2120,11 @@ function getPlaceType(x = state.player.x) {
   return "Foret";
 }
 
-const photoMemoryCatalog = [
-  { key: "place:Foret", title: "Premiere promenade", category: "Lieux", place: "Foret", story: "Aujourd'hui, le voyage a commence entre les arbres. Le chemin semblait attendre depuis longtemps." },
-  { key: "place:Riviere", title: "Le vieux pont", category: "Lieux", place: "Riviere", story: "L'eau passait doucement sous le vieux pont. Le monde avait l'air de respirer plus lentement." },
-  { key: "place:Clairiere", title: "Champ de fleurs", category: "Lieux", place: "Clairiere", story: "Une clairiere s'est ouverte dans la lumiere, assez calme pour donner envie de rester." },
-  { key: "place:Village", title: "Premier village", category: "Lieux", place: "Village", story: "Des maisons sont apparues au bout du chemin. Pour la premiere fois, le voyage avait des voix." },
-  { key: "secret:first", title: "Cascade secrete", category: "Lieux", place: "Lieu secret", secret: true, story: "Un passage cache s'est ouvert. Derriere lui, l'eau brillait comme un souvenir ancien." },
-  { key: "season:printemps", title: "Premier printemps", category: "Saisons et meteo", season: "Printemps", story: "Les premieres fleurs ont colore le carnet. Le voyage venait de trouver sa douceur." },
-  { key: "season:hiver", title: "Premier hiver", category: "Saisons et meteo", season: "Hiver", weatherId: "snow", story: "Les premiers flocons sont tombes sur la foret. Le silence etait plus profond que d'habitude." },
-  { key: "weather:rain", title: "Premiere pluie fine", category: "Saisons et meteo", weatherId: "rain", story: "La pluie a pose un voile brillant sur les feuilles. Chaque pas faisait chanter le sol." },
-  { key: "phase:night", title: "Premiere nuit", category: "Saisons et meteo", story: "La nuit est arrivee sans bruit. Les petites lumieres semblaient guider le chemin." },
-  { key: "villager:first", title: "Premiere rencontre", category: "Habitants", place: "Village", story: "Un habitant a partage quelques mots. Le monde paraissait soudain moins solitaire." },
-  { key: "quest:first", title: "Premiere mission terminee", category: "Missions importantes", story: "La premiere mission s'est terminee. L'enveloppe avait transforme la marche en petite aventure." },
-  { key: "companion:first", title: "Nouveau compagnon", category: "Compagnon", story: "Un compagnon a choisi de continuer la route. Depuis, les pas semblent un peu moins seuls." },
-  { key: "legendary:first", title: "Premier objet legendaire", category: "Decouvertes rares", story: "Un objet legendaire a rejoint le carnet. Pendant un instant, le chemin a semble beaucoup plus vaste." },
-  { key: "weather:mist", title: "Premier brouillard", category: "Saisons et meteo", weatherId: "mist", story: "La brume a recouvert le sentier. Les formes connues sont devenues des secrets a deviner." },
-  { key: "place:Montagne", title: "Route des hauteurs", category: "Lieux", place: "Montagne", story: "La route est montee vers les hauteurs. Au loin, le paysage ressemblait a une carte ancienne." }
-];
-
-function getPhotoMemoryTemplate(key) {
-  return photoMemoryCatalog.find((entry) => entry.key === key);
-}
-
-function addPhotoMemory({ key, place = getPlaceType(), weatherId = state.weather, season = getSeason(), itemId = "", companion = "" }) {
-  const template = getPhotoMemoryTemplate(key);
-  if (!template || state.photoMemories.some((photo) => photo.key === key)) return false;
-  const resolvedWeatherId = template.weatherId || weatherId;
-  const weather = weatherTypes.find((entry) => entry.id === resolvedWeatherId) || getWeatherForChapter();
-  const photo = {
-    id: `photo-${Date.now()}-${Math.floor(hashNumber(state.time + state.player.x) * 10000)}`,
-    key,
-    title: template.title,
-    category: template.category,
-    place: template.place || place,
-    weatherId: resolvedWeatherId,
-    weatherLabel: weather.label,
-    season: template.season || season,
-    phase: getDayPhase().label,
-    chapter: state.chapter,
-    itemId,
-    companion,
-    story: template.story,
-    secret: Boolean(template.secret),
-    at: new Date().toISOString()
-  };
-  state.photoMemories.unshift(photo);
-  state.photoMemories = normalizePhotoMemories(state.photoMemories);
-  showMessage("Nouveau souvenir debloque !");
-  return true;
-}
-
-function normalizePhotoMemories(memories) {
-  const seen = new Set();
-  return (Array.isArray(memories) ? memories : [])
-    .map((photo) => {
-      const template = getPhotoMemoryTemplate(photo?.key);
-      return template ? { ...template, ...photo, title: template.title, category: template.category, story: template.story } : null;
-    })
-    .filter((photo) => photo && !seen.has(photo.key) && seen.add(photo.key))
-    .slice(0, photoMemoryCatalog.length);
-}
-
 function rememberPlace(place) {
   if (!state.discoveredPlaces.includes(place)) {
     state.discoveredPlaces.push(place);
     rememberJournalEvent(`J'ai decouvert ${place.toLowerCase()} et ajoute ce lieu a ma carte.`);
-    addPhotoMemory({ key: `place:${place}`, place });
   }
-}
-
-function updatePhotoMilestones() {
-  const season = getSeason();
-  if (season === "Printemps") addPhotoMemory({ key: "season:printemps" });
-  if (season === "Hiver") addPhotoMemory({ key: "season:hiver", weatherId: state.weather });
-  if (getDayPhase().id === "night") addPhotoMemory({ key: "phase:night" });
 }
 
 function rememberJournalEvent(text) {
@@ -2264,7 +2188,6 @@ function offerCompanion(giver) {
     nextHelpAt: state.time + 55
   };
   rememberJournalEvent(`${giver.role.toLowerCase()} m'a confie ${picked.name}, un ${picked.species.toLowerCase()}.`);
-  addPhotoMemory({ key: "companion:first", place: getPlaceType(), companion: picked.species });
   openCompanionPopup();
   playSoftPing();
   saveGame();
@@ -2292,7 +2215,6 @@ function exploreSecretLocation(secret) {
     advanceQuest("secret", 1);
     const legendary = itemCatalog.find((item) => item.rarity === "Legendaire") || discoveries[discoveries.length - 1];
     collectDiscovery({ ...legendary, id: makeId(legendary.id, state.chapter + state.openedSecrets.length + 120), place: "Lieu secret" }, true);
-    addPhotoMemory({ key: "secret:first", place: secret.name });
     showMessage(`${secret.name} s'ouvre. Un objet legendaire rejoint ton album.`);
   } else {
     showMessage(`${secret.name} est deja ouvert. Le passage reste dans ton album.`);
@@ -2391,7 +2313,6 @@ function completeQuest() {
   state.completedQuests += 1;
   noteWalkProgress("quest", quest.title || quest.label);
   rememberJournalEvent(`J'ai termine la mission "${quest.title || quest.label}" et recu deux objets.`);
-  addPhotoMemory({ key: "quest:first", place: getPlaceType() });
   state.pendingQuestReward = {
     questTitle: quest.title || quest.label,
     rewardItems,
@@ -2563,9 +2484,6 @@ function collectDiscovery(item, quiet = false) {
   if (firstTime) {
     state.discoveryDates[baseId] = new Date().toISOString();
     rememberJournalEvent(`J'ai trouve ${item.label.toLowerCase()} pour la premiere fois.`);
-    if (item.rarity === "Legendaire") {
-      addPhotoMemory({ key: "legendary:first", place: item.place || getPlaceType(), itemId: baseId });
-    }
   }
   if (!quiet) noteWalkProgress("discovery", item.label.toLowerCase());
   advanceQuest("collectAny", 1);
@@ -2617,7 +2535,6 @@ function openVillagerHelp(villager) {
   state.villagerLastMet[relationKey] = new Date().toISOString();
   noteWalkProgress("villager", villager.role.toLowerCase());
   rememberJournalEvent(`J'ai rencontre ${villager.role.toLowerCase()} pres du village.`);
-  addPhotoMemory({ key: "villager:first", place: "Village" });
   if (!state.visitedVillages.includes(villager.villageId)) {
     state.visitedVillages.push(villager.villageId);
     advanceQuest("village", 1);
@@ -2710,7 +2627,6 @@ function playRouteEndCinematic() {
 
 function buildJournal() {
   ui.journalList.innerHTML = "";
-  const seasonalFound = seasonalEventItems.filter((item) => state.inventory[item.id] > 0).length;
   const currentItem = getLastFoundItem();
   const weather = getWeatherForChapter();
   const place = getPlaceType();
@@ -2754,8 +2670,6 @@ function buildJournal() {
   appendJournalBlock("Missions", renderQuestCard(true), "mission-block");
   appendJournalBlock("Carte", renderMap(), "map-block");
   appendJournalBlock("Succes", renderAchievements(), "gallery-block");
-  appendJournalBlock("Album photo", renderPhotoAlbum(), "review-block");
-  appendJournalBlock("Album des saisons", renderSeasonAlbum(seasonalFound), "gallery-block");
   if (state.companion.unlocked) appendJournalBlock("Mon compagnon", renderCompanionJournal(), "companion-block");
 }
 
@@ -2878,96 +2792,6 @@ function renderAchievements() {
       <p>${achievement.goal}</p>
     </article>`;
   }).join("")}</div>`;
-}
-
-function renderSeasonAlbum(seasonalFound) {
-  return `<div class="season-grid">${["Printemps", "Ete", "Automne", "Hiver"].map((season) => {
-    const item = seasonalEventItems.find((entry) => entry.season === season);
-    const discovered = item && state.inventory[item.id] > 0;
-    return `<article class="season-card ${getSeasonClass(season)} ${discovered ? "is-known" : "is-unknown"}">
-      <div class="season-illustration">${getSeasonIcon(season)}</div>
-      <strong>${season}</strong>
-      <p>Decouvert : ${discovered ? "Oui" : "Non"}</p>
-      <p>Objet exclusif : ${discovered ? item.label : "????"}</p>
-      <p>Musique : ${discovered ? "Souvenir debloque" : "A decouvrir"}</p>
-    </article>`;
-  }).join("")}<p class="album-count">${seasonalFound} / ${seasonalEventItems.length} souvenirs saisonniers</p></div>`;
-}
-
-function renderPhotoAlbum() {
-  const memories = normalizePhotoMemories(state.photoMemories);
-  const byKey = new Map(memories.map((photo) => [photo.key, photo]));
-  const categories = [...new Set(photoMemoryCatalog.map((photo) => photo.category))];
-  return categories.map((category) => {
-    const slots = photoMemoryCatalog.filter((photo) => photo.category === category);
-    const found = slots.filter((slot) => byKey.has(slot.key)).length;
-    return `<section class="photo-category">
-      <header class="photo-category-header">
-        <strong>${category}</strong>
-        <span>${found} / ${slots.length}</span>
-      </header>
-      <div class="photo-grid">${slots.map((slot) => {
-        const photo = byKey.get(slot.key);
-        return photo ? `
-          <article class="photo-card" data-photo-id="${photo.id}" tabindex="0" role="button">
-            ${renderPhotoIllustration(photo)}
-            <strong>${photo.title}</strong>
-            <p>${photo.story}</p>
-            <span>${getPlaceIcon(photo.place)} ${photo.place}</span>
-            <span>${getSeasonIcon(photo.season)} ${photo.season} - ${getWeatherIcon(photo.weatherId)} ${photo.weatherLabel}</span>
-          </article>
-        ` : `
-          <article class="photo-card is-locked">
-            <div class="photo-illustration is-locked"></div>
-            <strong>${slot.title}</strong>
-            <p>Souvenir a decouvrir.</p>
-            <span>?</span>
-          </article>
-        `;
-      }).join("")}</div>
-    </section>`;
-  }).join("");
-}
-
-function renderPhotoIllustration(photo, large = false) {
-  const placeClass = getPhotoPlaceClass(photo.place);
-  const weatherClass = `photo-weather-${photo.weatherId || "clear"}`;
-  const seasonClass = getSeasonClass(photo.season || getSeason());
-  return `<div class="photo-illustration ${large ? "is-large" : ""} ${placeClass} ${weatherClass} ${seasonClass}">
-    <span class="photo-sky"></span>
-    <span class="photo-sun"></span>
-    <span class="photo-hills"></span>
-    <span class="photo-water"></span>
-    <span class="photo-trees"></span>
-    <span class="photo-landmark"></span>
-    <span class="photo-weather"></span>
-  </div>`;
-}
-
-function getPhotoPlaceClass(place = "") {
-  if (place.includes("Riviere")) return "photo-place-river";
-  if (place.includes("Village")) return "photo-place-village";
-  if (place.includes("Montagne")) return "photo-place-mountain";
-  if (place.includes("Clairiere")) return "photo-place-meadow";
-  if (place.includes("secret") || place.includes("Secret") || place.includes("Sentier") || place.includes("Jardin") || place.includes("Porte") || place.includes("Belvedere")) return "photo-place-secret";
-  return "photo-place-forest";
-}
-
-function openPhotoDetail(photoId) {
-  const photo = state.photoMemories.find((entry) => entry.id === photoId);
-  if (!photo) return;
-  ui.photoDetailTitle.textContent = photo.title;
-  ui.photoDetailBody.innerHTML = `
-    ${renderPhotoIllustration(photo, true)}
-    <p><strong>${photo.category}</strong></p>
-    <p><strong>Lieu</strong> ${photo.place}</p>
-    <p><strong>Saison</strong> ${photo.season}</p>
-    <p><strong>Meteo</strong> ${photo.weatherLabel}</p>
-    <p><strong>Moment</strong> ${photo.phase}</p>
-    <p><strong>Date</strong> ${formatShortDate(photo.at)}</p>
-    <p>${photo.story || "Un beau moment a rejoint ton album."}</p>
-  `;
-  ui.photoDetailDialog.showModal();
 }
 
 function initWalkMemory() {
@@ -3113,7 +2937,6 @@ function startGame(reset = false) {
   running = true;
   setupAudio();
   initWalkMemory();
-  addPhotoMemory({ key: "season:printemps", place: "Foret", weatherId: state.weather });
   updateMissionTracker();
   if (state.pendingQuestReward) {
     openQuestCompletePopup(state.pendingQuestReward);
@@ -3137,7 +2960,6 @@ function resetGame() {
   state.discoveredPlaces = [];
   state.visitedVillages = [];
   state.journalEvents = [];
-  state.photoMemories = [];
   state.walkMemories = [];
   state.currentWalk = null;
   state.questLastProgressAt = 0;
@@ -3177,7 +2999,6 @@ function saveGame() {
     discoveredPlaces: state.discoveredPlaces,
     visitedVillages: state.visitedVillages,
     journalEvents: state.journalEvents,
-    photoMemories: state.photoMemories,
     walkMemories: state.walkMemories,
     currentWalk: state.currentWalk,
     questLastProgressAt: state.questLastProgressAt,
@@ -3223,7 +3044,6 @@ function loadGame() {
     state.discoveredPlaces = Array.isArray(payload.discoveredPlaces) ? payload.discoveredPlaces : [];
     state.visitedVillages = Array.isArray(payload.visitedVillages) ? payload.visitedVillages : [];
     state.journalEvents = Array.isArray(payload.journalEvents) ? payload.journalEvents : [];
-    state.photoMemories = normalizePhotoMemories(payload.photoMemories);
     state.walkMemories = Array.isArray(payload.walkMemories) ? payload.walkMemories : [];
     state.currentWalk = payload.currentWalk && typeof payload.currentWalk === "object" ? payload.currentWalk : null;
     state.questLastProgressAt = Number.isFinite(payload.questLastProgressAt) ? payload.questLastProgressAt : state.time;
@@ -3795,22 +3615,11 @@ ui.journalButton.addEventListener("click", () => {
   ui.journalDialog.showModal();
 });
 ui.journalList.addEventListener("click", (event) => {
-  const photo = event.target.closest(".photo-card[data-photo-id]");
-  if (photo) {
-    openPhotoDetail(photo.dataset.photoId);
-    return;
-  }
   const card = event.target.closest(".encyclopedia-card[data-item-id]");
   if (card) openEncyclopediaDetail(card.dataset.itemId);
 });
 ui.journalList.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
-  const photo = event.target.closest(".photo-card[data-photo-id]");
-  if (photo) {
-    event.preventDefault();
-    openPhotoDetail(photo.dataset.photoId);
-    return;
-  }
   const card = event.target.closest(".encyclopedia-card[data-item-id]");
   if (!card) return;
   event.preventDefault();
