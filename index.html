@@ -43,7 +43,7 @@
 
     <aside id="message" class="message" aria-live="polite"></aside>
     <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
-    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.18</aside>
+    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.19</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -103,6 +103,19 @@
         <div id="questCompleteBody" class="mission-body"></div>
         <div class="choice-actions">
           <button id="claimQuestRewardButton" class="primary-button" value="close" type="submit">Valider la recompense</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="companionDialog" class="panel-dialog compact-dialog companion-dialog">
+      <form method="dialog">
+        <header class="panel-header">
+          <h2>Nouveau compagnon</h2>
+          <button class="close-button" value="close" type="submit">Fermer</button>
+        </header>
+        <div id="companionBody" class="mission-body"></div>
+        <div class="choice-actions">
+          <button id="welcomeCompanionButton" class="primary-button" value="close" type="submit">L'accueillir</button>
         </div>
       </form>
     </dialog>
@@ -177,7 +190,7 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.18").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.19").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});

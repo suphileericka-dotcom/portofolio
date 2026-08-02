@@ -35,6 +35,9 @@ const ui = {
   questCompleteDialog: document.getElementById("questCompleteDialog"),
   questCompleteBody: document.getElementById("questCompleteBody"),
   claimQuestRewardButton: document.getElementById("claimQuestRewardButton"),
+  companionDialog: document.getElementById("companionDialog"),
+  companionBody: document.getElementById("companionBody"),
+  welcomeCompanionButton: document.getElementById("welcomeCompanionButton"),
   missionTracker: document.getElementById("missionTracker"),
   soundEnabledToggle: document.getElementById("soundEnabledToggle"),
   musicVolume: document.getElementById("musicVolume"),
@@ -96,7 +99,7 @@ const state = {
   worldDiscoveries: {},
   discoveryRespawns: {},
   achievements: [],
-  companion: { unlocked: false, finds: 0, nextHelpAt: 0 },
+  companion: { unlocked: false, offered: false, species: "", name: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0 },
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur" },
   options: { music: 0.1, nature: 0.16, effects: 0.25, muted: false, audioVersion: 5 }
@@ -134,6 +137,16 @@ const villagers = [
   { role: "Artiste", line: "Je peins les meteo rares. Elles ne restent jamais assez longtemps." },
   { role: "Botaniste", line: "Une feuille nervuree peut proteger une carte fragile de la pluie. C'est un tres bon debut." },
   { role: "Vieux sage", line: "Aide les gens sans attendre de cadeau. Le monde, lui, se souviendra." }
+];
+
+const companionSpecies = [
+  { species: "Renard", name: "Roux", color: "#c86f3f", accent: "#f0bd6c", personality: "curieux et discret", description: "Il marche sans bruit et observe les sentiers avant de s'approcher." },
+  { species: "Chat", name: "Miette", color: "#6a5b52", accent: "#f7f3df", personality: "calme et attentif", description: "Il aime les pauses longues et les coins de soleil." },
+  { species: "Lapin", name: "Brin", color: "#d6bf78", accent: "#f7f3df", personality: "vif et doux", description: "Il trottine derriere toi et s'assoit des que le monde ralentit." },
+  { species: "Herisson", name: "Bog", color: "#8b6840", accent: "#ead68d", personality: "prudent et loyal", description: "Il avance lentement, mais ne quitte jamais vraiment ta piste." },
+  { species: "Chien", name: "Nino", color: "#9c6c42", accent: "#f0bd6c", personality: "joyeux et protecteur", description: "Il remue la queue quand une nouvelle route apparait." },
+  { species: "Ecureuil", name: "Noisette", color: "#b76b45", accent: "#ead68d", personality: "malicieux et rapide", description: "Il bondit autour des pierres et repere les petits details." },
+  { species: "Petit oiseau", name: "Plume", color: "#67b4c8", accent: "#f7f3df", personality: "leger et chanteur", description: "Il vole bas pres de toi et se pose quand tu t'arretes." }
 ];
 
 const villagerNeeds = [
@@ -221,25 +234,6 @@ const rests = [
   { x: 6070, label: "souche phosphorescente" }
 ];
 
-const butterflies = Array.from({ length: 18 }, (_, index) => ({
-  x: 520 + index * 370 + Math.sin(index) * 90,
-  y: 0,
-  phase: index * 0.8,
-  scare: 0
-}));
-
-const fireflies = Array.from({ length: 32 }, (_, index) => ({
-  x: 1200 + index * 170,
-  y: 0,
-  phase: index * 1.7
-}));
-
-const ambientAnimals = Array.from({ length: 16 }, (_, index) => ({
-  x: 700 + index * 620 + hashNumber(index + 4) * 260,
-  type: ["bird", "rabbit", "frog", "squirrel"][index % 4],
-  phase: index * 1.23,
-  scare: 0
-}));
 
 const trees = Array.from({ length: 95 }, (_, index) => {
   const x = index * 82 + Math.sin(index * 4.2) * 55;
@@ -475,6 +469,19 @@ function getProceduralLetters() {
     }
   }
   return letters;
+}
+
+function getCompanionGiver() {
+  if (state.companion.offered || state.companion.unlocked) return null;
+  const eligible = state.player.x > 2600 || state.completedQuests >= 2 || Object.keys(state.villagerRelations).length >= 3;
+  if (!eligible) return null;
+  const x = Math.max(2860, state.player.x + 520);
+  return {
+    role: "Gardien des compagnons",
+    line: "Tu as beaucoup voyage seul. Je crois que ce petit compagnon serait heureux de continuer le chemin a tes cotes.",
+    x,
+    specialCompanionGiver: true
+  };
 }
 
 function getProceduralLanterns() {
@@ -820,6 +827,12 @@ function drawWorldObjects() {
     if (Math.abs(state.player.x - (village.x + 410)) < 90) drawPrompt(village.x + 410, y - 102, "E parler");
   });
 
+  const companionGiver = getCompanionGiver();
+  if (companionGiver) {
+    drawVillager(companionGiver.x, companionGiver);
+    if (Math.abs(state.player.x - companionGiver.x) < 90) drawPrompt(companionGiver.x, world.ground - 120, "E parler");
+  }
+
   getProceduralRests().forEach((rest) => {
     const y = world.ground - 18;
     ctx.fillStyle = "#6f4729";
@@ -880,32 +893,6 @@ function drawWorldObjects() {
     if (Math.abs(state.player.x - secret.x) < 100) drawPrompt(secret.x, world.ground - 138, "E explorer");
   });
 
-  butterflies.forEach((butterfly) => {
-    const dist = Math.abs(state.player.x - butterfly.x);
-    if (dist < 90) butterfly.scare = Math.min(1, butterfly.scare + 0.04);
-    butterfly.scare *= 0.992;
-    const y = world.ground - 70 - butterfly.scare * 110 + Math.sin(state.time * 4 + butterfly.phase) * 18;
-    const x = butterfly.x + Math.sin(state.time * 2 + butterfly.phase) * 28 + butterfly.scare * 45;
-    ctx.fillStyle = "rgba(245, 196, 117, 0.82)";
-    drawEllipse(x - 5, y, 8, 5, ctx.fillStyle);
-    drawEllipse(x + 5, y, 8, 5, ctx.fillStyle);
-  });
-
-  fireflies.forEach((fly) => {
-    const follow = Math.max(0, 1 - Math.abs(state.player.x - fly.x) / 340);
-    const x = fly.x + Math.sin(state.time * 1.5 + fly.phase) * 32 + follow * (state.player.x - fly.x) * 0.16;
-    const y = world.ground - 130 + Math.cos(state.time * 1.8 + fly.phase) * 42;
-    const glow = ctx.createRadialGradient(x, y, 1, x, y, 22);
-    glow.addColorStop(0, "rgba(180, 239, 184, 0.9)");
-    glow.addColorStop(1, "rgba(180, 239, 184, 0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(x, y, 22, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  drawAmbientAnimals();
-
   drawRiver();
   drawCompanion();
   drawPlayer();
@@ -942,42 +929,88 @@ function drawSecretLocation(secret) {
 function drawCompanion() {
   if (!state.companion.unlocked) return;
   const p = state.player;
-  const x = p.x - p.face * 74 + Math.sin(state.time * 2.4) * 7;
-  const y = world.ground - 18 + Math.sin(state.time * 5) * 2;
+  const moving = Math.abs(p.vx) > 12;
+  const sleeping = p.rest > 0.2;
+  const x = p.x - p.face * 82 + Math.sin(state.time * 2.4) * (moving ? 7 : 2);
+  const y = world.ground - 18 + (moving ? Math.sin(state.time * 8) * 3 : 0);
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(p.face, 1);
+  drawCompanionAnimal(state.companion, moving, sleeping);
+  ctx.restore();
+}
+
+function drawCompanionAnimal(companion, moving = false, sleeping = false) {
+  const color = companion.color || "#c86f3f";
+  const accent = companion.accent || "#f0bd6c";
+  const species = companion.species || "Renard";
+  const sit = !moving || sleeping;
   ctx.fillStyle = "rgba(0,0,0,0.16)";
   ctx.beginPath();
   ctx.ellipse(0, 10, 25, 6, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#c86f3f";
+  ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.ellipse(0, -10, 26, 14, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, sit ? -8 : -10, 24, sit ? 13 : 14, 0, 0, Math.PI * 2);
   ctx.fill();
+  if (species === "Petit oiseau") {
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.moveTo(17, -17);
+    ctx.lineTo(32, -13);
+    ctx.lineTo(18, -9);
+    ctx.fill();
+  }
   ctx.beginPath();
-  ctx.arc(20, -17, 13, 0, Math.PI * 2);
+  ctx.arc(20, sit ? -15 : -17, 12, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#f0bd6c";
+  ctx.fillStyle = accent;
   ctx.beginPath();
-  ctx.moveTo(12, -28);
-  ctx.lineTo(17, -46);
-  ctx.lineTo(24, -27);
-  ctx.moveTo(24, -27);
-  ctx.lineTo(34, -43);
-  ctx.lineTo(34, -22);
+  if (species === "Lapin") {
+    ctx.moveTo(13, -25);
+    ctx.lineTo(15, -51);
+    ctx.lineTo(22, -25);
+    ctx.moveTo(23, -25);
+    ctx.lineTo(30, -50);
+    ctx.lineTo(32, -24);
+  } else {
+    ctx.moveTo(12, -26);
+    ctx.lineTo(17, -43);
+    ctx.lineTo(24, -25);
+    ctx.moveTo(24, -25);
+    ctx.lineTo(34, -40);
+    ctx.lineTo(34, -21);
+  }
   ctx.fill();
-  ctx.strokeStyle = "#8b3d2b";
-  ctx.lineWidth = 5;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = species === "Herisson" ? 0 : 5;
   ctx.beginPath();
-  ctx.moveTo(-20, -12);
-  ctx.quadraticCurveTo(-45, -32, -56, -6);
+  ctx.moveTo(-20, -10);
+  ctx.quadraticCurveTo(-44, species === "Ecureuil" ? -44 : -28, -56, -5);
   ctx.stroke();
+  if (species === "Herisson") {
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    for (let i = -16; i <= 12; i += 7) {
+      ctx.beginPath();
+      ctx.moveTo(i, -19);
+      ctx.lineTo(i + 4, -31);
+      ctx.stroke();
+    }
+  }
   ctx.fillStyle = "#24312e";
   ctx.beginPath();
-  ctx.arc(25, -19, 2.4, 0, Math.PI * 2);
+  ctx.arc(25, sit ? -17 : -19, sleeping ? 1.6 : 2.4, 0, Math.PI * 2);
   ctx.fill();
-  ctx.restore();
+  if (sleeping) {
+    ctx.font = "800 10px Nunito";
+    ctx.fillStyle = "rgba(247,243,223,0.72)";
+    ctx.fillText("z", 36, -34);
+  }
+}
+
+function getCompanionSymbol(companion = state.companion) {
+  return (companion.species || "?").slice(0, 1).toUpperCase();
 }
 
 function drawLetterIcon(x, y) {
@@ -1315,58 +1348,6 @@ function drawRiver() {
   }
 }
 
-function drawAmbientAnimals() {
-  ambientAnimals.forEach((animal, index) => {
-    const repeatWidth = 9800;
-    const baseRepeat = Math.floor((state.camera.x - animal.x) / repeatWidth);
-    for (let repeat = baseRepeat; repeat <= baseRepeat + 1; repeat += 1) {
-      const x = animal.x + repeat * repeatWidth;
-      if (x < state.camera.x - 160 || x > state.camera.x + window.innerWidth + 160) continue;
-      const dist = Math.abs(state.player.x - x);
-      animal.scare = dist < 90 ? Math.min(1, animal.scare + 0.06) : animal.scare * 0.985;
-      const hop = Math.abs(Math.sin(state.time * 2.2 + animal.phase)) * (animal.type === "rabbit" ? 9 : 4);
-      const y = world.ground - 18 - hop - animal.scare * 34;
-      const drift = Math.sin(state.time * 0.8 + animal.phase) * 16 + animal.scare * 58;
-      drawAnimalIcon(x + drift, y, animal.type, index);
-    }
-  });
-}
-
-function drawAnimalIcon(x, y, type, index) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.globalAlpha = isNightTime() && type !== "frog" ? 0.68 : 0.92;
-  if (type === "bird") {
-    ctx.strokeStyle = "#2f3933";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(-14, -34);
-    ctx.quadraticCurveTo(-4, -45, 8, -34);
-    ctx.quadraticCurveTo(18, -45, 28, -34);
-    ctx.stroke();
-  } else if (type === "rabbit") {
-    drawEllipse(0, 0, 18, 11, "#d6bf78");
-    drawEllipse(14, -5, 9, 8, "#d6bf78");
-    drawEllipse(19, -19, 3, 13, "#d6bf78");
-    drawEllipse(11, -19, 3, 12, "#d6bf78");
-    drawEllipse(-12, -4, 5, 5, "#f7f3df");
-  } else if (type === "frog") {
-    drawEllipse(0, 0, 15, 9, "#5f876c");
-    drawEllipse(-8, -8, 5, 5, "#7f9b61");
-    drawEllipse(8, -8, 5, 5, "#7f9b61");
-  } else {
-    drawEllipse(0, 0, 16, 9, "#9c6c42");
-    drawEllipse(13, -4, 8, 7, "#9c6c42");
-    ctx.strokeStyle = "#9c6c42";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(-13, -5);
-    ctx.quadraticCurveTo(-27, -18, -10, -25);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
 function drawVillager(x, villager) {
   const y = world.ground;
   const bob = Math.sin(state.time * 2 + x) * 3;
@@ -1657,6 +1638,13 @@ function update(dt) {
 function interact() {
   clearMovementIntent();
   const p = state.player;
+  const companionGiver = getCompanionGiver();
+  if (companionGiver && Math.abs(companionGiver.x - p.x) < 98) {
+    offerCompanion(companionGiver);
+    saveGame();
+    return;
+  }
+
   const villageNeed = getProceduralVillages()
     .map((village) => ({
       ...village.villager,
@@ -1938,6 +1926,44 @@ function updateCompanion(dt) {
   }
 }
 
+function offerCompanion(giver) {
+  if (state.companion.offered || state.companion.unlocked) return;
+  const seed = Date.now() + state.player.x + state.completedQuests * 31 + Object.keys(state.villagerRelations).length * 17;
+  const picked = companionSpecies[Math.floor(hashNumber(seed) * companionSpecies.length) % companionSpecies.length];
+  state.companion = {
+    unlocked: true,
+    offered: true,
+    species: picked.species,
+    name: picked.name,
+    color: picked.color,
+    accent: picked.accent,
+    description: picked.description,
+    personality: picked.personality,
+    giver: giver.role,
+    metAt: new Date().toISOString(),
+    walks: 0,
+    finds: 0,
+    nextHelpAt: state.time + 55
+  };
+  rememberJournalEvent(`${giver.role.toLowerCase()} m'a confie ${picked.name}, un ${picked.species.toLowerCase()}.`);
+  openCompanionPopup();
+  playSoftPing();
+  saveGame();
+}
+
+function openCompanionPopup() {
+  const companion = state.companion;
+  ui.companionBody.innerHTML = `
+    <div class="companion-portrait">${getCompanionSymbol(companion)}</div>
+    <p><strong>Un animal a decide de rejoindre ton voyage.</strong></p>
+    <p><strong>Espece :</strong> ${companion.species}</p>
+    <p><strong>Nom :</strong> ${companion.name}</p>
+    <p>${companion.description}</p>
+    <p><strong>Personnalite :</strong> ${companion.personality}</p>
+  `;
+  ui.companionDialog.showModal();
+}
+
 function exploreSecretLocation(secret) {
   const firstOpen = !state.openedSecrets.includes(secret.id);
   if (firstOpen) {
@@ -2041,10 +2067,6 @@ function completeQuest() {
     rewardItems,
     completedAt: state.time
   };
-  if (!state.companion.unlocked) {
-    state.companion.unlocked = true;
-    state.companion.nextHelpAt = state.time + 35;
-  }
   openQuestCompletePopup(state.pendingQuestReward);
   playSoftPing();
   updateMissionTracker();
@@ -2371,6 +2393,7 @@ function buildJournal() {
   appendJournalBlock("Inventaire", renderInventoryGallery(), "gallery-block");
   appendJournalBlock("Encyclopedie", renderEncyclopedia(), "gallery-block");
   appendJournalBlock("Habitants", renderVillagers(), "gallery-block");
+  appendJournalBlock("Mon compagnon", renderCompanionJournal(), "companion-block");
   appendJournalBlock("Carte", renderMap(), "map-block");
   appendJournalBlock("Missions", renderQuestCard(true), "mission-block");
   appendJournalBlock("Succes", renderAchievements(), "gallery-block");
@@ -2460,6 +2483,27 @@ function renderVillagers() {
   }).join("")}</div>`;
 }
 
+function renderCompanionJournal() {
+  if (!state.companion.unlocked) {
+    return `<article class="quest-card"><strong>Aucun compagnon</strong><p>Un habitant special pourra t'en confier un plus loin dans l'aventure.</p></article>`;
+  }
+  const companion = state.companion;
+  return `
+    <article class="companion-card">
+      <div class="companion-portrait">${getCompanionSymbol(companion)}</div>
+      <div>
+        <strong>${companion.name}</strong>
+        <p>Espece : ${companion.species}</p>
+        <p>Rencontre : ${formatShortDate(companion.metAt)}</p>
+        <p>Offert par : ${companion.giver || "Habitant special"}</p>
+        <p>Personnalite : ${companion.personality}</p>
+        <p>${companion.description}</p>
+        <p>Promenades ensemble : ${companion.walks || (state.currentWalk ? 1 : 0)}</p>
+      </div>
+    </article>
+  `;
+}
+
 function renderMap() {
   const places = ["Foret", "Riviere", "Village", "Montagne", "Clairiere", "Lieu secret"];
   return `<div class="travel-map">${places.map((place) => {
@@ -2537,6 +2581,7 @@ function renderWalkMemories() {
 
 function initWalkMemory() {
   if (state.currentWalk) return;
+  if (state.companion.unlocked) state.companion.walks = (state.companion.walks || 0) + 1;
   state.currentWalk = {
     number: state.walkMemories.length + 1,
     startedAt: state.time,
@@ -2547,6 +2592,24 @@ function initWalkMemory() {
     villagers: 0,
     questDone: false,
     bestMoment: "La route s'est ouverte doucement."
+  };
+}
+
+function getEmptyCompanionState() {
+  return { unlocked: false, offered: false, species: "", name: "", color: "", accent: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0 };
+}
+
+function normalizeCompanionState(raw) {
+  if (!raw || typeof raw !== "object") return getEmptyCompanionState();
+  if (raw.unlocked && !raw.species) return getEmptyCompanionState();
+  return {
+    ...getEmptyCompanionState(),
+    ...raw,
+    unlocked: Boolean(raw.unlocked),
+    offered: Boolean(raw.offered || raw.unlocked),
+    walks: Number.isFinite(raw.walks) ? raw.walks : 0,
+    finds: Number.isFinite(raw.finds) ? raw.finds : 0,
+    nextHelpAt: Number.isFinite(raw.nextHelpAt) ? raw.nextHelpAt : 0
   };
 }
 
@@ -2717,7 +2780,7 @@ function resetGame() {
   state.worldDiscoveries = {};
   state.discoveryRespawns = {};
   state.achievements = [];
-  state.companion = { unlocked: false, finds: 0, nextHelpAt: 0 };
+  state.companion = getEmptyCompanionState();
   state.time = 0;
   state.camera.x = 0;
   state.chapter = 1;
@@ -2801,9 +2864,7 @@ function loadGame() {
     state.worldDiscoveries = payload.worldDiscoveries && typeof payload.worldDiscoveries === "object" ? payload.worldDiscoveries : {};
     state.discoveryRespawns = payload.discoveryRespawns && typeof payload.discoveryRespawns === "object" ? payload.discoveryRespawns : {};
     state.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
-    state.companion = payload.companion && typeof payload.companion === "object"
-      ? { unlocked: Boolean(payload.companion.unlocked), finds: payload.companion.finds || 0, nextHelpAt: payload.companion.nextHelpAt || 0 }
-      : { unlocked: false, finds: 0, nextHelpAt: 0 };
+    state.companion = normalizeCompanionState(payload.companion);
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
     state.cinematicPlayed = Boolean(payload.cinematicPlayed) && state.player.x >= world.firstRouteEnd;
     state.chapter = getChapter(state.player.x);
@@ -3181,6 +3242,7 @@ ui.nicknameInput.addEventListener("change", () => {
 ui.giveItemButton.addEventListener("click", givePendingItem);
 ui.refuseHelpButton.addEventListener("click", refusePendingHelp);
 ui.claimQuestRewardButton.addEventListener("click", claimQuestReward);
+ui.welcomeCompanionButton.addEventListener("click", () => showMessage(`${state.companion.name} marche maintenant avec toi.`));
 ui.missionTracker.addEventListener("click", () => {
   if (state.pendingQuestReward && !ui.questCompleteDialog.open) openQuestCompletePopup(state.pendingQuestReward);
 });
