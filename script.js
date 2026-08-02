@@ -44,6 +44,10 @@ const ui = {
   natureVolume: document.getElementById("natureVolume"),
   effectsVolume: document.getElementById("effectsVolume"),
   resetDiscoveryTipsButton: document.getElementById("resetDiscoveryTipsButton"),
+  skinSelect: document.getElementById("skinSelect"),
+  hairSelect: document.getElementById("hairSelect"),
+  outfitSelect: document.getElementById("outfitSelect"),
+  accessorySelect: document.getElementById("accessorySelect"),
   mobilePad: document.getElementById("mobilePad"),
   padKnob: document.getElementById("padKnob")
 };
@@ -59,6 +63,26 @@ const discoveryRespawnSeconds = 45;
 const letterRespawnDelaySeconds = 35;
 const maxVisibleDiscoveries = 8;
 const minDiscoverySpacing = 145;
+const playerAppearanceOptions = {
+  skin: {
+    warm: "#f0bd6c",
+    light: "#f1cf9b",
+    brown: "#b77746",
+    dark: "#7a4d2b"
+  },
+  hair: {
+    dark: "#22322c",
+    curly: "#9c5638",
+    blond: "#d8b66c",
+    black: "#1d1c1a"
+  },
+  outfit: {
+    berry: "#ce6f75",
+    forest: "#4f8763",
+    river: "#4f7f99",
+    sun: "#d09a3d"
+  }
+};
 let audio = null;
 let lastTime = 0;
 let running = false;
@@ -68,7 +92,7 @@ let pendingDiscoveryPopup = null;
 let audioSceneKey = "";
 
 const state = {
-  player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0 },
+  player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0, action: "", actionUntil: 0 },
   camera: { x: 0, y: 0, zoom: 1 },
   time: 0,
   chapter: 1,
@@ -101,7 +125,7 @@ const state = {
   achievements: [],
   companion: { unlocked: false, offered: false, species: "", name: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0 },
   startedAtLeastOnce: false,
-  playerProfile: { id: "", nickname: "Voyageur" },
+  playerProfile: { id: "", nickname: "Voyageur", appearance: { skin: "warm", hair: "dark", outfit: "berry", accessory: "bag" } },
   options: { music: 0.1, nature: 0.16, effects: 0.25, muted: false, audioVersion: 5 }
 };
 
@@ -1013,6 +1037,30 @@ function getCompanionSymbol(companion = state.companion) {
   return (companion.species || "?").slice(0, 1).toUpperCase();
 }
 
+function getPlayerAppearance() {
+  const appearance = normalizeAppearance(state.playerProfile.appearance);
+  return {
+    skin: playerAppearanceOptions.skin[appearance.skin] || playerAppearanceOptions.skin.warm,
+    hair: playerAppearanceOptions.hair[appearance.hair] || playerAppearanceOptions.hair.dark,
+    body: playerAppearanceOptions.outfit[appearance.outfit] || playerAppearanceOptions.outfit.berry,
+    accessory: appearance.accessory
+  };
+}
+
+function normalizeAppearance(appearance = {}) {
+  return {
+    skin: playerAppearanceOptions.skin[appearance.skin] ? appearance.skin : "warm",
+    hair: playerAppearanceOptions.hair[appearance.hair] ? appearance.hair : "dark",
+    outfit: playerAppearanceOptions.outfit[appearance.outfit] ? appearance.outfit : "berry",
+    accessory: ["bag", "scarf", "hat", "lantern"].includes(appearance.accessory) ? appearance.accessory : "bag"
+  };
+}
+
+function setPlayerAction(action, duration = 1.1) {
+  state.player.action = action;
+  state.player.actionUntil = state.time + duration;
+}
+
 function drawLetterIcon(x, y) {
   ctx.save();
   ctx.translate(x, y);
@@ -1441,22 +1489,30 @@ function drawPrompt(x, y, text) {
 
 function drawPlayer() {
   const p = state.player;
+  const appearance = getPlayerAppearance();
   drawCharacter({
     x: p.x,
     y: p.y,
     face: p.face,
     velocity: p.vx,
-    body: "#ce6f75",
-    skin: "#f0bd6c",
-    hair: "#22322c",
+    body: appearance.body,
+    skin: appearance.skin,
+    hair: appearance.hair,
+    accessory: appearance.accessory,
     label: state.playerProfile.nickname,
-    seated: p.rest > 0.2
+    seated: p.rest > 0.2,
+    action: p.actionUntil > state.time ? p.action : ""
   });
 }
 
-function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = "#f0bd6c", hair = "#22322c", label = "", seated = false }) {
-  const walk = seated ? 0 : Math.sin(state.time * 10) * Math.min(1, Math.abs(velocity) / 190);
-  const baseY = y - 52 + (seated ? 10 : 0);
+function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = "#f0bd6c", hair = "#22322c", accessory = "bag", label = "", seated = false, action = "" }) {
+  const speed = Math.min(1, Math.abs(velocity) / 190);
+  const walk = seated ? 0 : Math.sin(state.time * (speed > 0.72 ? 13 : 9)) * speed;
+  const idleBreath = seated ? 0 : Math.sin(state.time * 2.2) * (speed < 0.08 ? 1.6 : 0.3);
+  const blink = Math.sin(state.time * 3.7) > 0.97;
+  const baseY = y - 52 + (seated ? 10 : 0) + idleBreath;
+  const reaching = action === "pickup" || action === "reward" || action === "rare";
+  const waving = action === "talk" || action === "companion";
   ctx.save();
   ctx.translate(x, baseY);
   ctx.scale(face, 1);
@@ -1473,6 +1529,11 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
   ctx.moveTo(8, 30);
   ctx.lineTo(seated ? 21 : 15 + walk * 7, seated ? 45 : 55);
   ctx.stroke();
+  if (accessory === "bag") {
+    ctx.fillStyle = "#8b6840";
+    roundedRect(-27, 3, 17, 26, 5);
+    ctx.fill();
+  }
   ctx.fillStyle = body;
   ctx.beginPath();
   ctx.ellipse(0, 22, 22, 30, 0, 0, Math.PI * 2);
@@ -1481,6 +1542,22 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
   ctx.beginPath();
   ctx.ellipse(-7, 10, 8, 16, -0.2, 0, Math.PI * 2);
   ctx.fill();
+  if (accessory === "scarf") {
+    ctx.fillStyle = "#d8bd7c";
+    roundedRect(-18, -1, 36, 8, 4);
+    ctx.fill();
+    roundedRect(12, 2, 8, 23, 4);
+    ctx.fill();
+  }
+  if (accessory === "lantern") {
+    ctx.strokeStyle = "#8b6840";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-20, 20);
+    ctx.lineTo(-31, 34);
+    ctx.stroke();
+    drawEllipse(-34, 38, 7, 9, "rgba(255, 220, 122, 0.78)");
+  }
   ctx.fillStyle = skin;
   ctx.beginPath();
   ctx.arc(0, -25, 23, 0, Math.PI * 2);
@@ -1490,15 +1567,45 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
   ctx.ellipse(-8, -31, 8, 6, -0.4, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#28312e";
-  ctx.beginPath();
-  ctx.arc(11, -27, 3.4, 0, Math.PI * 2);
-  ctx.fill();
+  if (blink) {
+    ctx.strokeStyle = "#28312e";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(8, -27);
+    ctx.lineTo(15, -27);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(11, -27, 3.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.fillStyle = hair;
   ctx.beginPath();
   ctx.ellipse(-9, -38, 25, 14, -0.28, Math.PI * 0.92, Math.PI * 2.06);
   ctx.lineTo(-22, -25);
   ctx.quadraticCurveTo(-5, -31, 16, -42);
   ctx.fill();
+  if (accessory === "hat") {
+    ctx.fillStyle = "#6f4729";
+    roundedRect(-22, -49, 39, 10, 5);
+    ctx.fill();
+    roundedRect(-14, -62, 24, 18, 6);
+    ctx.fill();
+  }
+  ctx.strokeStyle = "#2d2730";
+  ctx.lineWidth = 6;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-16, 14);
+  ctx.lineTo(reaching ? -25 : -22, reaching ? 33 : 24 + walk * 4);
+  ctx.moveTo(16, 14);
+  ctx.lineTo(waving ? 28 : reaching ? 8 : 22, waving ? -2 : reaching ? 34 : 24 - walk * 4);
+  ctx.stroke();
+  if (action === "rare") {
+    ctx.fillStyle = "#f6cf36";
+    ctx.font = "900 18px Nunito";
+    ctx.fillText("!", 31, -40);
+  }
   ctx.restore();
 
   if (label && Math.abs(x - state.player.x) < 260) {
@@ -1953,6 +2060,7 @@ function offerCompanion(giver) {
 
 function openCompanionPopup() {
   const companion = state.companion;
+  setPlayerAction("companion", 2);
   ui.companionBody.innerHTML = `
     <div class="companion-portrait">${getCompanionSymbol(companion)}</div>
     <p><strong>Un animal a decide de rejoindre ton voyage.</strong></p>
@@ -2103,6 +2211,7 @@ function openQuestPopup(quest) {
 
 function openQuestCompletePopup(reward) {
   const rewardItems = reward.rewardItems || [];
+  setPlayerAction("reward", 1.8);
   ui.questCompleteBody.innerHTML = `
     <p><strong>${reward.questTitle}</strong></p>
     <p>Recompense :</p>
@@ -2195,6 +2304,7 @@ function getQuestCollectTypes(item) {
 function collectDiscovery(item, quiet = false) {
   const baseId = baseDiscoveryId(item.id);
   const firstTime = !hasCollectedBaseItem(baseId);
+  if (!quiet) setPlayerAction((item.rarity === "Legendaire" || item.rarity === "Rare") ? "rare" : "pickup", 1.2);
   if (!quiet) {
     state.discoveryRespawns[item.id] = state.time + discoveryRespawnSeconds;
     if (state.worldDiscoveries[item.id]) {
@@ -2251,6 +2361,7 @@ function closeDiscoveryPopup() {
 }
 
 function openVillagerHelp(villager) {
+  setPlayerAction("talk", 1.4);
   const alreadyHelped = state.helpedVillagers.includes(villager.villageId);
   const relationKey = villager.role;
   state.villagerRelations[relationKey] = (state.villagerRelations[relationKey] || 0) + 1;
@@ -2905,13 +3016,17 @@ function loadPlayerProfile() {
       const payload = JSON.parse(raw);
       state.playerProfile.id = payload.id || createUuid();
       state.playerProfile.nickname = payload.nickname || "Voyageur";
+      state.playerProfile.appearance = normalizeAppearance(payload.appearance);
     } catch {
       state.playerProfile.id = createUuid();
+      state.playerProfile.appearance = normalizeAppearance();
     }
   } else {
     state.playerProfile.id = createUuid();
+    state.playerProfile.appearance = normalizeAppearance();
   }
   ui.nicknameInput.value = state.playerProfile.nickname;
+  syncAppearanceControls();
   ui.anonymousId.textContent = `Identifiant anonyme: ${state.playerProfile.id.slice(0, 8)}...`;
   savePlayerProfile();
 }
@@ -2919,7 +3034,21 @@ function loadPlayerProfile() {
 function savePlayerProfile() {
   const nickname = ui.nicknameInput.value.trim().slice(0, 18) || "Voyageur";
   state.playerProfile.nickname = nickname;
+  state.playerProfile.appearance = normalizeAppearance({
+    skin: ui.skinSelect.value,
+    hair: ui.hairSelect.value,
+    outfit: ui.outfitSelect.value,
+    accessory: ui.accessorySelect.value
+  });
   localStorage.setItem(playerKey, JSON.stringify(state.playerProfile));
+}
+
+function syncAppearanceControls() {
+  const appearance = normalizeAppearance(state.playerProfile.appearance);
+  ui.skinSelect.value = appearance.skin;
+  ui.hairSelect.value = appearance.hair;
+  ui.outfitSelect.value = appearance.outfit;
+  ui.accessorySelect.value = appearance.accessory;
 }
 
 function loadOptions() {
@@ -3238,6 +3367,13 @@ ui.continueButton.addEventListener("click", () => startGame(false));
 ui.nicknameInput.addEventListener("change", () => {
   savePlayerProfile();
   saveGame();
+});
+[ui.skinSelect, ui.hairSelect, ui.outfitSelect, ui.accessorySelect].forEach((control) => {
+  control.addEventListener("change", () => {
+    savePlayerProfile();
+    saveGame();
+    setPlayerAction("reward", 0.8);
+  });
 });
 ui.giveItemButton.addEventListener("click", givePendingItem);
 ui.refuseHelpButton.addEventListener("click", refusePendingHelp);

@@ -30,7 +30,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -125,7 +126,8 @@ h2 {
   text-transform: uppercase;
 }
 
-.field-row input {
+.field-row input,
+.field-row select {
   width: 100%;
   min-height: 2.75rem;
   padding: 0 0.8rem;
@@ -135,6 +137,17 @@ h2 {
   background: rgba(20, 34, 33, 0.58);
   outline: none;
   text-transform: none;
+}
+
+.field-row select {
+  cursor: pointer;
+}
+
+.appearance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.9rem;
 }
 
 .options-section {

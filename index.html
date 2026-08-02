@@ -43,7 +43,7 @@
 
     <aside id="message" class="message" aria-live="polite"></aside>
     <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
-    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.19</aside>
+    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.20</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -180,6 +180,44 @@
             <span>Pseudo</span>
             <input id="nicknameInput" type="text" maxlength="18" autocomplete="nickname" placeholder="Voyageur">
           </label>
+          <div class="appearance-grid" aria-label="Personnaliser mon voyageur">
+            <label class="field-row">
+              <span>Peau</span>
+              <select id="skinSelect">
+                <option value="warm">Doree</option>
+                <option value="light">Claire</option>
+                <option value="brown">Brune</option>
+                <option value="dark">Foncee</option>
+              </select>
+            </label>
+            <label class="field-row">
+              <span>Cheveux</span>
+              <select id="hairSelect">
+                <option value="dark">Bruns courts</option>
+                <option value="curly">Boucles rousses</option>
+                <option value="blond">Blonds doux</option>
+                <option value="black">Noirs epais</option>
+              </select>
+            </label>
+            <label class="field-row">
+              <span>Tenue</span>
+              <select id="outfitSelect">
+                <option value="berry">Manteau baie</option>
+                <option value="forest">Veste foret</option>
+                <option value="river">Cape riviere</option>
+                <option value="sun">Tunique soleil</option>
+              </select>
+            </label>
+            <label class="field-row">
+              <span>Accessoire</span>
+              <select id="accessorySelect">
+                <option value="bag">Sac</option>
+                <option value="scarf">Echarpe</option>
+                <option value="hat">Casquette</option>
+                <option value="lantern">Lanterne</option>
+              </select>
+            </label>
+          </div>
           <p id="anonymousId" class="identity-note"></p>
         </section>
         <button id="resetButton" class="danger-button" type="button">Recommencer la promenade</button>
@@ -190,7 +228,7 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.19").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.20").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});
