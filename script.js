@@ -62,11 +62,12 @@ const pointer = { active: false, x: 0, y: 0, worldX: 0 };
 const joystick = { active: false, id: null, x: 0, y: 0 };
 const discoveryRespawnSeconds = 45;
 const letterRespawnDelaySeconds = 35;
-const maxVisibleDiscoveries = 8;
-const minDiscoverySpacing = 145;
+const maxVisibleDiscoveries = 4;
+const minDiscoverySpacing = 400;
 const missionItemSpacing = 1050;
-const missionItemFirstDistance = 760;
-const missionItemRevealDelay = 22;
+const missionItemFirstDistance = 1100;
+const missionItemRevealDelayMin = 10;
+const missionItemRevealDelayMax = 20;
 const farFutureTime = 1000000000;
 const playerAppearanceOptions = {
   skin: {
@@ -432,26 +433,32 @@ function ensureMissionDiscoveryItems() {
   const templateItem = getMissionCatalogItem(state.activeQuest.itemId);
   if (!templateItem) return;
   const slots = ensureActiveQuestMissionSlots();
-  slots.forEach((slotX, slot) => {
-    const id = makeId(templateItem.id, 9000 + state.completedQuests * 100 + slot);
-    if (!state.worldDiscoveries[id]) {
-      state.worldDiscoveries[id] = {
-        ...templateItem,
-        id,
-        x: slotX,
-        place: getPlaceType(slotX),
-        visualType: state.activeQuest.itemId,
-        missionItem: true,
-        zoneKey: `mission-${state.activeQuest.id}`,
-        hiddenUntil: slot === 0 ? 0 : farFutureTime,
-        createdAt: state.time + slot * 0.001
-      };
-      saveGame();
-    } else if (!state.worldDiscoveries[id].collected) {
-      const canReveal = slot <= state.activeQuest.progress && state.time >= (state.activeQuest.nextMissionRevealAt || 0);
-      if (slot === 0 || canReveal) state.worldDiscoveries[id].hiddenUntil = 0;
-    }
+  const questZone = `mission-${state.activeQuest.id}`;
+  const activeSlot = Math.min(state.activeQuest.progress, state.activeQuest.target - 1);
+  const activeId = makeId(templateItem.id, 9000 + state.completedQuests * 100 + activeSlot);
+  Object.values(state.worldDiscoveries).forEach((item) => {
+    if (!item.missionItem || item.zoneKey !== questZone || item.id === activeId) return;
+    if (!item.collected) delete state.worldDiscoveries[item.id];
   });
+  if (state.activeQuest.progress >= state.activeQuest.target) return;
+  if (state.time < (state.activeQuest.nextMissionRevealAt || 0)) return;
+  if (!state.worldDiscoveries[activeId]) {
+    const slotX = slots[activeSlot] || getNextMissionSlotX(activeSlot);
+    state.worldDiscoveries[activeId] = {
+      ...templateItem,
+      id: activeId,
+      x: slotX,
+      place: getPlaceType(slotX),
+      visualType: state.activeQuest.itemId,
+      missionItem: true,
+      zoneKey: questZone,
+      hiddenUntil: 0,
+      createdAt: state.time
+    };
+    saveGame();
+  } else if (!state.worldDiscoveries[activeId].collected) {
+    state.worldDiscoveries[activeId].hiddenUntil = 0;
+  }
 }
 
 function ensureActiveQuestMissionSlots() {
@@ -459,11 +466,25 @@ function ensureActiveQuestMissionSlots() {
   if (!Array.isArray(state.activeQuest.missionSlots) || state.activeQuest.missionSlots.length < state.activeQuest.target) {
     const baseX = Number.isFinite(state.activeQuest.spawnX) ? state.activeQuest.spawnX : state.player.x + missionItemFirstDistance;
     state.activeQuest.missionSlots = Array.from({ length: state.activeQuest.target }, (_, index) => {
-      return Math.max(160, baseX + index * missionItemSpacing + hashNumber(baseX + index * 17) * 260);
+      return getMissionSlotX(baseX, index);
     }).sort((a, b) => a - b);
     saveGame();
   }
   return state.activeQuest.missionSlots;
+}
+
+function getMissionSlotX(baseX, index) {
+  const spread = missionItemSpacing + hashNumber(baseX + index * 17) * 520;
+  return Math.max(160, baseX + index * spread);
+}
+
+function getNextMissionSlotX(index) {
+  const baseX = Number.isFinite(state.activeQuest?.spawnX) ? state.activeQuest.spawnX : state.player.x + missionItemFirstDistance;
+  return getMissionSlotX(baseX, index);
+}
+
+function getMissionRevealDelay() {
+  return missionItemRevealDelayMin + Math.random() * (missionItemRevealDelayMax - missionItemRevealDelayMin);
 }
 
 function ensureActiveQuestSpawnX() {
@@ -1784,6 +1805,7 @@ function isModalOpen() {
     || ui.questCompleteDialog.open
     || ui.villagerDialog.open
     || ui.journalDialog.open
+    || ui.customizeDialog.open
     || ui.optionsDialog.open
     || ui.infoDialog.open
     || ui.cinematic.classList.contains("is-visible")
@@ -2214,8 +2236,7 @@ function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
   const spawnX = state.player.x + missionItemFirstDistance;
   const missionSlots = template.itemId
     ? Array.from({ length: template.target }, (_, index) => {
-      const distance = missionItemFirstDistance + index * missionItemSpacing + hashNumber(seed + index * 7) * 260;
-      return Math.max(160, state.player.x + distance);
+      return getMissionSlotX(spawnX, index);
     }).sort((a, b) => a - b)
     : [];
   return {
@@ -2255,7 +2276,7 @@ function advanceQuest(type, amount = 1) {
   if (!state.activeQuest || state.activeQuest.type !== type) return;
   state.activeQuest.progress = Math.min(state.activeQuest.target, state.activeQuest.progress + amount);
   state.questLastProgressAt = state.time;
-  if (state.activeQuest.itemId) state.activeQuest.nextMissionRevealAt = state.time + missionItemRevealDelay;
+  if (state.activeQuest.itemId) state.activeQuest.nextMissionRevealAt = state.time + getMissionRevealDelay();
   showMessage(`Mission: ${state.activeQuest.objective} ${state.activeQuest.progress} / ${state.activeQuest.target}`);
   updateMissionTracker();
   if (state.activeQuest.progress >= state.activeQuest.target) completeQuest();
