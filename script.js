@@ -54,6 +54,8 @@ const pointer = { active: false, x: 0, y: 0, worldX: 0 };
 const joystick = { active: false, id: null, x: 0, y: 0 };
 const discoveryRespawnSeconds = 45;
 const letterRespawnDelaySeconds = 35;
+const maxVisibleDiscoveries = 8;
+const minDiscoverySpacing = 145;
 let audio = null;
 let lastTime = 0;
 let running = false;
@@ -286,7 +288,7 @@ function isNightTime() {
 }
 
 function getProceduralDiscoveries() {
-  if (!isExpandedWorld()) return addMissionRequiredDiscoveries(discoveries);
+  if (!isExpandedWorld()) return limitVisibleDiscoveries(addMissionRequiredDiscoveries(discoveries));
   const relativeCamera = state.camera.x - world.firstRouteEnd;
   const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
   const end = Math.floor((relativeCamera + window.innerWidth + 900) / world.chapterSize);
@@ -314,7 +316,7 @@ function getProceduralDiscoveries() {
       });
     }
   }
-  return addMissionRequiredDiscoveries(items.concat(getWeatherBonusDiscoveries()));
+  return limitVisibleDiscoveries(addMissionRequiredDiscoveries(items.concat(getWeatherBonusDiscoveries())));
 }
 
 function addMissionRequiredDiscoveries(items) {
@@ -323,19 +325,34 @@ function addMissionRequiredDiscoveries(items) {
   if (!remaining) return items;
   const templateItem = getMissionCatalogItem(state.activeQuest.itemId);
   if (!templateItem) return items;
-  const missionItems = Array.from({ length: remaining }, (_, index) => ({
+  const questSpawnX = ensureActiveQuestSpawnX();
+  const missionItems = Array.from({ length: remaining }, (_, index) => {
+    const slot = state.activeQuest.progress + index;
+    return {
     ...templateItem,
-    id: makeId(templateItem.id, 9000 + state.completedQuests * 100 + state.activeQuest.progress + index),
-    x: state.player.x + 260 + index * 280,
-    place: getPlaceType(),
-    visualType: state.activeQuest.itemId
-  }));
+    id: makeId(templateItem.id, 9000 + state.completedQuests * 100 + slot),
+    x: questSpawnX + slot * 300,
+    place: state.activeQuest.spawnPlace,
+    visualType: state.activeQuest.itemId,
+    missionItem: true
+    };
+  });
   return items.concat(missionItems);
+}
+
+function ensureActiveQuestSpawnX() {
+  if (!state.activeQuest) return state.player.x + 360;
+  if (!Number.isFinite(state.activeQuest.spawnX)) {
+    state.activeQuest.spawnX = state.player.x + 360;
+    state.activeQuest.spawnPlace = getPlaceType(state.activeQuest.spawnX);
+    saveGame();
+  }
+  if (!state.activeQuest.spawnPlace) state.activeQuest.spawnPlace = getPlaceType(state.activeQuest.spawnX);
+  return state.activeQuest.spawnX;
 }
 
 function getWeatherBonusDiscoveries() {
   const weather = getWeatherForChapter();
-  const place = getPlaceType();
   const bonusByWeather = {
     rain: ["mushroom", "stone"],
     wind: ["feather", "leaf"],
@@ -344,16 +361,35 @@ function getWeatherBonusDiscoveries() {
     mist: ["mushroom", "paper"]
   };
   const ids = bonusByWeather[weather.id] || [];
+  const chapterStart = isExpandedWorld()
+    ? world.firstRouteEnd + Math.max(0, state.chapter - 4) * world.chapterSize
+    : 0;
   return ids.map((id, index) => {
     const item = getMissionCatalogItem(id);
+    const x = chapterStart + 880 + index * 520 + hashNumber(state.chapter * 13 + index) * 160;
     return {
       ...item,
       id: makeId(item.id, 7600 + state.chapter * 10 + index),
-      x: state.camera.x + 620 + index * 420 + hashNumber(state.chapter + index) * 90,
-      place,
+      x,
+      place: getPlaceType(x),
       visualType: getItemVisualType(item)
     };
   });
+}
+
+function limitVisibleDiscoveries(items) {
+  const cameraStart = state.camera.x - 140;
+  const cameraEnd = state.camera.x + window.innerWidth + 180;
+  const visible = items
+    .filter((item) => item.x >= cameraStart && item.x <= cameraEnd)
+    .sort((a, b) => Number(Boolean(b.missionItem)) - Number(Boolean(a.missionItem)) || Math.abs(a.x - state.player.x) - Math.abs(b.x - state.player.x));
+  const picked = [];
+  visible.forEach((item) => {
+    if (picked.length >= maxVisibleDiscoveries) return;
+    if (picked.some((other) => Math.abs(other.x - item.x) < minDiscoverySpacing)) return;
+    picked.push(item);
+  });
+  return picked.sort((a, b) => a.x - b.x);
 }
 
 function getProceduralSecretLocations() {
@@ -1882,6 +1918,7 @@ const questTemplates = [
 
 function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
   const template = questTemplates[Math.floor(hashNumber(seed) * questTemplates.length) % questTemplates.length];
+  const spawnX = state.player.x + 360;
   return {
     id: `quest-${Date.now()}-${Math.floor(hashNumber(seed + 2) * 10000)}`,
     title: template.title,
@@ -1890,6 +1927,8 @@ function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
     objective: template.objective,
     hint: template.hint,
     itemId: template.itemId || "",
+    spawnX,
+    spawnPlace: getPlaceType(spawnX),
     type: template.type,
     target: template.target,
     progress: 0,
@@ -2034,6 +2073,8 @@ function normalizeQuest(quest) {
     objective,
     hint: quest.hint || (matchingTemplate && matchingTemplate.hint) || "",
     itemId: quest.itemId || (matchingTemplate && matchingTemplate.itemId) || "",
+    spawnX: Number.isFinite(quest.spawnX) ? quest.spawnX : state.player.x + 360,
+    spawnPlace: quest.spawnPlace || getPlaceType(Number.isFinite(quest.spawnX) ? quest.spawnX : state.player.x + 360),
     progress: Number.isFinite(quest.progress) ? quest.progress : 0,
     target: Number.isFinite(quest.target) ? quest.target : 1,
     rewardCount: Number.isFinite(quest.rewardCount) ? quest.rewardCount : 2
