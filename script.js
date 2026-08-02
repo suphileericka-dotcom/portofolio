@@ -2179,6 +2179,17 @@ function getJourneySummary() {
   return `Aujourd'hui, j'ai explore ${place} sous ${weather}. J'ai garde ${discoveriesToday} souvenir(s) recent(s), rencontre ${knownVillagers} habitant(s), et ${state.activeQuest ? "une mission guide encore mes pas" : "le chemin reste ouvert pour une nouvelle enveloppe"}.`;
 }
 
+function getLastVillagerLine() {
+  const lastEntry = Object.entries(state.villagerLastMet)
+    .filter(([, rawDate]) => rawDate && !Number.isNaN(new Date(rawDate).getTime()))
+    .sort((a, b) => new Date(b[1]).getTime() - new Date(a[1]).getTime())[0];
+  if (!lastEntry) return "Aucune rencontre recente.";
+  const villager = villagers.find((entry) => entry.role === lastEntry[0]);
+  if (!villager) return "Une rencontre a marque cette promenade.";
+  const meetings = state.villagerRelations[villager.role] || 1;
+  return `Derniere rencontre : ${villager.role}, croise ${meetings} fois. "${villager.line}"`;
+}
+
 function formatPlayTime() {
   const minutes = Math.max(1, Math.floor(state.time / 60));
   if (minutes < 60) return `${minutes} min`;

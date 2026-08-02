@@ -1,4 +1,4 @@
-const CACHE_NAME = "bosquet-lent-v13";
+const CACHE_NAME = "bosquet-lent-v14";
 const ASSETS = [
   "./",
   "./index.html",
@@ -28,9 +28,12 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
   event.respondWith(
     fetch(event.request)
       .then((response) => {
+        if (!response || !response.ok) return response;
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;
