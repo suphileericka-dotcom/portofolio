@@ -995,6 +995,17 @@ h2 {
   padding: 0.75rem;
 }
 
+.encyclopedia-card.is-known {
+  cursor: pointer;
+}
+
+.encyclopedia-card.is-known:hover,
+.encyclopedia-card.is-known:focus-visible {
+  border-color: rgba(240, 189, 108, 0.55);
+  background: rgba(240, 189, 108, 0.12);
+  outline: none;
+}
+
 .encyclopedia-card.is-unknown,
 .villager-card.is-unknown,
 .achievement-card.is-unknown,

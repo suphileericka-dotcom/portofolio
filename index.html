@@ -44,7 +44,7 @@
 
     <aside id="message" class="message" aria-live="polite"></aside>
     <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
-    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.26</aside>
+    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.27</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -79,6 +79,16 @@
         <div class="choice-actions">
           <button id="continueDiscoveryButton" class="primary-button" value="close" type="submit">Continuer</button>
         </div>
+      </form>
+    </dialog>
+
+    <dialog id="encyclopediaDetailDialog" class="panel-dialog compact-dialog">
+      <form method="dialog">
+        <header class="panel-header">
+          <h2 id="encyclopediaDetailTitle">Objet</h2>
+          <button class="close-button" value="close" type="submit">Fermer</button>
+        </header>
+        <div id="encyclopediaDetailBody" class="discovery-body"></div>
       </form>
     </dialog>
 
@@ -206,7 +216,7 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.26").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.27").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});

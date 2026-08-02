@@ -16,6 +16,9 @@ const ui = {
   discoveryBody: document.getElementById("discoveryBody"),
   hideDiscoveryPopup: document.getElementById("hideDiscoveryPopup"),
   continueDiscoveryButton: document.getElementById("continueDiscoveryButton"),
+  encyclopediaDetailDialog: document.getElementById("encyclopediaDetailDialog"),
+  encyclopediaDetailTitle: document.getElementById("encyclopediaDetailTitle"),
+  encyclopediaDetailBody: document.getElementById("encyclopediaDetailBody"),
   infoDialog: document.getElementById("infoDialog"),
   optionsDialog: document.getElementById("optionsDialog"),
   journalList: document.getElementById("journalList"),
@@ -1800,6 +1803,7 @@ function draw() {
 function isModalOpen() {
   return Boolean(
     ui.discoveryDialog.open
+    || ui.encyclopediaDetailDialog.open
     || ui.questDialog.open
     || ui.questCompleteDialog.open
     || ui.villagerDialog.open
@@ -2690,18 +2694,35 @@ function renderEncyclopedia() {
   return `<div class="encyclopedia-grid">${itemCatalog.map((item) => {
     const discovered = known.has(item.id);
     return `
-      <article class="encyclopedia-card ${discovered ? "is-known" : "is-unknown"}">
+      <article class="encyclopedia-card ${discovered ? "is-known" : "is-unknown"}" ${discovered ? `data-item-id="${item.id}" tabindex="0" role="button"` : ""}>
         <div class="journal-object-image">${discovered ? getItemIcon(item) : getUnknownItemIcon()}</div>
         <strong>${discovered ? item.label : "Objet inconnu"}</strong>
         <span>${discovered ? `${item.place} - ${getRarityStars(item.rarity)}` : "Silhouette dans le brouillard"}</span>
-        <p>${discovered ? item.text : "Decouvre cet objet pendant l'exploration pour completer sa fiche."}</p>
-        <p><strong>Utilite</strong> ${discovered ? getItemUse(item.id) : "Inconnue"}</p>
-        <p><strong>Lieu</strong> ${discovered ? item.place || "Chemin" : "Inconnu"}</p>
-        <p><strong>Conditions</strong> ${discovered ? getItemConditionHint(item) : "Conditions inconnues"}</p>
-        <p><strong>Premiere decouverte</strong> ${discovered ? formatDiscoveryDate(item.id) : "Non decouvert"}</p>
+        <small>${discovered ? getShortItemConditionHint(item) : "Conditions inconnues"}</small>
       </article>
     `;
   }).join("")}</div>`;
+}
+
+function getShortItemConditionHint(itemOrId) {
+  const hint = getItemConditionHint(itemOrId);
+  return hint.replace("Lieu : ", "").replace(". Condition :", " -").replace("Condition : ", "");
+}
+
+function openEncyclopediaDetail(itemId) {
+  const item = getCatalogItem(itemId);
+  if (!item || !state.inventory[item.id]) return;
+  ui.encyclopediaDetailTitle.textContent = item.label;
+  ui.encyclopediaDetailBody.innerHTML = `
+    <div class="discovery-icon">${getItemIcon(item, "large")}</div>
+    <p>${item.text}</p>
+    <p><strong>Utilite</strong> ${getItemUse(item.id)}</p>
+    <p><strong>Lieu</strong> ${item.place || "Chemin"}</p>
+    <p><strong>Conditions d'apparition</strong> ${getItemConditionHint(item)}</p>
+    <p><strong>Rarete</strong> ${getRarityStars(item.rarity)} - ${item.rarity || "Commun"}</p>
+    <p><strong>Date de decouverte</strong> ${formatDiscoveryDate(item.id)}</p>
+  `;
+  ui.encyclopediaDetailDialog.showModal();
 }
 
 function renderVillagers() {
@@ -3622,6 +3643,17 @@ ui.missionTracker.addEventListener("click", () => {
 ui.journalButton.addEventListener("click", () => {
   buildJournal();
   ui.journalDialog.showModal();
+});
+ui.journalList.addEventListener("click", (event) => {
+  const card = event.target.closest(".encyclopedia-card[data-item-id]");
+  if (card) openEncyclopediaDetail(card.dataset.itemId);
+});
+ui.journalList.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const card = event.target.closest(".encyclopedia-card[data-item-id]");
+  if (!card) return;
+  event.preventDefault();
+  openEncyclopediaDetail(card.dataset.itemId);
 });
 ui.infoButton.addEventListener("click", () => ui.infoDialog.showModal());
 ui.discoveryDialog.addEventListener("close", closeDiscoveryPopup);
