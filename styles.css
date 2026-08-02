@@ -945,18 +945,15 @@ h2 {
   font-weight: 900;
 }
 
-.inventory-gallery,
 .encyclopedia-grid,
 .villager-grid,
 .achievement-grid,
-.season-grid,
-.favorite-grid {
+.season-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: 0.65rem;
 }
 
-.inventory-card,
 .encyclopedia-card,
 .villager-card,
 .achievement-card,
@@ -970,31 +967,8 @@ h2 {
   color: var(--muted);
 }
 
-.inventory-card {
-  padding: 0.7rem;
-}
-
-.inventory-card summary {
-  display: grid;
-  grid-template-columns: 3.3rem 1fr auto;
-  gap: 0.55rem;
-  align-items: center;
-  cursor: pointer;
-}
-
-.inventory-card summary .journal-object-image {
-  width: 3.3rem;
-  height: 3.3rem;
-}
-
-.inventory-card summary small {
-  grid-column: 2 / 4;
-  color: var(--sun);
-  font-weight: 900;
-}
-
-.inventory-card p,
 .villager-card p,
+.encyclopedia-card p,
 .achievement-card p,
 .season-card p,
 .quest-card p,
@@ -1003,7 +977,6 @@ h2 {
   line-height: 1.45;
 }
 
-.inventory-card strong,
 .encyclopedia-card strong,
 .villager-card strong,
 .achievement-card strong,
@@ -1128,25 +1101,6 @@ h2 {
 
 .review-list article {
   padding: 0.7rem 0.85rem;
-}
-
-.favorite-place {
-  min-height: 2.8rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.7rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--line);
-  background: rgba(247, 243, 223, 0.08);
-  color: var(--ink);
-  font-weight: 900;
-}
-
-.favorite-place.is-favorite {
-  border-color: rgba(240, 189, 108, 0.55);
-  background: rgba(240, 189, 108, 0.16);
 }
 
 .album-section p + p {
@@ -1321,8 +1275,7 @@ input[type="range"] {
     min-height: 14rem;
   }
 
-  .daily-sketch,
-  .inventory-card summary {
+  .daily-sketch {
     grid-template-columns: 1fr;
   }
 

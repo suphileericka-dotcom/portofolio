@@ -159,7 +159,6 @@ const state = {
   villagerLastMet: {},
   discoveredPlaces: [],
   visitedVillages: [],
-  favoritePlaces: [],
   journalEvents: [],
   walkMemories: [],
   currentWalk: null,
@@ -2624,8 +2623,6 @@ function playRouteEndCinematic() {
 
 function buildJournal() {
   ui.journalList.innerHTML = "";
-  const uniqueFound = Object.keys(state.inventory).length;
-  const knownVillagers = Object.keys(state.villagerRelations).length;
   const seasonalFound = seasonalEventItems.filter((item) => state.inventory[item.id] > 0).length;
   const currentItem = getLastFoundItem();
   const weather = getWeatherForChapter();
@@ -2665,27 +2662,14 @@ function buildJournal() {
   `;
   ui.journalList.appendChild(book);
 
-  appendJournalBlock("Inventaire", renderInventoryGallery(), "gallery-block");
   appendJournalBlock("Encyclopedie", renderEncyclopedia(), "gallery-block");
   appendJournalBlock("Habitants", renderVillagers(), "gallery-block");
-  appendJournalBlock("Mon compagnon", renderCompanionJournal(), "companion-block");
-  appendJournalBlock("Carte", renderMap(), "map-block");
   appendJournalBlock("Missions", renderQuestCard(true), "mission-block");
+  appendJournalBlock("Carte", renderMap(), "map-block");
   appendJournalBlock("Succes", renderAchievements(), "gallery-block");
+  appendJournalBlock("Album photo", renderPhotoAlbum(), "review-block");
   appendJournalBlock("Album des saisons", renderSeasonAlbum(seasonalFound), "gallery-block");
-  appendJournalBlock("Revue", renderJournalReview(), "review-block");
-  appendJournalBlock("Souvenirs de promenade", renderWalkMemories(), "review-block");
-  appendJournalBlock("Endroits preferes", renderFavoritePlaces(), "favorites-block");
-  appendJournalBlock("Statistiques", `
-    <div class="stat-grid">
-      <span><strong>${Math.round(state.player.x / 100) / 10} km</strong>Parcours</span>
-      <span><strong>${state.discoveries.length}</strong>Objets ramasses</span>
-      <span><strong>${formatPlayTime()}</strong>Temps joue</span>
-      <span><strong>${state.completedQuests}</strong>Missions terminees</span>
-      <span><strong>${knownVillagers} / ${villagers.length}</strong>Habitants</span>
-      <span><strong>${uniqueFound} / ${itemCatalog.length}</strong>Encyclopedie</span>
-    </div>
-  `, "stats-block");
+  if (state.companion.unlocked) appendJournalBlock("Mon compagnon", renderCompanionJournal(), "companion-block");
 }
 
 function appendJournalBlock(title, html, className = "") {
@@ -2701,33 +2685,6 @@ function getLastFoundItem() {
   return getCatalogItem(lastId) || { id: lastId, label: lastId.replace(/-/g, " "), text: "Une trace retrouvee dans le carnet." };
 }
 
-function getInventoryItems() {
-  return Object.entries(state.inventory)
-    .map(([id, count]) => ({ item: getCatalogItem(id) || { id, label: id.replace(/-/g, " "), rarity: "Commun", place: "Chemin", text: "Objet note dans l'inventaire." }, count }))
-    .sort((a, b) => b.count - a.count || a.item.label.localeCompare(b.item.label));
-}
-
-function renderInventoryGallery() {
-  const items = getInventoryItems();
-  if (!items.length) return `<p class="empty-note">Le sac attend sa premiere trouvaille.</p>`;
-  return `<div class="inventory-gallery">${items.map(({ item, count }) => `
-    <details class="inventory-card">
-      <summary>
-        <span class="journal-object-image">${getItemIcon(item)}</span>
-        <strong>${item.label}</strong>
-        <span>x${count}</span>
-        <small>${getRarityStars(item.rarity)}</small>
-      </summary>
-      <p>${item.text}</p>
-      <p><strong>Utilite</strong> ${getItemUse(item.id)}</p>
-      <p><strong>Ou la trouver</strong> ${item.place || "Chemin"}</p>
-      <p><strong>Conditions d'apparition</strong> ${getItemConditionHint(item)}</p>
-      <p><strong>Premiere decouverte</strong> ${formatDiscoveryDate(item.id)}</p>
-      <p><strong>Nombre recolte</strong> ${count}</p>
-    </details>
-  `).join("")}</div>`;
-}
-
 function renderEncyclopedia() {
   const known = new Set(Object.keys(state.inventory));
   return `<div class="encyclopedia-grid">${itemCatalog.map((item) => {
@@ -2736,8 +2693,12 @@ function renderEncyclopedia() {
       <article class="encyclopedia-card ${discovered ? "is-known" : "is-unknown"}">
         <div class="journal-object-image">${discovered ? getItemIcon(item) : getUnknownItemIcon()}</div>
         <strong>${discovered ? item.label : "Objet inconnu"}</strong>
-    <span>${discovered ? `${item.place} - ${getRarityStars(item.rarity)}` : "Silhouette dans le brouillard"}</span>
-        <small>${discovered ? getItemConditionHint(item) : "Conditions inconnues"}</small>
+        <span>${discovered ? `${item.place} - ${getRarityStars(item.rarity)}` : "Silhouette dans le brouillard"}</span>
+        <p>${discovered ? item.text : "Decouvre cet objet pendant l'exploration pour completer sa fiche."}</p>
+        <p><strong>Utilite</strong> ${discovered ? getItemUse(item.id) : "Inconnue"}</p>
+        <p><strong>Lieu</strong> ${discovered ? item.place || "Chemin" : "Inconnu"}</p>
+        <p><strong>Conditions</strong> ${discovered ? getItemConditionHint(item) : "Conditions inconnues"}</p>
+        <p><strong>Premiere decouverte</strong> ${discovered ? formatDiscoveryDate(item.id) : "Non decouvert"}</p>
       </article>
     `;
   }).join("")}</div>`;
@@ -2829,24 +2790,12 @@ function renderSeasonAlbum(seasonalFound) {
   }).join("")}<p class="album-count">${seasonalFound} / ${seasonalEventItems.length} souvenirs saisonniers</p></div>`;
 }
 
-function renderJournalReview() {
-  const events = state.journalEvents.length
-    ? state.journalEvents.slice(-10).reverse()
-    : [{ day: 1, text: "Aujourd'hui, j'ai commence mon voyage." }];
-  return `<div class="review-list">${events.map((event) => `
-    <article>
-      <strong>Jour ${event.day}</strong>
-      <p>${event.text}</p>
-    </article>
-  `).join("")}</div>`;
-}
-
-function renderWalkMemories() {
+function renderPhotoAlbum() {
   const current = getCurrentWalkMemory();
   const memories = [current].concat(state.walkMemories.slice(-5).reverse()).filter(Boolean);
   return `<div class="review-list">${memories.map((memory, index) => `
     <article>
-      <strong>${index === 0 ? "Promenade en cours" : `Promenade n°${memory.number}`}</strong>
+      <strong>${index === 0 ? "Photo de la promenade en cours" : `Photo n°${memory.number}`}</strong>
       <p>Saison : ${memory.season} - Meteo : ${memory.weather} - Lieu : ${memory.place}</p>
       <p>Objets decouverts : ${memory.discoveries} - Habitants rencontres : ${memory.villagers} - Mission terminee : ${memory.questDone ? "Oui" : "Non"}</p>
       <p>${memory.summary}</p>
@@ -2912,16 +2861,6 @@ function getCurrentWalkMemory() {
     ...state.currentWalk,
     summary: `Aujourd'hui, j'ai explore ${state.currentWalk.place.toLowerCase()} sous ${state.currentWalk.weather.toLowerCase()}. ${state.currentWalk.bestMoment}`
   };
-}
-
-function renderFavoritePlaces() {
-  const places = state.discoveredPlaces.length ? state.discoveredPlaces : ["Foret", "Riviere", "Village", "Clairiere"];
-  return `<div class="favorite-grid">${places.map((place) => {
-    const favorite = state.favoritePlaces.includes(place);
-    return `<button class="favorite-place ${favorite ? "is-favorite" : ""}" type="button" data-place="${place}">
-      <span>${favorite ? "*" : "+"}</span>${place}
-    </button>`;
-  }).join("")}</div>`;
 }
 
 function getAchievementList() {
@@ -2999,17 +2938,6 @@ function getVillagerPortrait(index) {
   return ["P", "D", "G", "E", "M", "R", "F", "A", "J", "V", "H", "B", "T", "S"][index % 14];
 }
 
-function toggleFavoritePlace(place) {
-  if (!place) return;
-  if (state.favoritePlaces.includes(place)) {
-    state.favoritePlaces = state.favoritePlaces.filter((entry) => entry !== place);
-  } else {
-    state.favoritePlaces.push(place);
-  }
-  saveGame();
-  buildJournal();
-}
-
 function startGame(reset = false) {
   savePlayerProfile();
   if (reset) resetGame();
@@ -3040,7 +2968,6 @@ function resetGame() {
   state.villagerLastMet = {};
   state.discoveredPlaces = [];
   state.visitedVillages = [];
-  state.favoritePlaces = [];
   state.journalEvents = [];
   state.walkMemories = [];
   state.currentWalk = null;
@@ -3080,7 +3007,6 @@ function saveGame() {
     villagerLastMet: state.villagerLastMet,
     discoveredPlaces: state.discoveredPlaces,
     visitedVillages: state.visitedVillages,
-    favoritePlaces: state.favoritePlaces,
     journalEvents: state.journalEvents,
     walkMemories: state.walkMemories,
     currentWalk: state.currentWalk,
@@ -3126,7 +3052,6 @@ function loadGame() {
     state.villagerLastMet = payload.villagerLastMet && typeof payload.villagerLastMet === "object" ? payload.villagerLastMet : {};
     state.discoveredPlaces = Array.isArray(payload.discoveredPlaces) ? payload.discoveredPlaces : [];
     state.visitedVillages = Array.isArray(payload.visitedVillages) ? payload.visitedVillages : [];
-    state.favoritePlaces = Array.isArray(payload.favoritePlaces) ? payload.favoritePlaces : [];
     state.journalEvents = Array.isArray(payload.journalEvents) ? payload.journalEvents : [];
     state.walkMemories = Array.isArray(payload.walkMemories) ? payload.walkMemories : [];
     state.currentWalk = payload.currentWalk && typeof payload.currentWalk === "object" ? payload.currentWalk : null;
@@ -3697,10 +3622,6 @@ ui.missionTracker.addEventListener("click", () => {
 ui.journalButton.addEventListener("click", () => {
   buildJournal();
   ui.journalDialog.showModal();
-});
-ui.journalList.addEventListener("click", (event) => {
-  const favoriteButton = event.target.closest(".favorite-place");
-  if (favoriteButton) toggleFavoritePlace(favoriteButton.dataset.place);
 });
 ui.infoButton.addEventListener("click", () => ui.infoDialog.showModal());
 ui.discoveryDialog.addEventListener("close", closeDiscoveryPopup);
