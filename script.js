@@ -262,7 +262,7 @@ function getWeatherForChapter(chapter = state.chapter) {
 }
 
 function getProceduralDiscoveries() {
-  if (!isExpandedWorld()) return discoveries;
+  if (!isExpandedWorld()) return addMissionRequiredDiscoveries(discoveries);
   const relativeCamera = state.camera.x - world.firstRouteEnd;
   const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
   const end = Math.floor((relativeCamera + window.innerWidth + 900) / world.chapterSize);
@@ -278,7 +278,8 @@ function getProceduralDiscoveries() {
       rarity: local.rarity,
       place: local.place,
       use: local.use,
-      text: local.text
+      text: local.text,
+      visualType: getItemVisualType(local)
     });
     const seasonItem = seasonalEventItems.find((entry) => entry.season === getSeason(chapter));
     if (seasonItem && chapterIndex % 4 === 2) {
@@ -289,7 +290,23 @@ function getProceduralDiscoveries() {
       });
     }
   }
-  return items;
+  return addMissionRequiredDiscoveries(items);
+}
+
+function addMissionRequiredDiscoveries(items) {
+  if (!state.activeQuest || !state.activeQuest.itemId) return items;
+  const remaining = Math.max(0, state.activeQuest.target - state.activeQuest.progress);
+  if (!remaining) return items;
+  const templateItem = getMissionCatalogItem(state.activeQuest.itemId);
+  if (!templateItem) return items;
+  const missionItems = Array.from({ length: remaining }, (_, index) => ({
+    ...templateItem,
+    id: makeId(templateItem.id, 9000 + state.completedQuests * 100 + state.activeQuest.progress + index),
+    x: state.player.x + 260 + index * 280,
+    place: getPlaceType(),
+    visualType: state.activeQuest.itemId
+  }));
+  return items.concat(missionItems);
 }
 
 function getProceduralSecretLocations() {
@@ -843,7 +860,7 @@ function drawLetterIcon(x, y) {
 }
 
 function drawCollectibleIcon(item, index, x, y) {
-  const baseId = baseDiscoveryId(item.id);
+  const baseId = getItemVisualType(item);
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(1.08, 1.08);
@@ -997,8 +1014,52 @@ function drawCollectibleIcon(item, index, x, y) {
     ctx.lineTo(0, 10);
     ctx.closePath();
     ctx.fill();
+  } else if (baseId === "flower") {
+    ctx.strokeStyle = "#6a7b39";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, 24);
+    ctx.quadraticCurveTo(-4, 2, 0, -11);
+    ctx.stroke();
+    ["#e8d49a", "#f0bd6c", "#ce6f75", "#f7f3df"].forEach((color, petal) => {
+      const angle = petal * Math.PI / 2;
+      drawEllipse(Math.cos(angle) * 10, -18 + Math.sin(angle) * 8, 8, 12, color);
+    });
+    drawEllipse(0, -18, 6, 6, "#8b6840");
+  } else if (baseId === "paper") {
+    ctx.save();
+    ctx.rotate(-0.16);
+    ctx.fillStyle = "#ead68d";
+    roundedRect(-18, -24, 36, 45, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = "#8b6840";
+    ctx.lineWidth = 2;
+    for (let line = -12; line <= 8; line += 10) {
+      ctx.beginPath();
+      ctx.moveTo(-10, line);
+      ctx.lineTo(10, line - 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (baseId === "tool") {
+    ctx.strokeStyle = "#d8bd7c";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(-18, 18);
+    ctx.lineTo(18, -18);
+    ctx.stroke();
+    drawEllipse(18, -18, 10, 10, "#f0bd6c");
+    drawEllipse(-18, 18, 8, 8, "#67b4c8");
   } else {
-    drawEllipse(0, 0, 10, 10, ["#f0bd6c", "#67b4c8", "#f7f3df", "#8ebf76", "#ce6f75"][index % 5]);
+    ctx.save();
+    ctx.rotate(0.7);
+    ctx.fillStyle = ["#f0bd6c", "#67b4c8", "#f7f3df", "#8ebf76", "#ce6f75"][index % 5];
+    roundedRect(-12, -18, 24, 36, 7);
+    ctx.fill();
+    ctx.stroke();
+    drawEllipse(0, -4, 5, 5, "rgba(20,34,33,0.22)");
+    ctx.restore();
   }
   ctx.restore();
 }
@@ -1535,13 +1596,62 @@ function getItemUse(itemId) {
   return need ? need.use : "Servira peut-etre plus loin sur la route.";
 }
 
+function getMissionCatalogItem(itemId) {
+  if (itemId === "flower") {
+    return { id: "wild-flower", label: "Fleur sauvage", rarity: "Commun", place: "Clairiere", text: "Une fleur claire, facile a reconnaitre dans l'herbe.", use: "Compte pour les missions de fleurs et l'album des saisons." };
+  }
+  const found = itemCatalog.find((item) => item.id === itemId)
+    || discoveries.find((item) => item.id === itemId);
+  if (found) return found;
+  return discoveries[0];
+}
+
+function getItemVisualType(itemOrId) {
+  const item = typeof itemOrId === "string" ? getCatalogItem(itemOrId) || { id: itemOrId, label: itemOrId } : itemOrId || {};
+  const explicit = item.visualType;
+  if (explicit) return explicit;
+  const baseId = baseDiscoveryId(item.id);
+  const label = (item.label || "").toLowerCase();
+  if (baseId === "leaf" || label.includes("feuille") || label.includes("foug")) return "leaf";
+  if (baseId === "stone" || label.includes("pierre") || label.includes("galet") || label.includes("silex") || label.includes("rune")) return "stone";
+  if (baseId === "feather" || label.includes("plume") || label.includes("aile")) return "feather";
+  if (baseId === "shell" || label.includes("coquillage") || label.includes("coquille") || label.includes("coque")) return "shell";
+  if (baseId === "cone" || label.includes("pomme de pin") || label.includes("noisette") || label.includes("graine")) return "cone";
+  if (baseId === "mushroom" || label.includes("champignon")) return "mushroom";
+  if (baseId === "star" || label.includes("etoile") || label.includes("soleil")) return "star";
+  if (baseId.includes("flower") || baseId.includes("bloom") || label.includes("fleur") || label.includes("petale") || label.includes("rose")) return "flower";
+  if (label.includes("carte") || label.includes("note") || label.includes("sceau")) return "paper";
+  if (label.includes("clef") || label.includes("boussole") || label.includes("medaille") || label.includes("bague")) return "tool";
+  return "charm";
+}
+
+function getItemConditionHint(itemOrId) {
+  const type = getItemVisualType(itemOrId);
+  const hints = {
+    leaf: "Lieu : foret ou clairiere. Condition : visible par temps calme ou venteux.",
+    stone: "Lieu : riviere, montagne ou vieux sentier. Condition : souvent apres la pluie.",
+    feather: "Lieu : village ou foret. Condition : apparait plus souvent quand il y a du vent.",
+    shell: "Lieu : riviere ou bord de l'eau. Condition : cherche pres des zones humides.",
+    cone: "Lieu : foret. Condition : tres courant en automne et dans les zones boisees.",
+    mushroom: "Lieu : sous-bois sombre ou humide. Condition : pluie, brume ou zones nocturnes.",
+    star: "Lieu : montagne ou nuit. Condition : rare, apres un evenement lumineux.",
+    flower: "Lieu : clairiere. Condition : printemps ou beau temps.",
+    paper: "Lieu : village ou ancien chemin. Condition : pres des enveloppes et des habitants.",
+    tool: "Lieu : village, ponts et lieux secrets. Condition : objet rare de progression.",
+    charm: "Lieu : chemin d'exploration. Condition : peut apparaitre dans plusieurs zones."
+  };
+  return hints[type] || hints.charm;
+}
+
 function getItemSymbol(item) {
   const rarity = item.rarity || (getCatalogItem(item.id) || {}).rarity || "Commun";
-  const baseId = baseDiscoveryId(item.id);
-  if (baseId.includes("leaf")) return "L";
-  if (baseId.includes("mushroom")) return "M";
-  if (baseId.includes("star")) return "*";
-  if (baseId.includes("shell")) return "C";
+  const baseId = getItemVisualType(item);
+  if (baseId === "leaf") return "L";
+  if (baseId === "mushroom") return "M";
+  if (baseId === "star") return "*";
+  if (baseId === "shell") return "C";
+  if (baseId === "stone") return "P";
+  if (baseId === "flower") return "F";
   if (rarity === "Legendaire") return "*";
   if (rarity === "Rare") return "+";
   return "o";
@@ -1642,13 +1752,13 @@ function exploreSecretLocation(secret) {
 }
 
 const questTemplates = [
-  { title: "Collection de coquillages", description: "Ramasse 6 coquillages pendentifs d'exploration.", objective: "Ramasser 6 coquillages.", type: "collect:shell", target: 6 },
-  { title: "Herbier nervure", description: "Ramasse 5 feuilles nervurees pour completer une page du carnet.", objective: "Ramasser 5 feuilles nervurees.", type: "collect:leaf", target: 5 },
-  { title: "Lueurs du sous-bois", description: "Trouve 3 champignons lumineux pres des passages humides.", objective: "Trouver 3 champignons lumineux.", type: "collect:mushroom", target: 3 },
-  { title: "Pierres anciennes", description: "Ramasse 8 pierres anciennes ou polies sur le chemin.", objective: "Ramasser 8 pierres anciennes.", type: "collect:stone", target: 8 },
-  { title: "Fleurs sauvages", description: "Decouvre 4 fleurs sauvages pendant l'exploration.", objective: "Decouvrir 4 fleurs sauvages.", type: "collectFlower", target: 4 },
-  { title: "Voix du village", description: "Rencontre 5 habitants et ecoute leurs histoires.", objective: "Rencontrer 5 habitants.", type: "talkVillager", target: 5 },
-  { title: "Chemins nouveaux", description: "Explore 2 nouveaux villages sur la route.", objective: "Explorer 2 nouveaux villages.", type: "village", target: 2 }
+  { title: "Collection de coquillages", description: "Ramasse 6 coquillages pendentifs d'exploration.", objective: "Ramasser 6 coquillages.", type: "collect:shell", itemId: "shell", target: 6, hint: "Indice : les coquillages apparaissent pres de la riviere. Des coquillages de mission brillent sur le chemin tant que cette mission est active." },
+  { title: "Herbier nervure", description: "Ramasse 5 feuilles nervurees pour completer une page du carnet.", objective: "Ramasser 5 feuilles nervurees.", type: "collect:leaf", itemId: "leaf", target: 5, hint: "Indice : les feuilles nervurees apparaissent en foret et dans les clairieres. La mission en fait apparaitre assez pour la terminer." },
+  { title: "Lueurs du sous-bois", description: "Trouve 3 champignons lumineux pres des passages humides.", objective: "Trouver 3 champignons lumineux.", type: "collect:mushroom", itemId: "mushroom", target: 3, hint: "Indice : les champignons lumineux poussent dans les zones sombres ou humides. Pendant cette mission, de vrais champignons lumineux apparaissent devant toi." },
+  { title: "Pierres anciennes", description: "Ramasse 8 pierres anciennes ou polies sur le chemin.", objective: "Ramasser 8 pierres anciennes.", type: "collect:stone", itemId: "stone", target: 8, hint: "Indice : les pierres anciennes se trouvent pres des rivieres, des montagnes et des vieux sentiers. La mission garantit assez de pierres visibles." },
+  { title: "Fleurs sauvages", description: "Decouvre 4 fleurs sauvages pendant l'exploration.", objective: "Decouvrir 4 fleurs sauvages.", type: "collectFlower", itemId: "flower", target: 4, hint: "Indice : les fleurs sauvages aiment les clairieres et le printemps. La mission place des fleurs reconnaissables sur ta route." },
+  { title: "Voix du village", description: "Rencontre 5 habitants et ecoute leurs histoires.", objective: "Rencontrer 5 habitants.", type: "talkVillager", target: 5, hint: "Indice : avance jusqu'aux villages et parle aux habitants quand l'invite apparait." },
+  { title: "Chemins nouveaux", description: "Explore 2 nouveaux villages sur la route.", objective: "Explorer 2 nouveaux villages.", type: "village", target: 2, hint: "Indice : continue vers la droite. Chaque nouveau village visite fait avancer la mission." }
 ];
 
 function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
@@ -1659,6 +1769,8 @@ function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
     label: template.objective,
     description: template.description,
     objective: template.objective,
+    hint: template.hint,
+    itemId: template.itemId || "",
     type: template.type,
     target: template.target,
     progress: 0,
@@ -1729,6 +1841,7 @@ function openQuestPopup(quest) {
     <p>${quest.description}</p>
     <p><strong>Objectif precis :</strong> ${quest.objective}</p>
     <p><strong>Progression :</strong> ${quest.progress} / ${quest.target}</p>
+    <p><strong>Indice :</strong> ${getQuestHint(quest)}</p>
     <p><strong>Recompense :</strong> 2 objets aleatoires</p>
   `;
   ui.questDialog.showModal();
@@ -1761,6 +1874,7 @@ function updateMissionTracker() {
       <strong>Mission</strong>
       <span>${state.activeQuest.objective}</span>
       <span>${state.activeQuest.progress} / ${state.activeQuest.target}</span>
+      <span>${getQuestHint(state.activeQuest)}</span>
     `;
     ui.missionTracker.classList.add("is-visible");
     return;
@@ -1787,22 +1901,34 @@ function normalizeQuest(quest) {
     label: objective,
     description: quest.description || (matchingTemplate && matchingTemplate.description) || objective,
     objective,
+    hint: quest.hint || (matchingTemplate && matchingTemplate.hint) || "",
+    itemId: quest.itemId || (matchingTemplate && matchingTemplate.itemId) || "",
     progress: Number.isFinite(quest.progress) ? quest.progress : 0,
     target: Number.isFinite(quest.target) ? quest.target : 1,
     rewardCount: Number.isFinite(quest.rewardCount) ? quest.rewardCount : 2
   };
 }
 
+function getQuestHint(quest) {
+  if (!quest) return "Aucune mission active pour le moment.";
+  if (quest.hint) return quest.hint;
+  if (quest.itemId) return getItemConditionHint(quest.itemId);
+  if (quest.type === "talkVillager") return "Indice : cherche les villages et parle aux habitants.";
+  if (quest.type === "village") return "Indice : continue la route jusqu'au prochain village.";
+  return "Indice : avance doucement, le monde fera apparaitre ce dont tu as besoin.";
+}
+
 function isFlowerDiscovery(item) {
   const label = (item.label || "").toLowerCase();
   const id = baseDiscoveryId(item.id);
-  return id.includes("flower") || id.includes("bloom") || label.includes("fleur");
+  return getItemVisualType(item) === "flower" || id.includes("flower") || id.includes("bloom") || label.includes("fleur");
 }
 
 function getQuestCollectTypes(item) {
   const baseId = baseDiscoveryId(item.id);
   const label = (item.label || "").toLowerCase();
-  const types = new Set([`collect:${baseId}`]);
+  const visualType = getItemVisualType(item);
+  const types = new Set([`collect:${baseId}`, `collect:${visualType}`]);
   if (label.includes("coquillage") || label.includes("coquille")) types.add("collect:shell");
   if (label.includes("feuille")) types.add("collect:leaf");
   if (label.includes("champignon")) types.add("collect:mushroom");
@@ -2053,6 +2179,7 @@ function renderInventoryGallery() {
       <p>${item.text}</p>
       <p><strong>Utilite</strong> ${getItemUse(item.id)}</p>
       <p><strong>Ou la trouver</strong> ${item.place || "Chemin"}</p>
+      <p><strong>Conditions d'apparition</strong> ${getItemConditionHint(item)}</p>
       <p><strong>Premiere decouverte</strong> ${formatDiscoveryDate(item.id)}</p>
       <p><strong>Nombre recolte</strong> ${count}</p>
     </details>
@@ -2067,7 +2194,8 @@ function renderEncyclopedia() {
       <article class="encyclopedia-card ${discovered ? "is-known" : "is-unknown"}">
         <div class="journal-object-image">${discovered ? getItemSymbol(item) : "?"}</div>
         <strong>${discovered ? item.label : "Objet inconnu"}</strong>
-        <span>${discovered ? `${item.place} - ${getRarityStars(item.rarity)}` : "Silhouette dans le brouillard"}</span>
+    <span>${discovered ? `${item.place} - ${getRarityStars(item.rarity)}` : "Silhouette dans le brouillard"}</span>
+        <small>${discovered ? getItemConditionHint(item) : "Conditions inconnues"}</small>
       </article>
     `;
   }).join("")}</div>`;
@@ -2106,6 +2234,7 @@ function renderQuestCard(compact = false) {
   return `<article class="quest-card ${compact ? "is-wide" : ""}">
     <strong>${quest.title || quest.label}</strong>
     <p>${quest.objective}</p>
+    <p>${getQuestHint(quest)}</p>
     <div class="progress-bar"><span style="width: ${percent}%"></span></div>
     <p>${quest.progress} / ${quest.target}</p>
     <p>Recompense : 2 objets aleatoires</p>
