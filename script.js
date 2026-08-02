@@ -93,6 +93,7 @@ const state = {
   nextLetterAt: 0,
   completedQuests: 0,
   rewards: [],
+  worldDiscoveries: {},
   discoveryRespawns: {},
   achievements: [],
   companion: { unlocked: false, finds: 0, nextHelpAt: 0 },
@@ -288,56 +289,99 @@ function isNightTime() {
 }
 
 function getProceduralDiscoveries() {
-  if (!isExpandedWorld()) return limitVisibleDiscoveries(addMissionRequiredDiscoveries(discoveries));
-  const relativeCamera = state.camera.x - world.firstRouteEnd;
-  const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
-  const end = Math.floor((relativeCamera + window.innerWidth + 900) / world.chapterSize);
-  const items = [];
-  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
-    const chapter = chapterIndex + 4;
-    const local = generatedCatalogItems[chapterIndex % generatedCatalogItems.length] || discoveries[chapterIndex % discoveries.length];
-    const jitter = 160 + hashNumber(chapter * 3.1) * 520;
-    items.push({
-      id: makeId(local.id, chapter),
-      x: world.firstRouteEnd + chapterIndex * world.chapterSize + jitter,
-      label: local.label,
-      rarity: local.rarity,
-      place: local.place,
-      use: local.use,
-      text: local.text,
-      visualType: getItemVisualType(local)
-    });
-    const seasonItem = seasonalEventItems.find((entry) => entry.season === getSeason(chapter));
-    if (seasonItem && chapterIndex % 4 === 2) {
-      items.push({
-        ...seasonItem,
-        id: makeId(seasonItem.id, chapter),
-        x: world.firstRouteEnd + chapterIndex * world.chapterSize + 1320 + hashNumber(chapter * 7.7) * 420
-      });
-    }
-  }
-  return limitVisibleDiscoveries(addMissionRequiredDiscoveries(items.concat(getWeatherBonusDiscoveries())));
+  ensureVisibleDiscoveryZones();
+  return limitVisibleDiscoveries(Object.values(state.worldDiscoveries));
 }
 
-function addMissionRequiredDiscoveries(items) {
-  if (!state.activeQuest || !state.activeQuest.itemId) return items;
+function getVisibleWorldDiscoveries() {
+  return getProceduralDiscoveries();
+}
+
+function ensureVisibleDiscoveryZones() {
+  if (!isExpandedWorld()) {
+    ensureDiscoveryZone("start", () => discoveries.map((item, index) => ({
+      ...item,
+      id: normalizeDiscoveryId(item.id),
+      x: item.x,
+      visualType: getItemVisualType(item),
+      zoneKey: "start",
+      createdAt: state.time + index * 0.001
+    })));
+    ensureMissionDiscoveryItems();
+    return;
+  }
+  const relativeCamera = state.camera.x - world.firstRouteEnd;
+  const start = Math.max(0, Math.floor((relativeCamera - 700) / world.chapterSize));
+  const end = Math.floor((relativeCamera + window.innerWidth + 1100) / world.chapterSize);
+  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
+    ensureDiscoveryZone(`chapter-${chapterIndex}`, () => buildChapterDiscoveries(chapterIndex));
+  }
+  ensureMissionDiscoveryItems();
+}
+
+function ensureDiscoveryZone(zoneKey, builder) {
+  const hasZone = Object.values(state.worldDiscoveries).some((item) => item.zoneKey === zoneKey);
+  if (hasZone) return;
+  builder().forEach((item) => {
+    state.worldDiscoveries[item.id] = item;
+  });
+}
+
+function buildChapterDiscoveries(chapterIndex) {
+  const chapter = chapterIndex + 4;
+  const items = [];
+  const local = generatedCatalogItems[chapterIndex % generatedCatalogItems.length] || discoveries[chapterIndex % discoveries.length];
+  const jitter = 160 + hashNumber(chapter * 3.1) * 520;
+  items.push({
+    id: makeId(local.id, chapter),
+    x: world.firstRouteEnd + chapterIndex * world.chapterSize + jitter,
+    label: local.label,
+    rarity: local.rarity,
+    place: local.place,
+    use: local.use,
+    text: local.text,
+    visualType: getItemVisualType(local),
+    zoneKey: `chapter-${chapterIndex}`,
+    createdAt: state.time
+  });
+  const seasonItem = seasonalEventItems.find((entry) => entry.season === getSeason(chapter));
+  if (seasonItem && chapterIndex % 4 === 2) {
+    items.push({
+      ...seasonItem,
+      id: makeId(seasonItem.id, chapter),
+      x: world.firstRouteEnd + chapterIndex * world.chapterSize + 1320 + hashNumber(chapter * 7.7) * 420,
+      visualType: getItemVisualType(seasonItem),
+      zoneKey: `chapter-${chapterIndex}`,
+      createdAt: state.time + 0.01
+    });
+  }
+  return items.concat(buildWeatherBonusDiscoveries(chapterIndex));
+}
+
+function ensureMissionDiscoveryItems() {
+  if (!state.activeQuest || !state.activeQuest.itemId) return;
   const remaining = Math.max(0, state.activeQuest.target - state.activeQuest.progress);
-  if (!remaining) return items;
+  if (!remaining) return;
   const templateItem = getMissionCatalogItem(state.activeQuest.itemId);
-  if (!templateItem) return items;
+  if (!templateItem) return;
   const questSpawnX = ensureActiveQuestSpawnX();
-  const missionItems = Array.from({ length: remaining }, (_, index) => {
+  Array.from({ length: remaining }, (_, index) => {
     const slot = state.activeQuest.progress + index;
-    return {
-    ...templateItem,
-    id: makeId(templateItem.id, 9000 + state.completedQuests * 100 + slot),
-    x: questSpawnX + slot * 300,
-    place: state.activeQuest.spawnPlace,
-    visualType: state.activeQuest.itemId,
-    missionItem: true
+    const id = makeId(templateItem.id, 9000 + state.completedQuests * 100 + slot);
+    if (!state.worldDiscoveries[id]) {
+      state.worldDiscoveries[id] = {
+        ...templateItem,
+        id,
+        x: questSpawnX + slot * 300,
+        place: state.activeQuest.spawnPlace,
+        visualType: state.activeQuest.itemId,
+        missionItem: true,
+        zoneKey: `mission-${state.activeQuest.id}`,
+        createdAt: state.time + slot * 0.001
+      };
+      saveGame();
     };
   });
-  return items.concat(missionItems);
 }
 
 function ensureActiveQuestSpawnX() {
@@ -351,7 +395,7 @@ function ensureActiveQuestSpawnX() {
   return state.activeQuest.spawnX;
 }
 
-function getWeatherBonusDiscoveries() {
+function buildWeatherBonusDiscoveries(chapterIndex) {
   const weather = getWeatherForChapter();
   const bonusByWeather = {
     rain: ["mushroom", "stone"],
@@ -362,7 +406,7 @@ function getWeatherBonusDiscoveries() {
   };
   const ids = bonusByWeather[weather.id] || [];
   const chapterStart = isExpandedWorld()
-    ? world.firstRouteEnd + Math.max(0, state.chapter - 4) * world.chapterSize
+    ? world.firstRouteEnd + Math.max(0, chapterIndex) * world.chapterSize
     : 0;
   return ids.map((id, index) => {
     const item = getMissionCatalogItem(id);
@@ -372,7 +416,9 @@ function getWeatherBonusDiscoveries() {
       id: makeId(item.id, 7600 + state.chapter * 10 + index),
       x,
       place: getPlaceType(x),
-      visualType: getItemVisualType(item)
+      visualType: getItemVisualType(item),
+      zoneKey: `chapter-${chapterIndex}`,
+      createdAt: state.time + 0.02 + index * 0.001
     };
   });
 }
@@ -381,7 +427,7 @@ function limitVisibleDiscoveries(items) {
   const cameraStart = state.camera.x - 140;
   const cameraEnd = state.camera.x + window.innerWidth + 180;
   const visible = items
-    .filter((item) => item.x >= cameraStart && item.x <= cameraEnd)
+    .filter((item) => !item.collected && item.x >= cameraStart && item.x <= cameraEnd)
     .sort((a, b) => Number(Boolean(b.missionItem)) - Number(Boolean(a.missionItem)) || Math.abs(a.x - state.player.x) - Math.abs(b.x - state.player.x));
   const picked = [];
   visible.forEach((item) => {
@@ -815,7 +861,7 @@ function drawWorldObjects() {
     if (!lit && Math.abs(state.player.x - lantern.x) < 78) drawPrompt(lantern.x, y - 58, "E allumer");
   });
 
-  getProceduralDiscoveries().forEach((item, index) => {
+  getVisibleWorldDiscoveries().forEach((item, index) => {
     const collected = hasCollectedDiscovery(item);
     if (collected) return;
     const y = world.ground - 20 + Math.sin(state.time * 2 + index) * 5;
@@ -1594,6 +1640,7 @@ function update(dt) {
   }
   updateCompanion(dt);
   updateQuestHint(dt);
+  updateWorldDiscoveries();
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
   const targetZoom = p.rest > 0 ? 1.08 : 1;
@@ -1643,7 +1690,7 @@ function interact() {
     return;
   }
 
-  const item = getProceduralDiscoveries().find((entry) => !hasCollectedDiscovery(entry) && Math.abs(entry.x - p.x) < 78);
+  const item = getVisibleWorldDiscoveries().find((entry) => !hasCollectedDiscovery(entry) && Math.abs(entry.x - p.x) < 78);
   if (item) {
     const showedPopup = collectDiscovery(item);
     if (!showedPopup) playSoftPing();
@@ -1734,6 +1781,7 @@ function getWeatherProtection(weatherId = state.weather) {
 }
 
 function hasCollectedDiscovery(item) {
+  if (item.collected) return true;
   const respawnAt = state.discoveryRespawns[item.id] || state.discoveryRespawns[normalizeDiscoveryId(item.id)] || 0;
   return respawnAt > state.time;
 }
@@ -1967,6 +2015,20 @@ function updateQuestHint() {
   showMessageFor(getQuestHint(state.activeQuest), 7200);
 }
 
+function updateWorldDiscoveries() {
+  Object.values(state.worldDiscoveries).forEach((item) => {
+    if (item.missionItem && (!state.activeQuest || item.zoneKey !== `mission-${state.activeQuest.id}`)) {
+      delete state.worldDiscoveries[item.id];
+      return;
+    }
+    if (item.collected && Number.isFinite(item.respawnAt) && state.time >= item.respawnAt) {
+      item.collected = false;
+      item.respawnAt = 0;
+      delete state.discoveryRespawns[item.id];
+    }
+  });
+}
+
 function completeQuest() {
   const quest = state.activeQuest;
   state.activeQuest = null;
@@ -2111,7 +2173,13 @@ function getQuestCollectTypes(item) {
 function collectDiscovery(item, quiet = false) {
   const baseId = baseDiscoveryId(item.id);
   const firstTime = !hasCollectedBaseItem(baseId);
-  if (!quiet) state.discoveryRespawns[item.id] = state.time + discoveryRespawnSeconds;
+  if (!quiet) {
+    state.discoveryRespawns[item.id] = state.time + discoveryRespawnSeconds;
+    if (state.worldDiscoveries[item.id]) {
+      state.worldDiscoveries[item.id].collected = true;
+      state.worldDiscoveries[item.id].respawnAt = state.time + discoveryRespawnSeconds;
+    }
+  }
   state.discoveries.push(item.id);
   state.inventory[baseId] = (state.inventory[baseId] || 0) + 1;
   if (firstTime) {
@@ -2646,6 +2714,7 @@ function resetGame() {
   state.nextLetterAt = 0;
   state.completedQuests = 0;
   state.rewards = [];
+  state.worldDiscoveries = {};
   state.discoveryRespawns = {};
   state.achievements = [];
   state.companion = { unlocked: false, finds: 0, nextHelpAt: 0 };
@@ -2684,6 +2753,7 @@ function saveGame() {
     nextLetterAt: state.nextLetterAt,
     completedQuests: state.completedQuests,
     rewards: state.rewards,
+    worldDiscoveries: state.worldDiscoveries,
     discoveryRespawns: state.discoveryRespawns,
     achievements: state.achievements,
     companion: state.companion,
@@ -2728,6 +2798,7 @@ function loadGame() {
     state.nextLetterAt = Number.isFinite(payload.nextLetterAt) ? payload.nextLetterAt : 0;
     state.completedQuests = Number.isFinite(payload.completedQuests) ? payload.completedQuests : 0;
     state.rewards = Array.isArray(payload.rewards) ? payload.rewards : [];
+    state.worldDiscoveries = payload.worldDiscoveries && typeof payload.worldDiscoveries === "object" ? payload.worldDiscoveries : {};
     state.discoveryRespawns = payload.discoveryRespawns && typeof payload.discoveryRespawns === "object" ? payload.discoveryRespawns : {};
     state.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
     state.companion = payload.companion && typeof payload.companion === "object"

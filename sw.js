@@ -1,4 +1,4 @@
-const CACHE_NAME = "bosquet-lent-v17";
+const CACHE_NAME = "bosquet-lent-v18";
 const ASSETS = [
   "./",
   "./index.html",
