@@ -446,6 +446,10 @@ h2 {
   padding: 1rem;
 }
 
+#journalDialog {
+  width: min(68rem, calc(100vw - 1.4rem));
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -460,8 +464,8 @@ h2 {
 
 .journal-list {
   display: grid;
-  gap: 0.7rem;
-  max-height: 25rem;
+  gap: 0.9rem;
+  max-height: min(34rem, calc(100vh - 8rem));
   overflow: auto;
   padding-right: 0.25rem;
 }
@@ -489,6 +493,113 @@ h2 {
   background: rgba(240, 189, 108, 0.12);
 }
 
+.journal-book {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.journal-page {
+  min-height: 20rem;
+  padding: 1rem;
+  border: 1px solid rgba(88, 61, 33, 0.28);
+  border-radius: 0.5rem;
+  background:
+    linear-gradient(90deg, rgba(247, 243, 223, 0.13), rgba(247, 243, 223, 0.04)),
+    rgba(240, 189, 108, 0.08);
+}
+
+.journal-page h3,
+.journal-section h3 {
+  margin: 0 0 0.75rem;
+  color: var(--sun);
+  font-family: "Spectral", Georgia, serif;
+  font-size: 1.45rem;
+  letter-spacing: 0;
+}
+
+.journal-kicker {
+  margin: 0 0 0.35rem;
+  color: rgba(247, 243, 223, 0.55);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.journey-stamps,
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.journey-stamps span,
+.stat-grid span {
+  padding: 0.55rem;
+  border-radius: 0.5rem;
+  background: rgba(20, 34, 33, 0.35);
+  color: var(--muted);
+  line-height: 1.25;
+}
+
+.stat-grid strong {
+  display: block;
+  color: var(--sun);
+  font-size: 1.1rem;
+}
+
+.journey-note,
+.last-meeting,
+.empty-note,
+.album-count {
+  margin: 0.85rem 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.journal-landscape {
+  height: 7rem;
+  display: grid;
+  place-items: center;
+  margin-top: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(247, 243, 223, 0.14);
+  background: linear-gradient(180deg, rgba(103, 180, 200, 0.42), rgba(142, 191, 118, 0.28) 62%, rgba(79, 62, 38, 0.42));
+  color: var(--ink);
+  font-size: 3rem;
+  font-weight: 900;
+}
+
+.season-automne {
+  background: linear-gradient(180deg, rgba(206, 111, 117, 0.28), rgba(240, 189, 108, 0.22));
+}
+
+.season-hiver {
+  background: linear-gradient(180deg, rgba(103, 180, 200, 0.24), rgba(247, 243, 223, 0.16));
+}
+
+.season-ete {
+  background: linear-gradient(180deg, rgba(240, 189, 108, 0.28), rgba(103, 180, 200, 0.2));
+}
+
+.daily-sketch {
+  display: grid;
+  grid-template-columns: 5.6rem 1fr;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.daily-sketch p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.journal-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
 .journal-card {
   display: grid;
   grid-template-columns: 4.6rem 1fr;
@@ -506,6 +617,187 @@ h2 {
   color: var(--sun);
   font-size: 1.6rem;
   font-weight: 900;
+}
+
+.journal-object-image.large {
+  width: 5.6rem;
+  height: 5.6rem;
+  font-size: 2rem;
+}
+
+.inventory-gallery,
+.encyclopedia-grid,
+.villager-grid,
+.achievement-grid,
+.season-grid,
+.favorite-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.65rem;
+}
+
+.inventory-card,
+.encyclopedia-card,
+.villager-card,
+.achievement-card,
+.season-card,
+.quest-card,
+.review-list article,
+.map-zone {
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: rgba(247, 243, 223, 0.07);
+  color: var(--muted);
+}
+
+.inventory-card {
+  padding: 0.7rem;
+}
+
+.inventory-card summary {
+  display: grid;
+  grid-template-columns: 3.3rem 1fr auto;
+  gap: 0.55rem;
+  align-items: center;
+  cursor: pointer;
+}
+
+.inventory-card summary .journal-object-image {
+  width: 3.3rem;
+  height: 3.3rem;
+}
+
+.inventory-card summary small {
+  grid-column: 2 / 4;
+  color: var(--sun);
+  font-weight: 900;
+}
+
+.inventory-card p,
+.villager-card p,
+.achievement-card p,
+.season-card p,
+.quest-card p,
+.review-list p {
+  margin: 0.35rem 0 0;
+  line-height: 1.45;
+}
+
+.inventory-card strong,
+.encyclopedia-card strong,
+.villager-card strong,
+.achievement-card strong,
+.season-card strong,
+.quest-card strong,
+.review-list strong {
+  color: var(--ink);
+}
+
+.encyclopedia-card,
+.villager-card,
+.achievement-card,
+.season-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem;
+}
+
+.encyclopedia-card.is-unknown,
+.villager-card.is-unknown,
+.achievement-card.is-unknown,
+.season-card.is-unknown,
+.map-zone.is-fog {
+  filter: grayscale(1);
+  opacity: 0.62;
+}
+
+.encyclopedia-card.is-unknown .journal-object-image {
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(247, 243, 223, 0.42);
+}
+
+.villager-portrait,
+.season-illustration {
+  width: 3.7rem;
+  height: 3.7rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(240, 189, 108, 0.25);
+  background: rgba(240, 189, 108, 0.12);
+  color: var(--sun);
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.travel-map {
+  min-height: 14rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, rgba(103, 180, 200, 0.14), rgba(142, 191, 118, 0.12));
+}
+
+.map-zone {
+  display: grid;
+  place-items: center;
+  padding: 0.8rem;
+  text-align: center;
+}
+
+.map-zone span {
+  color: var(--sun);
+  font-size: 1.6rem;
+  font-weight: 900;
+}
+
+.quest-card {
+  padding: 0.8rem;
+}
+
+.progress-bar {
+  height: 0.7rem;
+  overflow: hidden;
+  margin: 0.65rem 0 0.2rem;
+  border-radius: 999px;
+  background: rgba(247, 243, 223, 0.12);
+}
+
+.progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sun);
+}
+
+.review-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.review-list article {
+  padding: 0.7rem 0.85rem;
+}
+
+.favorite-place {
+  min-height: 2.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--line);
+  background: rgba(247, 243, 223, 0.08);
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.favorite-place.is-favorite {
+  border-color: rgba(240, 189, 108, 0.55);
+  background: rgba(240, 189, 108, 0.16);
 }
 
 .album-section p + p {
@@ -658,6 +950,18 @@ input[type="range"] {
   }
 
   .journal-card {
+    grid-template-columns: 1fr;
+  }
+
+  .journal-book,
+  .travel-map,
+  .journey-stamps,
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-sketch,
+  .inventory-card summary {
     grid-template-columns: 1fr;
   }
 
