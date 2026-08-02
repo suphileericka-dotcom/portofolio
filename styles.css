@@ -143,34 +143,6 @@ h2 {
   cursor: pointer;
 }
 
-.appearance-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: 0.7rem;
-  margin-top: 0.9rem;
-}
-
-.options-section {
-  margin-top: 1.1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--line);
-}
-
-.options-section h3 {
-  margin: 0 0 0.7rem;
-  color: var(--sun);
-  font-size: 0.88rem;
-  font-weight: 800;
-  letter-spacing: 0;
-}
-
-.identity-note {
-  width: 100%;
-  margin: 0;
-  color: rgba(247, 243, 223, 0.62);
-  font-size: 0.82rem;
-}
-
 .start-actions {
   display: flex;
   flex-wrap: wrap;
@@ -461,6 +433,117 @@ h2 {
 
 #journalDialog {
   width: min(68rem, calc(100vw - 1.4rem));
+}
+
+.customize-dialog {
+  width: min(48rem, calc(100vw - 1.4rem));
+}
+
+.customize-layout {
+  display: grid;
+  grid-template-columns: minmax(12rem, 15rem) 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.custom-preview {
+  min-height: 18rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(240, 189, 108, 0.22);
+  border-radius: 0.5rem;
+  background:
+    linear-gradient(180deg, rgba(103, 180, 200, 0.16), rgba(142, 191, 118, 0.11)),
+    rgba(247, 243, 223, 0.06);
+}
+
+.custom-preview canvas {
+  width: min(13.75rem, 100%);
+  height: auto;
+}
+
+.appearance-choices {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.appearance-choice-group {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.appearance-choice-group h3 {
+  margin: 0;
+  color: var(--sun);
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.appearance-choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.appearance-choice {
+  min-width: 5.8rem;
+  min-height: 4rem;
+  display: grid;
+  place-items: center;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  color: var(--ink);
+  background: rgba(247, 243, 223, 0.08);
+  font-weight: 850;
+  font-size: 0.78rem;
+  line-height: 1.12;
+  text-align: center;
+}
+
+.appearance-choice.is-selected {
+  border-color: rgba(240, 189, 108, 0.82);
+  background: rgba(240, 189, 108, 0.18);
+}
+
+.appearance-choice:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.appearance-choice small {
+  color: var(--muted);
+  font-size: 0.64rem;
+  line-height: 1.1;
+}
+
+.appearance-swatch,
+.appearance-icon {
+  width: 1.55rem;
+  height: 1.55rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(247, 243, 223, 0.42);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgba(20, 34, 33, 0.2);
+}
+
+.appearance-icon {
+  border-radius: 0.45rem;
+  background: rgba(20, 34, 33, 0.42);
+  color: var(--sun);
+  font-size: 0.72rem;
+}
+
+.customize-name {
+  margin-top: 1rem;
+}
+
+.customize-actions {
+  justify-content: flex-end;
 }
 
 .panel-header {
@@ -998,8 +1081,13 @@ input[type="range"] {
   .journal-book,
   .travel-map,
   .journey-stamps,
-  .stat-grid {
+  .stat-grid,
+  .customize-layout {
     grid-template-columns: 1fr;
+  }
+
+  .custom-preview {
+    min-height: 14rem;
   }
 
   .daily-sketch,

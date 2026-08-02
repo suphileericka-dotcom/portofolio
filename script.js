@@ -6,6 +6,7 @@ const ui = {
   startButton: document.getElementById("startButton"),
   continueButton: document.getElementById("continueButton"),
   journalButton: document.getElementById("journalButton"),
+  customizeButton: document.getElementById("customizeButton"),
   optionsButton: document.getElementById("optionsButton"),
   infoButton: document.getElementById("infoButton"),
   muteButton: document.getElementById("muteButton"),
@@ -22,8 +23,12 @@ const ui = {
   message: document.getElementById("message"),
   cinematic: document.getElementById("cinematic"),
   cinematicText: document.getElementById("cinematicText"),
+  customizeDialog: document.getElementById("customizeDialog"),
+  appearancePreview: document.getElementById("appearancePreview"),
+  appearanceChoices: document.getElementById("appearanceChoices"),
+  cancelAppearanceButton: document.getElementById("cancelAppearanceButton"),
+  applyAppearanceButton: document.getElementById("applyAppearanceButton"),
   nicknameInput: document.getElementById("nicknameInput"),
-  anonymousId: document.getElementById("anonymousId"),
   villagerDialog: document.getElementById("villagerDialog"),
   villagerTitle: document.getElementById("villagerTitle"),
   villagerText: document.getElementById("villagerText"),
@@ -44,10 +49,6 @@ const ui = {
   natureVolume: document.getElementById("natureVolume"),
   effectsVolume: document.getElementById("effectsVolume"),
   resetDiscoveryTipsButton: document.getElementById("resetDiscoveryTipsButton"),
-  skinSelect: document.getElementById("skinSelect"),
-  hairSelect: document.getElementById("hairSelect"),
-  outfitSelect: document.getElementById("outfitSelect"),
-  accessorySelect: document.getElementById("accessorySelect"),
   mobilePad: document.getElementById("mobilePad"),
   padKnob: document.getElementById("padKnob")
 };
@@ -87,6 +88,50 @@ const playerAppearanceOptions = {
     sun: "#d09a3d"
   }
 };
+
+const appearanceChoiceGroups = [
+  {
+    key: "skin",
+    title: "Peau",
+    choices: [
+      { value: "warm", label: "Doree", color: "#f0bd6c" },
+      { value: "light", label: "Claire", color: "#f1cf9b" },
+      { value: "brown", label: "Ambree", color: "#b77746" },
+      { value: "dark", label: "Foncee", color: "#7a4d2b" }
+    ]
+  },
+  {
+    key: "hair",
+    title: "Cheveux",
+    choices: [
+      { value: "dark", label: "Bruns courts", icon: "BC" },
+      { value: "curly", label: "Boucles rousses", icon: "BR" },
+      { value: "blond", label: "Blonds", icon: "BL" },
+      { value: "black", label: "Noirs", icon: "NO" }
+    ]
+  },
+  {
+    key: "outfit",
+    title: "Tenue",
+    choices: [
+      { value: "berry", label: "Manteau baie", color: "#ce6f75" },
+      { value: "forest", label: "Cape foret", color: "#4f8763" },
+      { value: "river", label: "Veste riviere", color: "#4f7f99" },
+      { value: "sun", label: "Pull soleil", color: "#d09a3d" }
+    ]
+  },
+  {
+    key: "accessory",
+    title: "Accessoire",
+    choices: [
+      { value: "bag", label: "Sac", icon: "S" },
+      { value: "scarf", label: "Echarpe", icon: "E" },
+      { value: "hat", label: "Chapeau", icon: "C" },
+      { value: "lantern", label: "Lanterne", icon: "L", locked: () => state.lanterns.length < 3, hint: "Debloquee apres 3 lanternes" }
+    ]
+  }
+];
+
 let audio = null;
 let lastTime = 0;
 let running = false;
@@ -94,6 +139,7 @@ let messageTimer = 0;
 let pendingVillagerHelp = null;
 let pendingDiscoveryPopup = null;
 let audioSceneKey = "";
+let appearanceDraft = null;
 
 const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0, action: "", actionUntil: 0 },
@@ -3127,29 +3173,175 @@ function loadPlayerProfile() {
     state.playerProfile.appearance = normalizeAppearance();
   }
   ui.nicknameInput.value = state.playerProfile.nickname;
-  syncAppearanceControls();
-  ui.anonymousId.textContent = `Identifiant anonyme: ${state.playerProfile.id.slice(0, 8)}...`;
   savePlayerProfile();
 }
 
 function savePlayerProfile() {
-  const nickname = ui.nicknameInput.value.trim().slice(0, 18) || "Voyageur";
+  const nickname = ui.nicknameInput.value.trim().slice(0, 18) || state.playerProfile.nickname || "Voyageur";
   state.playerProfile.nickname = nickname;
-  state.playerProfile.appearance = normalizeAppearance({
-    skin: ui.skinSelect.value,
-    hair: ui.hairSelect.value,
-    outfit: ui.outfitSelect.value,
-    accessory: ui.accessorySelect.value
-  });
+  state.playerProfile.appearance = normalizeAppearance(state.playerProfile.appearance);
   localStorage.setItem(playerKey, JSON.stringify(state.playerProfile));
 }
 
-function syncAppearanceControls() {
-  const appearance = normalizeAppearance(state.playerProfile.appearance);
-  ui.skinSelect.value = appearance.skin;
-  ui.hairSelect.value = appearance.hair;
-  ui.outfitSelect.value = appearance.outfit;
-  ui.accessorySelect.value = appearance.accessory;
+function getChoiceLocked(choice) {
+  return typeof choice.locked === "function" ? choice.locked() : Boolean(choice.locked);
+}
+
+function openCustomizeDialog() {
+  appearanceDraft = normalizeAppearance(state.playerProfile.appearance);
+  ui.nicknameInput.value = state.playerProfile.nickname;
+  renderAppearanceChoices();
+  drawAppearancePreview();
+  ui.customizeDialog.showModal();
+}
+
+function renderAppearanceChoices() {
+  ui.appearanceChoices.innerHTML = appearanceChoiceGroups.map((group) => {
+    const choices = group.choices.map((choice) => {
+      const locked = getChoiceLocked(choice);
+      const selected = appearanceDraft[group.key] === choice.value;
+      const swatch = choice.color
+        ? `<span class="appearance-swatch" style="background:${choice.color}"></span>`
+        : `<span class="appearance-icon">${choice.icon || choice.label.slice(0, 1)}</span>`;
+      const hint = locked ? `<small>${choice.hint || "A debloquer"}</small>` : "";
+      return `
+        <button class="appearance-choice ${selected ? "is-selected" : ""}" type="button" data-category="${group.key}" data-value="${choice.value}" ${locked ? "disabled" : ""} title="${choice.label}">
+          ${swatch}
+          <span>${choice.label}</span>
+          ${hint}
+        </button>
+      `;
+    }).join("");
+    return `
+      <section class="appearance-choice-group">
+        <h3>${group.title}</h3>
+        <div class="appearance-choice-row">${choices}</div>
+      </section>
+    `;
+  }).join("");
+}
+
+function chooseAppearanceOption(category, value) {
+  const group = appearanceChoiceGroups.find((entry) => entry.key === category);
+  const choice = group?.choices.find((entry) => entry.value === value);
+  if (!group || !choice || getChoiceLocked(choice)) return;
+  appearanceDraft = normalizeAppearance({ ...appearanceDraft, [category]: value });
+  renderAppearanceChoices();
+  drawAppearancePreview();
+}
+
+function applyAppearanceChanges() {
+  state.playerProfile.nickname = ui.nicknameInput.value.trim().slice(0, 18) || "Voyageur";
+  state.playerProfile.appearance = normalizeAppearance(appearanceDraft || state.playerProfile.appearance);
+  ui.nicknameInput.value = state.playerProfile.nickname;
+  savePlayerProfile();
+  saveGame();
+  setPlayerAction("reward", 0.8);
+  showMessage("Apparence enregistree.");
+}
+
+function cancelAppearanceChanges() {
+  appearanceDraft = normalizeAppearance(state.playerProfile.appearance);
+  ui.nicknameInput.value = state.playerProfile.nickname;
+  drawAppearancePreview();
+}
+
+function drawPreviewRoundedRect(previewCtx, x, y, w, h, r) {
+  previewCtx.beginPath();
+  previewCtx.moveTo(x + r, y);
+  previewCtx.arcTo(x + w, y, x + w, y + h, r);
+  previewCtx.arcTo(x + w, y + h, x, y + h, r);
+  previewCtx.arcTo(x, y + h, x, y, r);
+  previewCtx.arcTo(x, y, x + w, y, r);
+  previewCtx.closePath();
+}
+
+function drawAppearancePreview() {
+  if (!ui.appearancePreview) return;
+  const previewCtx = ui.appearancePreview.getContext("2d");
+  const appearance = normalizeAppearance(appearanceDraft || state.playerProfile.appearance);
+  const skin = playerAppearanceOptions.skin[appearance.skin];
+  const hair = playerAppearanceOptions.hair[appearance.hair];
+  const body = playerAppearanceOptions.outfit[appearance.outfit];
+  previewCtx.clearRect(0, 0, ui.appearancePreview.width, ui.appearancePreview.height);
+  previewCtx.save();
+  previewCtx.translate(110, 146);
+  previewCtx.fillStyle = "rgba(0, 0, 0, 0.18)";
+  previewCtx.beginPath();
+  previewCtx.ellipse(0, 88, 48, 12, 0, 0, Math.PI * 2);
+  previewCtx.fill();
+  previewCtx.strokeStyle = "#2d2730";
+  previewCtx.lineWidth = 10;
+  previewCtx.lineCap = "round";
+  previewCtx.beginPath();
+  previewCtx.moveTo(-14, 42);
+  previewCtx.lineTo(-31, 87);
+  previewCtx.moveTo(14, 42);
+  previewCtx.lineTo(31, 87);
+  previewCtx.stroke();
+  if (appearance.accessory === "bag") {
+    previewCtx.fillStyle = "#8b6840";
+    drawPreviewRoundedRect(previewCtx, -48, 0, 30, 46, 9);
+    previewCtx.fill();
+  }
+  previewCtx.fillStyle = body;
+  previewCtx.beginPath();
+  previewCtx.ellipse(0, 28, 38, 50, 0, 0, Math.PI * 2);
+  previewCtx.fill();
+  previewCtx.fillStyle = "rgba(255, 255, 255, 0.1)";
+  previewCtx.beginPath();
+  previewCtx.ellipse(-12, 8, 12, 26, -0.2, 0, Math.PI * 2);
+  previewCtx.fill();
+  if (appearance.accessory === "scarf") {
+    previewCtx.fillStyle = "#d8bd7c";
+    drawPreviewRoundedRect(previewCtx, -32, -13, 64, 13, 7);
+    previewCtx.fill();
+    drawPreviewRoundedRect(previewCtx, 19, -5, 13, 38, 7);
+    previewCtx.fill();
+  }
+  previewCtx.fillStyle = skin;
+  previewCtx.beginPath();
+  previewCtx.arc(0, -45, 38, 0, Math.PI * 2);
+  previewCtx.fill();
+  previewCtx.fillStyle = "#28312e";
+  previewCtx.beginPath();
+  previewCtx.arc(15, -48, 4.8, 0, Math.PI * 2);
+  previewCtx.fill();
+  previewCtx.fillStyle = hair;
+  previewCtx.beginPath();
+  previewCtx.ellipse(-12, -66, 43, 22, -0.26, Math.PI * 0.9, Math.PI * 2.08);
+  previewCtx.lineTo(-36, -45);
+  previewCtx.quadraticCurveTo(-9, -56, 28, -72);
+  previewCtx.fill();
+  if (appearance.accessory === "hat") {
+    previewCtx.fillStyle = "#6f4729";
+    drawPreviewRoundedRect(previewCtx, -36, -84, 68, 15, 8);
+    previewCtx.fill();
+    drawPreviewRoundedRect(previewCtx, -22, -104, 40, 28, 9);
+    previewCtx.fill();
+  }
+  previewCtx.strokeStyle = "#2d2730";
+  previewCtx.lineWidth = 9;
+  previewCtx.lineCap = "round";
+  previewCtx.beginPath();
+  previewCtx.moveTo(-28, 18);
+  previewCtx.lineTo(-44, 43);
+  previewCtx.moveTo(28, 18);
+  previewCtx.lineTo(48, -8);
+  previewCtx.stroke();
+  if (appearance.accessory === "lantern") {
+    previewCtx.strokeStyle = "#8b6840";
+    previewCtx.lineWidth = 3;
+    previewCtx.beginPath();
+    previewCtx.moveTo(-34, 35);
+    previewCtx.lineTo(-55, 62);
+    previewCtx.stroke();
+    previewCtx.fillStyle = "rgba(255, 220, 122, 0.8)";
+    previewCtx.beginPath();
+    previewCtx.ellipse(-60, 69, 11, 15, 0, 0, Math.PI * 2);
+    previewCtx.fill();
+  }
+  previewCtx.restore();
 }
 
 function loadOptions() {
@@ -3465,17 +3657,16 @@ ui.mobilePad.addEventListener("pointerup", () => {
 
 ui.startButton.addEventListener("click", () => startGame(true));
 ui.continueButton.addEventListener("click", () => startGame(false));
-ui.nicknameInput.addEventListener("change", () => {
-  savePlayerProfile();
-  saveGame();
+ui.customizeButton.addEventListener("click", openCustomizeDialog);
+ui.appearanceChoices.addEventListener("click", (event) => {
+  const button = event.target.closest(".appearance-choice");
+  if (!button) return;
+  chooseAppearanceOption(button.dataset.category, button.dataset.value);
 });
-[ui.skinSelect, ui.hairSelect, ui.outfitSelect, ui.accessorySelect].forEach((control) => {
-  control.addEventListener("change", () => {
-    savePlayerProfile();
-    saveGame();
-    setPlayerAction("reward", 0.8);
-  });
-});
+ui.nicknameInput.addEventListener("input", drawAppearancePreview);
+ui.applyAppearanceButton.addEventListener("click", applyAppearanceChanges);
+ui.cancelAppearanceButton.addEventListener("click", cancelAppearanceChanges);
+ui.customizeDialog.addEventListener("close", cancelAppearanceChanges);
 ui.giveItemButton.addEventListener("click", givePendingItem);
 ui.refuseHelpButton.addEventListener("click", refusePendingHelp);
 ui.claimQuestRewardButton.addEventListener("click", claimQuestReward);

@@ -37,13 +37,14 @@
         <button id="muteButton" class="sound-button" type="button" title="Couper le son" aria-label="Couper le son">Son</button>
         <button id="infoButton" class="icon-button info-button" type="button" title="Informations" aria-label="Informations">ℹ️</button>
         <button id="journalButton" class="icon-button" type="button" title="Carnet">Carnet</button>
+        <button id="customizeButton" class="icon-button" type="button" title="Personnaliser">Personnaliser</button>
         <button id="optionsButton" class="icon-button" type="button" title="Options">Options</button>
       </div>
     </section>
 
     <aside id="message" class="message" aria-live="polite"></aside>
     <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
-    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.22</aside>
+    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.23</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -134,6 +135,29 @@
       </form>
     </dialog>
 
+    <dialog id="customizeDialog" class="panel-dialog customize-dialog">
+      <form method="dialog">
+        <header class="panel-header">
+          <h2>Personnaliser mon personnage</h2>
+          <button class="close-button" value="close" type="submit">Fermer</button>
+        </header>
+        <div class="customize-layout">
+          <section class="custom-preview" aria-label="Apercu du personnage">
+            <canvas id="appearancePreview" width="220" height="260"></canvas>
+          </section>
+          <section id="appearanceChoices" class="appearance-choices"></section>
+        </div>
+        <label class="field-row customize-name">
+          <span>Nom</span>
+          <input id="nicknameInput" type="text" maxlength="18" autocomplete="nickname" placeholder="Voyageur">
+        </label>
+        <div class="choice-actions customize-actions">
+          <button id="cancelAppearanceButton" class="secondary-button" value="close" type="submit">Annuler</button>
+          <button id="applyAppearanceButton" class="primary-button" value="close" type="submit">Appliquer</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="infoDialog" class="panel-dialog compact-dialog">
       <form method="dialog">
         <header class="panel-header">
@@ -174,52 +198,6 @@
           <input id="effectsVolume" type="range" min="0" max="1" step="0.01" value="0.25">
         </label>
         <button id="resetDiscoveryTipsButton" class="secondary-button wide-button" type="button">Reactiver toutes les explications des objets</button>
-        <section class="options-section" aria-label="Joueur">
-          <h3>Joueur</h3>
-          <label class="field-row">
-            <span>Pseudo</span>
-            <input id="nicknameInput" type="text" maxlength="18" autocomplete="nickname" placeholder="Voyageur">
-          </label>
-          <div class="appearance-grid" aria-label="Personnaliser mon voyageur">
-            <label class="field-row">
-              <span>Peau</span>
-              <select id="skinSelect">
-                <option value="warm">Doree</option>
-                <option value="light">Claire</option>
-                <option value="brown">Brune</option>
-                <option value="dark">Foncee</option>
-              </select>
-            </label>
-            <label class="field-row">
-              <span>Cheveux</span>
-              <select id="hairSelect">
-                <option value="dark">Bruns courts</option>
-                <option value="curly">Boucles rousses</option>
-                <option value="blond">Blonds doux</option>
-                <option value="black">Noirs epais</option>
-              </select>
-            </label>
-            <label class="field-row">
-              <span>Tenue</span>
-              <select id="outfitSelect">
-                <option value="berry">Manteau baie</option>
-                <option value="forest">Veste foret</option>
-                <option value="river">Cape riviere</option>
-                <option value="sun">Tunique soleil</option>
-              </select>
-            </label>
-            <label class="field-row">
-              <span>Accessoire</span>
-              <select id="accessorySelect">
-                <option value="bag">Sac</option>
-                <option value="scarf">Echarpe</option>
-                <option value="hat">Casquette</option>
-                <option value="lantern">Lanterne</option>
-              </select>
-            </label>
-          </div>
-          <p id="anonymousId" class="identity-note"></p>
-        </section>
         <button id="resetButton" class="danger-button" type="button">Recommencer la promenade</button>
       </form>
     </dialog>
@@ -228,7 +206,7 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.22").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.23").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});
