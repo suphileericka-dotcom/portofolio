@@ -81,6 +81,10 @@ const state = {
   visitedVillages: [],
   favoritePlaces: [],
   journalEvents: [],
+  walkMemories: [],
+  currentWalk: null,
+  questLastProgressAt: 0,
+  lastQuestHintAt: 0,
   openedSecrets: [],
   activeQuest: null,
   pendingQuestReward: null,
@@ -227,6 +231,13 @@ const fireflies = Array.from({ length: 32 }, (_, index) => ({
   phase: index * 1.7
 }));
 
+const ambientAnimals = Array.from({ length: 16 }, (_, index) => ({
+  x: 700 + index * 620 + hashNumber(index + 4) * 260,
+  type: ["bird", "rabbit", "frog", "squirrel"][index % 4],
+  phase: index * 1.23,
+  scare: 0
+}));
+
 const trees = Array.from({ length: 95 }, (_, index) => {
   const x = index * 82 + Math.sin(index * 4.2) * 55;
   return {
@@ -261,6 +272,19 @@ function getWeatherForChapter(chapter = state.chapter) {
   return weatherTypes.find((weather) => weather.id === weatherSchedule[index]) || weatherTypes[0];
 }
 
+function getDayPhase() {
+  const cycle = 260;
+  const progress = ((state.time % cycle) + cycle) % cycle / cycle;
+  if (progress < 0.24) return { id: "morning", label: "Matin", night: 0, progress };
+  if (progress < 0.58) return { id: "day", label: "Jour", night: 0, progress };
+  if (progress < 0.72) return { id: "evening", label: "Soir", night: 0.28, progress };
+  return { id: "night", label: "Nuit", night: 0.78, progress };
+}
+
+function isNightTime() {
+  return getDayPhase().night > 0.5;
+}
+
 function getProceduralDiscoveries() {
   if (!isExpandedWorld()) return addMissionRequiredDiscoveries(discoveries);
   const relativeCamera = state.camera.x - world.firstRouteEnd;
@@ -290,7 +314,7 @@ function getProceduralDiscoveries() {
       });
     }
   }
-  return addMissionRequiredDiscoveries(items);
+  return addMissionRequiredDiscoveries(items.concat(getWeatherBonusDiscoveries()));
 }
 
 function addMissionRequiredDiscoveries(items) {
@@ -307,6 +331,29 @@ function addMissionRequiredDiscoveries(items) {
     visualType: state.activeQuest.itemId
   }));
   return items.concat(missionItems);
+}
+
+function getWeatherBonusDiscoveries() {
+  const weather = getWeatherForChapter();
+  const place = getPlaceType();
+  const bonusByWeather = {
+    rain: ["mushroom", "stone"],
+    wind: ["feather", "leaf"],
+    clear: ["flower", "shell"],
+    snow: ["cone", "star"],
+    mist: ["mushroom", "paper"]
+  };
+  const ids = bonusByWeather[weather.id] || [];
+  return ids.map((id, index) => {
+    const item = getMissionCatalogItem(id);
+    return {
+      ...item,
+      id: makeId(item.id, 7600 + state.chapter * 10 + index),
+      x: state.camera.x + 620 + index * 420 + hashNumber(state.chapter + index) * 90,
+      place,
+      visualType: getItemVisualType(item)
+    };
+  });
 }
 
 function getProceduralSecretLocations() {
@@ -477,15 +524,32 @@ function roundedRect(x, y, w, h, r) {
 function drawBackground(colors) {
   const w = window.innerWidth;
   const h = window.innerHeight;
+  const phase = getDayPhase();
+  const sky = blendHex(colors.sky, "#24324d", phase.night);
+  const haze = blendHex(colors.haze, "#33405a", phase.night * 0.82);
   const gradient = ctx.createLinearGradient(0, 0, 0, h);
-  gradient.addColorStop(0, colors.sky);
-  gradient.addColorStop(0.58, colors.haze);
-  gradient.addColorStop(1, "#9a8f61");
+  gradient.addColorStop(0, sky);
+  gradient.addColorStop(0.58, haze);
+  gradient.addColorStop(1, blendHex("#9a8f61", "#3c453d", phase.night));
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, w, h);
 
+  if (phase.night > 0.35) {
+    ctx.save();
+    ctx.fillStyle = "rgba(247, 243, 223, 0.72)";
+    for (let i = 0; i < 34; i += 1) {
+      const x = (i * 137 + Math.floor(state.camera.x * 0.03)) % w;
+      const y = 30 + (i * 53) % Math.floor(h * 0.38);
+      ctx.globalAlpha = 0.35 + hashNumber(i) * 0.5;
+      ctx.beginPath();
+      ctx.arc(x, y, 1 + hashNumber(i + 9) * 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   ctx.save();
-  ctx.globalAlpha = 0.7;
+  ctx.globalAlpha = 0.7 * (1 - phase.night * 0.65);
   drawCloud(w * 0.68, h * 0.17, w * 0.18);
   drawCloud(w * 0.92, h * 0.25, w * 0.11);
   ctx.restore();
@@ -689,7 +753,7 @@ function drawWorldObjects() {
   });
 
   getProceduralLanterns().forEach((lantern) => {
-    const lit = state.lanterns.includes(lantern.id);
+    const lit = state.lanterns.includes(lantern.id) || isNightTime();
     const y = world.ground - 62;
     ctx.strokeStyle = "#3d3028";
     ctx.lineWidth = 5;
@@ -757,6 +821,8 @@ function drawWorldObjects() {
     ctx.arc(x, y, 22, 0, Math.PI * 2);
     ctx.fill();
   });
+
+  drawAmbientAnimals();
 
   drawRiver();
   drawCompanion();
@@ -1167,6 +1233,58 @@ function drawRiver() {
   }
 }
 
+function drawAmbientAnimals() {
+  ambientAnimals.forEach((animal, index) => {
+    const repeatWidth = 9800;
+    const baseRepeat = Math.floor((state.camera.x - animal.x) / repeatWidth);
+    for (let repeat = baseRepeat; repeat <= baseRepeat + 1; repeat += 1) {
+      const x = animal.x + repeat * repeatWidth;
+      if (x < state.camera.x - 160 || x > state.camera.x + window.innerWidth + 160) continue;
+      const dist = Math.abs(state.player.x - x);
+      animal.scare = dist < 90 ? Math.min(1, animal.scare + 0.06) : animal.scare * 0.985;
+      const hop = Math.abs(Math.sin(state.time * 2.2 + animal.phase)) * (animal.type === "rabbit" ? 9 : 4);
+      const y = world.ground - 18 - hop - animal.scare * 34;
+      const drift = Math.sin(state.time * 0.8 + animal.phase) * 16 + animal.scare * 58;
+      drawAnimalIcon(x + drift, y, animal.type, index);
+    }
+  });
+}
+
+function drawAnimalIcon(x, y, type, index) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha = isNightTime() && type !== "frog" ? 0.68 : 0.92;
+  if (type === "bird") {
+    ctx.strokeStyle = "#2f3933";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-14, -34);
+    ctx.quadraticCurveTo(-4, -45, 8, -34);
+    ctx.quadraticCurveTo(18, -45, 28, -34);
+    ctx.stroke();
+  } else if (type === "rabbit") {
+    drawEllipse(0, 0, 18, 11, "#d6bf78");
+    drawEllipse(14, -5, 9, 8, "#d6bf78");
+    drawEllipse(19, -19, 3, 13, "#d6bf78");
+    drawEllipse(11, -19, 3, 12, "#d6bf78");
+    drawEllipse(-12, -4, 5, 5, "#f7f3df");
+  } else if (type === "frog") {
+    drawEllipse(0, 0, 15, 9, "#5f876c");
+    drawEllipse(-8, -8, 5, 5, "#7f9b61");
+    drawEllipse(8, -8, 5, 5, "#7f9b61");
+  } else {
+    drawEllipse(0, 0, 16, 9, "#9c6c42");
+    drawEllipse(13, -4, 8, 7, "#9c6c42");
+    ctx.strokeStyle = "#9c6c42";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-13, -5);
+    ctx.quadraticCurveTo(-27, -18, -10, -25);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawVillager(x, villager) {
   const y = world.ground;
   const bob = Math.sin(state.time * 2 + x) * 3;
@@ -1439,6 +1557,7 @@ function update(dt) {
     advanceQuest("weather", 1);
   }
   updateCompanion(dt);
+  updateQuestHint(dt);
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
   const targetZoom = p.rest > 0 ? 1.08 : 1;
@@ -1784,6 +1903,8 @@ function readAncientLetter(letter) {
     return;
   }
   state.activeQuest = makeQuest(letter.x);
+  state.questLastProgressAt = state.time;
+  state.lastQuestHintAt = state.time;
   state.nextLetterAt = Number.POSITIVE_INFINITY;
   openQuestPopup(state.activeQuest);
   playSoftPing();
@@ -1793,9 +1914,18 @@ function readAncientLetter(letter) {
 function advanceQuest(type, amount = 1) {
   if (!state.activeQuest || state.activeQuest.type !== type) return;
   state.activeQuest.progress = Math.min(state.activeQuest.target, state.activeQuest.progress + amount);
+  state.questLastProgressAt = state.time;
   showMessage(`Mission: ${state.activeQuest.objective} ${state.activeQuest.progress} / ${state.activeQuest.target}`);
   updateMissionTracker();
   if (state.activeQuest.progress >= state.activeQuest.target) completeQuest();
+}
+
+function updateQuestHint() {
+  if (!state.activeQuest || state.pendingQuestReward) return;
+  if (state.time - state.questLastProgressAt < 32) return;
+  if (state.time - state.lastQuestHintAt < 28) return;
+  state.lastQuestHintAt = state.time;
+  showMessageFor(getQuestHint(state.activeQuest), 7200);
 }
 
 function completeQuest() {
@@ -1803,6 +1933,7 @@ function completeQuest() {
   state.activeQuest = null;
   const rewardItems = grantQuestReward();
   state.completedQuests += 1;
+  noteWalkProgress("quest", quest.title || quest.label);
   rememberJournalEvent(`J'ai termine la mission "${quest.title || quest.label}" et recu deux objets.`);
   state.pendingQuestReward = {
     questTitle: quest.title || quest.label,
@@ -1946,6 +2077,7 @@ function collectDiscovery(item, quiet = false) {
     state.discoveryDates[baseId] = new Date().toISOString();
     rememberJournalEvent(`J'ai trouve ${item.label.toLowerCase()} pour la premiere fois.`);
   }
+  if (!quiet) noteWalkProgress("discovery", item.label.toLowerCase());
   advanceQuest("collectAny", 1);
   getQuestCollectTypes(item).forEach((type) => advanceQuest(type, 1));
   if (isFlowerDiscovery(item)) advanceQuest("collectFlower", 1);
@@ -1992,6 +2124,7 @@ function openVillagerHelp(villager) {
   const relationKey = villager.role;
   state.villagerRelations[relationKey] = (state.villagerRelations[relationKey] || 0) + 1;
   state.villagerLastMet[relationKey] = new Date().toISOString();
+  noteWalkProgress("villager", villager.role.toLowerCase());
   rememberJournalEvent(`J'ai rencontre ${villager.role.toLowerCase()} pres du village.`);
   if (!state.visitedVillages.includes(villager.villageId)) {
     state.visitedVillages.push(villager.villageId);
@@ -2101,6 +2234,7 @@ function buildJournal() {
         <span>${getWeatherIcon(weather.id)} Jour ${state.chapter}</span>
         <span>${getSeasonIcon(getSeason())} ${getSeason()}</span>
         <span>${getWeatherIcon(weather.id)} ${weather.label}</span>
+        <span>${getDayPhase().label}</span>
         <span>${getPlaceIcon(place)} ${place}</span>
         <span>Temps ${formatPlayTime()}</span>
       </div>
@@ -2133,6 +2267,7 @@ function buildJournal() {
   appendJournalBlock("Succes", renderAchievements(), "gallery-block");
   appendJournalBlock("Album des saisons", renderSeasonAlbum(seasonalFound), "gallery-block");
   appendJournalBlock("Revue", renderJournalReview(), "review-block");
+  appendJournalBlock("Souvenirs de promenade", renderWalkMemories(), "review-block");
   appendJournalBlock("Endroits preferes", renderFavoritePlaces(), "favorites-block");
   appendJournalBlock("Statistiques", `
     <div class="stat-grid">
@@ -2278,6 +2413,60 @@ function renderJournalReview() {
   `).join("")}</div>`;
 }
 
+function renderWalkMemories() {
+  const current = getCurrentWalkMemory();
+  const memories = [current].concat(state.walkMemories.slice(-5).reverse()).filter(Boolean);
+  return `<div class="review-list">${memories.map((memory, index) => `
+    <article>
+      <strong>${index === 0 ? "Promenade en cours" : `Promenade n°${memory.number}`}</strong>
+      <p>Saison : ${memory.season} - Meteo : ${memory.weather} - Lieu : ${memory.place}</p>
+      <p>Objets decouverts : ${memory.discoveries} - Habitants rencontres : ${memory.villagers} - Mission terminee : ${memory.questDone ? "Oui" : "Non"}</p>
+      <p>${memory.summary}</p>
+    </article>
+  `).join("")}</div>`;
+}
+
+function initWalkMemory() {
+  if (state.currentWalk) return;
+  state.currentWalk = {
+    number: state.walkMemories.length + 1,
+    startedAt: state.time,
+    season: getSeason(),
+    weather: getWeatherForChapter().label,
+    place: getPlaceType(),
+    discoveries: 0,
+    villagers: 0,
+    questDone: false,
+    bestMoment: "La route s'est ouverte doucement."
+  };
+}
+
+function noteWalkProgress(kind, detail = "") {
+  initWalkMemory();
+  if (kind === "discovery") {
+    state.currentWalk.discoveries += 1;
+    state.currentWalk.bestMoment = `J'ai trouve ${detail}.`;
+  }
+  if (kind === "villager") {
+    state.currentWalk.villagers += 1;
+    state.currentWalk.bestMoment = `Une rencontre avec ${detail} a marque la promenade.`;
+  }
+  if (kind === "quest") {
+    state.currentWalk.questDone = true;
+    state.currentWalk.bestMoment = `La mission "${detail}" s'est terminee.`;
+  }
+  state.currentWalk.weather = getWeatherForChapter().label;
+  state.currentWalk.place = getPlaceType();
+}
+
+function getCurrentWalkMemory() {
+  initWalkMemory();
+  return {
+    ...state.currentWalk,
+    summary: `Aujourd'hui, j'ai explore ${state.currentWalk.place.toLowerCase()} sous ${state.currentWalk.weather.toLowerCase()}. ${state.currentWalk.bestMoment}`
+  };
+}
+
 function renderFavoritePlaces() {
   const places = state.discoveredPlaces.length ? state.discoveredPlaces : ["Foret", "Riviere", "Village", "Clairiere"];
   return `<div class="favorite-grid">${places.map((place) => {
@@ -2381,6 +2570,7 @@ function startGame(reset = false) {
   ui.startScreen.classList.add("is-hidden");
   running = true;
   setupAudio();
+  initWalkMemory();
   updateMissionTracker();
   if (state.pendingQuestReward) {
     openQuestCompletePopup(state.pendingQuestReward);
@@ -2405,6 +2595,10 @@ function resetGame() {
   state.visitedVillages = [];
   state.favoritePlaces = [];
   state.journalEvents = [];
+  state.walkMemories = [];
+  state.currentWalk = null;
+  state.questLastProgressAt = 0;
+  state.lastQuestHintAt = 0;
   state.openedSecrets = [];
   state.activeQuest = null;
   state.pendingQuestReward = null;
@@ -2439,6 +2633,10 @@ function saveGame() {
     visitedVillages: state.visitedVillages,
     favoritePlaces: state.favoritePlaces,
     journalEvents: state.journalEvents,
+    walkMemories: state.walkMemories,
+    currentWalk: state.currentWalk,
+    questLastProgressAt: state.questLastProgressAt,
+    lastQuestHintAt: state.lastQuestHintAt,
     openedSecrets: state.openedSecrets,
     activeQuest: state.activeQuest,
     pendingQuestReward: state.pendingQuestReward,
@@ -2479,6 +2677,10 @@ function loadGame() {
     state.visitedVillages = Array.isArray(payload.visitedVillages) ? payload.visitedVillages : [];
     state.favoritePlaces = Array.isArray(payload.favoritePlaces) ? payload.favoritePlaces : [];
     state.journalEvents = Array.isArray(payload.journalEvents) ? payload.journalEvents : [];
+    state.walkMemories = Array.isArray(payload.walkMemories) ? payload.walkMemories : [];
+    state.currentWalk = payload.currentWalk && typeof payload.currentWalk === "object" ? payload.currentWalk : null;
+    state.questLastProgressAt = Number.isFinite(payload.questLastProgressAt) ? payload.questLastProgressAt : state.time;
+    state.lastQuestHintAt = Number.isFinite(payload.lastQuestHintAt) ? payload.lastQuestHintAt : state.time;
     state.openedSecrets = Array.isArray(payload.openedSecrets) ? payload.openedSecrets : [];
     state.activeQuest = normalizeQuest(payload.activeQuest);
     state.pendingQuestReward = payload.pendingQuestReward && typeof payload.pendingQuestReward === "object" ? payload.pendingQuestReward : null;
