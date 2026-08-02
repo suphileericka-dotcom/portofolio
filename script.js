@@ -2074,18 +2074,17 @@ function getItemConditionHint(itemOrId) {
   return hints[type] || hints.charm;
 }
 
-function getItemSymbol(item) {
-  const rarity = item.rarity || (getCatalogItem(item.id) || {}).rarity || "Commun";
-  const baseId = getItemVisualType(item);
-  if (baseId === "leaf") return "L";
-  if (baseId === "mushroom") return "M";
-  if (baseId === "star") return "*";
-  if (baseId === "shell") return "C";
-  if (baseId === "stone") return "P";
-  if (baseId === "flower") return "F";
-  if (rarity === "Legendaire") return "*";
-  if (rarity === "Rare") return "+";
-  return "o";
+function getItemIcon(item, extraClass = "") {
+  const type = getItemVisualType(item);
+  return `<span class="item-icon item-icon-${type} ${extraClass}" aria-hidden="true">
+    <span class="item-shape item-shape-main"></span>
+    <span class="item-shape item-shape-detail"></span>
+    <span class="item-shape item-shape-accent"></span>
+  </span>`;
+}
+
+function getUnknownItemIcon() {
+  return `<span class="item-icon item-icon-unknown" aria-hidden="true"><span>?</span></span>`;
 }
 
 function formatDiscoveryDate(itemId) {
@@ -2357,7 +2356,7 @@ function openQuestCompletePopup(reward) {
     <p><strong>${reward.questTitle}</strong></p>
     <p>Recompense :</p>
     <ul class="mission-reward-list">
-      ${rewardItems.map((item) => `<li>${item.label}</li>`).join("")}
+      ${rewardItems.map((item) => `<li>${getItemIcon(item, "small")}<span>${item.label}</span></li>`).join("")}
     </ul>
   `;
   ui.questCompleteDialog.showModal();
@@ -2509,7 +2508,7 @@ function openDiscoveryPopup(item) {
   ui.discoveryTitle.textContent = item.label;
   ui.hideDiscoveryPopup.checked = false;
   ui.discoveryBody.innerHTML = `
-    <div class="discovery-icon">${getItemSymbol(item)}</div>
+    <div class="discovery-icon">${getItemIcon(item, "large")}</div>
     <p>${item.text}</p>
     <p><strong>Rareté</strong> ${item.rarity || "Commun"}</p>
     <p><strong>Utilité</strong> ${getItemUse(item.id)}</p>
@@ -2654,7 +2653,7 @@ function buildJournal() {
       <p class="journal-kicker">Page 2</p>
       <h3>Souvenir du jour</h3>
       <div class="daily-sketch">
-        <div class="journal-object-image large">${currentItem ? getItemSymbol(currentItem) : "?"}</div>
+        <div class="journal-object-image large">${currentItem ? getItemIcon(currentItem, "large") : getUnknownItemIcon()}</div>
         <div>
           <strong>${currentItem ? currentItem.label : "Aucun objet trouve"}</strong>
           <p>${currentItem ? currentItem.text : "Le prochain tresor ramasse dessinera cette page."}</p>
@@ -2714,7 +2713,7 @@ function renderInventoryGallery() {
   return `<div class="inventory-gallery">${items.map(({ item, count }) => `
     <details class="inventory-card">
       <summary>
-        <span class="journal-object-image">${getItemSymbol(item)}</span>
+        <span class="journal-object-image">${getItemIcon(item)}</span>
         <strong>${item.label}</strong>
         <span>x${count}</span>
         <small>${getRarityStars(item.rarity)}</small>
@@ -2735,7 +2734,7 @@ function renderEncyclopedia() {
     const discovered = known.has(item.id);
     return `
       <article class="encyclopedia-card ${discovered ? "is-known" : "is-unknown"}">
-        <div class="journal-object-image">${discovered ? getItemSymbol(item) : "?"}</div>
+        <div class="journal-object-image">${discovered ? getItemIcon(item) : getUnknownItemIcon()}</div>
         <strong>${discovered ? item.label : "Objet inconnu"}</strong>
     <span>${discovered ? `${item.place} - ${getRarityStars(item.rarity)}` : "Silhouette dans le brouillard"}</span>
         <small>${discovered ? getItemConditionHint(item) : "Conditions inconnues"}</small>
