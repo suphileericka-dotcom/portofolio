@@ -128,6 +128,7 @@ const state = {
   discoveryRespawns: {},
   achievements: [],
   companion: { unlocked: false, offered: false, species: "", name: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0 },
+  companionGiverX: 0,
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur", appearance: { skin: "warm", hair: "dark", outfit: "berry", accessory: "bag" } },
   options: { music: 0.1, nature: 0.16, effects: 0.25, muted: false, audioVersion: 5 }
@@ -516,11 +517,13 @@ function getCompanionGiver() {
   if (state.companion.offered || state.companion.unlocked) return null;
   const eligible = state.player.x > 2600 || state.completedQuests >= 2 || Object.keys(state.villagerRelations).length >= 3;
   if (!eligible) return null;
-  const x = Math.max(2860, state.player.x + 520);
+  if (!Number.isFinite(state.companionGiverX) || state.companionGiverX <= 0) {
+    state.companionGiverX = Math.max(2860, state.player.x + 520);
+  }
   return {
     role: "Gardien des compagnons",
     line: "Tu as beaucoup voyage seul. Je crois que ce petit compagnon serait heureux de continuer le chemin a tes cotes.",
-    x,
+    x: state.companionGiverX,
     specialCompanionGiver: true
   };
 }
@@ -1416,17 +1419,7 @@ function drawRiver() {
 function drawVillager(x, villager) {
   const y = world.ground;
   const bob = Math.sin(state.time * 2 + x) * 3;
-  drawCharacter({
-    x,
-    y: y + bob,
-    face: -1,
-    velocity: 0,
-    body: "#6a8a80",
-    skin: "#e5b878",
-    hair: "#4a3632",
-    label: "",
-    seated: false
-  });
+  drawVillagerCharacter(x, y + bob, villager);
 
   if (Math.abs(state.player.x - x) < 210) {
     ctx.save();
@@ -1439,6 +1432,61 @@ function drawVillager(x, villager) {
     ctx.fillText(villager.role, x, y - 108);
     ctx.restore();
   }
+}
+
+function drawVillagerCharacter(x, y, villager) {
+  const seed = Math.abs(hashNumber(villager.role.length + x));
+  const bodyColors = ["#6a8a80", "#8b6840", "#6f7f4f", "#4f7f99", "#7f6a8a"];
+  const body = villager.specialCompanionGiver ? "#6f7f4f" : bodyColors[Math.floor(seed * bodyColors.length) % bodyColors.length];
+  const skin = "#e5b878";
+  const hair = villager.specialCompanionGiver ? "#6d7f3f" : "#4a3632";
+  ctx.save();
+  ctx.translate(x, y - 52);
+  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  ctx.beginPath();
+  ctx.ellipse(0, 57, 25, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#2d2730";
+  ctx.lineWidth = 7;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-7, 31);
+  ctx.lineTo(-15, 55);
+  ctx.moveTo(8, 31);
+  ctx.lineTo(14, 55);
+  ctx.stroke();
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(0, 22, 22, 30, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (villager.specialCompanionGiver) {
+    ctx.fillStyle = "rgba(240, 189, 108, 0.5)";
+    roundedRect(-16, 3, 32, 7, 4);
+    ctx.fill();
+  }
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.arc(0, -25, 23, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#28312e";
+  ctx.beginPath();
+  ctx.arc(9, -27, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = hair;
+  ctx.beginPath();
+  ctx.ellipse(-7, -39, 23, 13, -0.22, Math.PI * 0.9, Math.PI * 2.08);
+  ctx.lineTo(-20, -26);
+  ctx.quadraticCurveTo(-4, -32, 17, -42);
+  ctx.fill();
+  ctx.strokeStyle = "#2d2730";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(-16, 14);
+  ctx.lineTo(-23, 25);
+  ctx.moveTo(16, 14);
+  ctx.lineTo(24, 24);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawWeather() {
@@ -1522,7 +1570,7 @@ function drawPlayer() {
   });
 }
 
-function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = "#f0bd6c", hair = "#22322c", accessory = "bag", label = "", seated = false, action = "" }) {
+function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = "#f0bd6c", hair = "#22322c", accessory = "", label = "", seated = false, action = "" }) {
   const speed = Math.min(1, Math.abs(velocity) / 190);
   const walk = seated ? 0 : Math.sin(state.time * (speed > 0.72 ? 13 : 9)) * speed;
   const idleBreath = seated ? 0 : Math.sin(state.time * 2.2) * (speed < 0.08 ? 1.6 : 0.3);
@@ -2942,6 +2990,7 @@ function resetGame() {
   state.discoveryRespawns = {};
   state.achievements = [];
   state.companion = getEmptyCompanionState();
+  state.companionGiverX = 0;
   state.time = 0;
   state.camera.x = 0;
   state.chapter = 1;
@@ -2981,6 +3030,7 @@ function saveGame() {
     discoveryRespawns: state.discoveryRespawns,
     achievements: state.achievements,
     companion: state.companion,
+    companionGiverX: state.companionGiverX,
     startedAtLeastOnce: state.startedAtLeastOnce,
     cinematicPlayed: state.cinematicPlayed,
     playerId: state.playerProfile.id,
@@ -3026,6 +3076,7 @@ function loadGame() {
     state.discoveryRespawns = payload.discoveryRespawns && typeof payload.discoveryRespawns === "object" ? payload.discoveryRespawns : {};
     state.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
     state.companion = normalizeCompanionState(payload.companion);
+    state.companionGiverX = Number.isFinite(payload.companionGiverX) ? payload.companionGiverX : 0;
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
     state.cinematicPlayed = Boolean(payload.cinematicPlayed) && state.player.x >= world.firstRouteEnd;
     state.chapter = getChapter(state.player.x);
