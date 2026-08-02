@@ -6,6 +6,7 @@ const ui = {
   startButton: document.getElementById("startButton"),
   continueButton: document.getElementById("continueButton"),
   journalButton: document.getElementById("journalButton"),
+  photoButton: document.getElementById("photoButton"),
   customizeButton: document.getElementById("customizeButton"),
   optionsButton: document.getElementById("optionsButton"),
   infoButton: document.getElementById("infoButton"),
@@ -19,6 +20,9 @@ const ui = {
   encyclopediaDetailDialog: document.getElementById("encyclopediaDetailDialog"),
   encyclopediaDetailTitle: document.getElementById("encyclopediaDetailTitle"),
   encyclopediaDetailBody: document.getElementById("encyclopediaDetailBody"),
+  photoDetailDialog: document.getElementById("photoDetailDialog"),
+  photoDetailTitle: document.getElementById("photoDetailTitle"),
+  photoDetailBody: document.getElementById("photoDetailBody"),
   infoDialog: document.getElementById("infoDialog"),
   optionsDialog: document.getElementById("optionsDialog"),
   journalList: document.getElementById("journalList"),
@@ -163,6 +167,7 @@ const state = {
   discoveredPlaces: [],
   visitedVillages: [],
   journalEvents: [],
+  photoMemories: [],
   walkMemories: [],
   currentWalk: null,
   questLastProgressAt: 0,
@@ -1804,6 +1809,7 @@ function isModalOpen() {
   return Boolean(
     ui.discoveryDialog.open
     || ui.encyclopediaDetailDialog.open
+    || ui.photoDetailDialog.open
     || ui.questDialog.open
     || ui.questCompleteDialog.open
     || ui.villagerDialog.open
@@ -1985,6 +1991,12 @@ function announceWeather() {
   };
   showMessageFor(lines[weather.id] || weather.label, 25000);
   rememberJournalEvent(`${weather.label}: le paysage a change de rythme pendant la promenade.`);
+  addPhotoMemory({
+    key: `weather:${weather.id}`,
+    title: getWeatherPhotoTitle(weather.id),
+    category: "Meteo",
+    weatherId: weather.id
+  });
 }
 
 function baseDiscoveryId(id) {
@@ -2120,10 +2132,85 @@ function getPlaceType(x = state.player.x) {
   return "Foret";
 }
 
+function addPhotoMemory({ key, title, category = "Paysages", place = getPlaceType(), weatherId = state.weather, season = getSeason(), itemId = "", companion = "", secret = false }) {
+  if (!key || state.photoMemories.some((photo) => photo.key === key)) return false;
+  const weather = weatherTypes.find((entry) => entry.id === weatherId) || getWeatherForChapter();
+  const photo = {
+    id: `photo-${Date.now()}-${Math.floor(hashNumber(state.time + state.player.x) * 10000)}`,
+    key,
+    title,
+    category,
+    place,
+    weatherId,
+    weatherLabel: weather.label,
+    season,
+    phase: getDayPhase().label,
+    chapter: state.chapter,
+    itemId,
+    companion,
+    secret: Boolean(secret),
+    at: new Date().toISOString()
+  };
+  state.photoMemories.unshift(photo);
+  if (state.photoMemories.length > 36) state.photoMemories = state.photoMemories.slice(0, 36);
+  showMessage("Clic ! Nouveau souvenir ajoute a l'album photo.");
+  return true;
+}
+
+function takeManualPhoto() {
+  const place = getPlaceType();
+  const weather = getWeatherForChapter();
+  const season = getSeason();
+  const key = `manual:${place}:${weather.id}:${season}:${getDayPhase().id}`;
+  const added = addPhotoMemory({
+    key,
+    title: getManualPhotoTitle(place, weather.id),
+    category: "Paysages",
+    place,
+    weatherId: weather.id,
+    season
+  });
+  if (!added) showMessage("Ce souvenir est deja dans ton album.");
+  saveGame();
+}
+
+function getPlacePhotoTitle(place) {
+  if (place.includes("Village")) return "Premier village";
+  if (place.includes("Riviere")) return "Le vieux pont";
+  if (place.includes("Montagne")) return "Route des hauteurs";
+  if (place.includes("Clairiere")) return "Champ de fleurs";
+  if (place.includes("secret")) return "Paysage secret";
+  return "Premiere promenade";
+}
+
+function getWeatherPhotoTitle(weatherId) {
+  return {
+    rain: "Premiere pluie fine",
+    snow: "Premiere neige",
+    mist: "Matin de brouillard",
+    wind: "Grand vent sur le chemin"
+  }[weatherId] || "Lumiere claire";
+}
+
+function getManualPhotoTitle(place, weatherId) {
+  if (weatherId === "rain" && place.includes("Riviere")) return "Riviere sous la pluie";
+  if (weatherId === "snow") return "Silence de neige";
+  if (weatherId === "mist") return "Brume sur le sentier";
+  if (place.includes("Village")) return "Halte au village";
+  if (place.includes("Clairiere")) return "Clairiere en lumiere";
+  return `Souvenir de ${place.toLowerCase()}`;
+}
+
 function rememberPlace(place) {
   if (!state.discoveredPlaces.includes(place)) {
     state.discoveredPlaces.push(place);
     rememberJournalEvent(`J'ai decouvert ${place.toLowerCase()} et ajoute ce lieu a ma carte.`);
+    addPhotoMemory({
+      key: `place:${place}`,
+      title: getPlacePhotoTitle(place),
+      category: "Paysages",
+      place
+    });
   }
 }
 
@@ -2188,6 +2275,13 @@ function offerCompanion(giver) {
     nextHelpAt: state.time + 55
   };
   rememberJournalEvent(`${giver.role.toLowerCase()} m'a confie ${picked.name}, un ${picked.species.toLowerCase()}.`);
+  addPhotoMemory({
+    key: "companion:first",
+    title: `Premier compagnon: ${picked.name}`,
+    category: "Compagnon",
+    place: getPlaceType(),
+    companion: picked.species
+  });
   openCompanionPopup();
   playSoftPing();
   saveGame();
@@ -2215,6 +2309,13 @@ function exploreSecretLocation(secret) {
     advanceQuest("secret", 1);
     const legendary = itemCatalog.find((item) => item.rarity === "Legendaire") || discoveries[discoveries.length - 1];
     collectDiscovery({ ...legendary, id: makeId(legendary.id, state.chapter + state.openedSecrets.length + 120), place: "Lieu secret" }, true);
+    addPhotoMemory({
+      key: `secret:${secret.id}`,
+      title: secret.name,
+      category: "Paysages",
+      place: secret.name,
+      secret: true
+    });
     showMessage(`${secret.name} s'ouvre. Un objet legendaire rejoint ton album.`);
   } else {
     showMessage(`${secret.name} est deja ouvert. Le passage reste dans ton album.`);
@@ -2484,6 +2585,15 @@ function collectDiscovery(item, quiet = false) {
   if (firstTime) {
     state.discoveryDates[baseId] = new Date().toISOString();
     rememberJournalEvent(`J'ai trouve ${item.label.toLowerCase()} pour la premiere fois.`);
+    if (item.rarity === "Legendaire") {
+      addPhotoMemory({
+        key: `legendary:${baseId}`,
+        title: item.label,
+        category: "Decouvertes rares",
+        place: item.place || getPlaceType(),
+        itemId: baseId
+      });
+    }
   }
   if (!quiet) noteWalkProgress("discovery", item.label.toLowerCase());
   advanceQuest("collectAny", 1);
@@ -2812,16 +2922,58 @@ function renderSeasonAlbum(seasonalFound) {
 }
 
 function renderPhotoAlbum() {
-  const current = getCurrentWalkMemory();
-  const memories = [current].concat(state.walkMemories.slice(-5).reverse()).filter(Boolean);
-  return `<div class="review-list">${memories.map((memory, index) => `
-    <article>
-      <strong>${index === 0 ? "Photo de la promenade en cours" : `Photo n°${memory.number}`}</strong>
-      <p>Saison : ${memory.season} - Meteo : ${memory.weather} - Lieu : ${memory.place}</p>
-      <p>Objets decouverts : ${memory.discoveries} - Habitants rencontres : ${memory.villagers} - Mission terminee : ${memory.questDone ? "Oui" : "Non"}</p>
-      <p>${memory.summary}</p>
+  if (!state.photoMemories.length) {
+    return `<p class="empty-note">Les grands moments de ton voyage apparaitront ici comme des souvenirs illustres.</p>`;
+  }
+  return `<div class="photo-grid">${state.photoMemories.map((photo, index) => `
+    <article class="photo-card" data-photo-id="${photo.id}" tabindex="0" role="button">
+      ${renderPhotoIllustration(photo)}
+      <strong>Photo ${state.photoMemories.length - index}</strong>
+      <p>${photo.title}</p>
+      <span>${getPlaceIcon(photo.place)} ${photo.place}</span>
+      <span>${getSeasonIcon(photo.season)} ${photo.season} - ${getWeatherIcon(photo.weatherId)} ${photo.weatherLabel}</span>
     </article>
   `).join("")}</div>`;
+}
+
+function renderPhotoIllustration(photo, large = false) {
+  const placeClass = getPhotoPlaceClass(photo.place);
+  const weatherClass = `photo-weather-${photo.weatherId || "clear"}`;
+  const seasonClass = getSeasonClass(photo.season || getSeason());
+  return `<div class="photo-illustration ${large ? "is-large" : ""} ${placeClass} ${weatherClass} ${seasonClass}">
+    <span class="photo-sky"></span>
+    <span class="photo-sun"></span>
+    <span class="photo-hills"></span>
+    <span class="photo-water"></span>
+    <span class="photo-trees"></span>
+    <span class="photo-landmark"></span>
+    <span class="photo-weather"></span>
+  </div>`;
+}
+
+function getPhotoPlaceClass(place = "") {
+  if (place.includes("Riviere")) return "photo-place-river";
+  if (place.includes("Village")) return "photo-place-village";
+  if (place.includes("Montagne")) return "photo-place-mountain";
+  if (place.includes("Clairiere")) return "photo-place-meadow";
+  if (place.includes("secret") || place.includes("Secret") || place.includes("Sentier") || place.includes("Jardin") || place.includes("Porte") || place.includes("Belvedere")) return "photo-place-secret";
+  return "photo-place-forest";
+}
+
+function openPhotoDetail(photoId) {
+  const photo = state.photoMemories.find((entry) => entry.id === photoId);
+  if (!photo) return;
+  ui.photoDetailTitle.textContent = photo.title;
+  ui.photoDetailBody.innerHTML = `
+    ${renderPhotoIllustration(photo, true)}
+    <p><strong>${photo.category}</strong></p>
+    <p><strong>Lieu</strong> ${photo.place}</p>
+    <p><strong>Saison</strong> ${photo.season}</p>
+    <p><strong>Meteo</strong> ${photo.weatherLabel}</p>
+    <p><strong>Moment</strong> ${photo.phase}</p>
+    <p><strong>Date</strong> ${formatShortDate(photo.at)}</p>
+  `;
+  ui.photoDetailDialog.showModal();
 }
 
 function initWalkMemory() {
@@ -2967,6 +3119,13 @@ function startGame(reset = false) {
   running = true;
   setupAudio();
   initWalkMemory();
+  addPhotoMemory({
+    key: "story:first-walk",
+    title: "Premiere promenade",
+    category: "Paysages",
+    place: "Foret",
+    weatherId: state.weather
+  });
   updateMissionTracker();
   if (state.pendingQuestReward) {
     openQuestCompletePopup(state.pendingQuestReward);
@@ -2990,6 +3149,7 @@ function resetGame() {
   state.discoveredPlaces = [];
   state.visitedVillages = [];
   state.journalEvents = [];
+  state.photoMemories = [];
   state.walkMemories = [];
   state.currentWalk = null;
   state.questLastProgressAt = 0;
@@ -3029,6 +3189,7 @@ function saveGame() {
     discoveredPlaces: state.discoveredPlaces,
     visitedVillages: state.visitedVillages,
     journalEvents: state.journalEvents,
+    photoMemories: state.photoMemories,
     walkMemories: state.walkMemories,
     currentWalk: state.currentWalk,
     questLastProgressAt: state.questLastProgressAt,
@@ -3074,6 +3235,7 @@ function loadGame() {
     state.discoveredPlaces = Array.isArray(payload.discoveredPlaces) ? payload.discoveredPlaces : [];
     state.visitedVillages = Array.isArray(payload.visitedVillages) ? payload.visitedVillages : [];
     state.journalEvents = Array.isArray(payload.journalEvents) ? payload.journalEvents : [];
+    state.photoMemories = Array.isArray(payload.photoMemories) ? payload.photoMemories : [];
     state.walkMemories = Array.isArray(payload.walkMemories) ? payload.walkMemories : [];
     state.currentWalk = payload.currentWalk && typeof payload.currentWalk === "object" ? payload.currentWalk : null;
     state.questLastProgressAt = Number.isFinite(payload.questLastProgressAt) ? payload.questLastProgressAt : state.time;
@@ -3623,6 +3785,7 @@ ui.mobilePad.addEventListener("pointerup", () => {
 
 ui.startButton.addEventListener("click", () => startGame(true));
 ui.continueButton.addEventListener("click", () => startGame(false));
+ui.photoButton.addEventListener("click", takeManualPhoto);
 ui.customizeButton.addEventListener("click", openCustomizeDialog);
 ui.appearanceChoices.addEventListener("click", (event) => {
   const button = event.target.closest(".appearance-choice");
@@ -3645,11 +3808,22 @@ ui.journalButton.addEventListener("click", () => {
   ui.journalDialog.showModal();
 });
 ui.journalList.addEventListener("click", (event) => {
+  const photo = event.target.closest(".photo-card[data-photo-id]");
+  if (photo) {
+    openPhotoDetail(photo.dataset.photoId);
+    return;
+  }
   const card = event.target.closest(".encyclopedia-card[data-item-id]");
   if (card) openEncyclopediaDetail(card.dataset.itemId);
 });
 ui.journalList.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
+  const photo = event.target.closest(".photo-card[data-photo-id]");
+  if (photo) {
+    event.preventDefault();
+    openPhotoDetail(photo.dataset.photoId);
+    return;
+  }
   const card = event.target.closest(".encyclopedia-card[data-item-id]");
   if (!card) return;
   event.preventDefault();

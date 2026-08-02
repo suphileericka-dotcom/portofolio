@@ -37,6 +37,7 @@
         <button id="muteButton" class="sound-button" type="button" title="Couper le son" aria-label="Couper le son">Son</button>
         <button id="infoButton" class="icon-button info-button" type="button" title="Informations" aria-label="Informations">ℹ️</button>
         <button id="journalButton" class="icon-button" type="button" title="Carnet">Carnet</button>
+        <button id="photoButton" class="icon-button" type="button" title="Prendre une photo">&#128247; Photo</button>
         <button id="customizeButton" class="icon-button" type="button" title="Personnaliser">Personnaliser</button>
         <button id="optionsButton" class="icon-button" type="button" title="Options">Options</button>
       </div>
@@ -44,7 +45,7 @@
 
     <aside id="message" class="message" aria-live="polite"></aside>
     <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
-    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.27</aside>
+    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.28</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -89,6 +90,16 @@
           <button class="close-button" value="close" type="submit">Fermer</button>
         </header>
         <div id="encyclopediaDetailBody" class="discovery-body"></div>
+      </form>
+    </dialog>
+
+    <dialog id="photoDetailDialog" class="panel-dialog photo-detail-dialog">
+      <form method="dialog">
+        <header class="panel-header">
+          <h2 id="photoDetailTitle">Souvenir</h2>
+          <button class="close-button" value="close" type="submit">Fermer</button>
+        </header>
+        <div id="photoDetailBody" class="photo-detail-body"></div>
       </form>
     </dialog>
 
@@ -216,7 +227,7 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.27").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.28").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});

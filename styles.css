@@ -1114,6 +1114,197 @@ h2 {
   padding: 0.7rem 0.85rem;
 }
 
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.photo-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: rgba(247, 243, 223, 0.07);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.photo-card:hover,
+.photo-card:focus-visible {
+  border-color: rgba(240, 189, 108, 0.55);
+  background: rgba(240, 189, 108, 0.12);
+  outline: none;
+}
+
+.photo-card strong,
+.photo-detail-body strong {
+  color: var(--ink);
+}
+
+.photo-card p,
+.photo-card span,
+.photo-detail-body p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.photo-detail-dialog {
+  width: min(42rem, calc(100vw - 1.4rem));
+}
+
+.photo-detail-body {
+  display: grid;
+  gap: 0.65rem;
+  color: var(--muted);
+}
+
+.photo-illustration {
+  position: relative;
+  height: 8rem;
+  overflow: hidden;
+  border: 1px solid rgba(240, 189, 108, 0.25);
+  border-radius: 0.5rem;
+  background: linear-gradient(180deg, #67b4c8, #d9cf96 58%, #6d7f3f 59%);
+}
+
+.photo-illustration.is-large {
+  height: min(22rem, 56vw);
+}
+
+.photo-illustration span {
+  position: absolute;
+  display: block;
+}
+
+.photo-sun {
+  right: 12%;
+  top: 14%;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  background: #f6cf36;
+  box-shadow: 0 0 1.4rem rgba(246, 207, 54, 0.45);
+}
+
+.photo-hills {
+  left: -8%;
+  right: -8%;
+  bottom: 24%;
+  height: 45%;
+  border-radius: 50% 50% 0 0;
+  background: linear-gradient(135deg, rgba(79, 135, 99, 0.85), rgba(45, 85, 69, 0.88));
+}
+
+.photo-water {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26%;
+  background: linear-gradient(90deg, rgba(103, 180, 200, 0.84), rgba(247, 243, 223, 0.35), rgba(103, 180, 200, 0.84));
+  display: none;
+}
+
+.photo-trees {
+  left: 7%;
+  bottom: 18%;
+  width: 18%;
+  height: 42%;
+  background: linear-gradient(90deg, #3d512a 0 28%, transparent 28% 36%, #4f8763 36% 70%, transparent 70% 100%);
+  clip-path: polygon(50% 0, 100% 72%, 72% 72%, 100% 100%, 0 100%, 28% 72%, 0 72%);
+}
+
+.photo-landmark {
+  right: 12%;
+  bottom: 18%;
+  width: 28%;
+  height: 34%;
+  border-radius: 0.25rem;
+}
+
+.photo-place-river .photo-water {
+  display: block;
+}
+
+.photo-place-river .photo-landmark {
+  bottom: 28%;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: #8b6840;
+  box-shadow: -1.1rem 0.35rem 0 #6f4729, 1.1rem 0.35rem 0 #6f4729;
+}
+
+.photo-place-village .photo-landmark {
+  background: linear-gradient(180deg, #6f4729 0 24%, #e8d49a 25%);
+  clip-path: polygon(50% 0, 100% 36%, 88% 36%, 88% 100%, 12% 100%, 12% 36%, 0 36%);
+}
+
+.photo-place-mountain .photo-hills {
+  height: 62%;
+  clip-path: polygon(0 100%, 28% 24%, 42% 62%, 62% 6%, 100% 100%);
+  background: linear-gradient(135deg, #6f756f, #dbe7df);
+}
+
+.photo-place-meadow .photo-landmark {
+  left: 16%;
+  right: auto;
+  bottom: 14%;
+  width: 62%;
+  height: 18%;
+  background: radial-gradient(circle, #ce6f75 0 16%, transparent 17%) 0 0 / 1.2rem 1.2rem,
+    radial-gradient(circle, #f6cf36 0 13%, transparent 14%) 0.6rem 0.35rem / 1.2rem 1.2rem;
+}
+
+.photo-place-secret .photo-landmark {
+  right: 18%;
+  bottom: 18%;
+  width: 18%;
+  height: 48%;
+  border-radius: 999px 999px 0 0;
+  border: 0.35rem solid rgba(240, 189, 108, 0.7);
+  border-bottom: 0;
+  box-shadow: 0 0 1.3rem rgba(240, 189, 108, 0.35);
+}
+
+.photo-weather-rain .photo-weather {
+  inset: 0;
+  background: repeating-linear-gradient(105deg, transparent 0 0.8rem, rgba(247, 243, 223, 0.28) 0.85rem 0.95rem);
+}
+
+.photo-weather-snow .photo-weather {
+  inset: 0;
+  background: radial-gradient(circle, rgba(247, 243, 223, 0.82) 0 0.08rem, transparent 0.09rem) 0 0 / 1.1rem 1.1rem;
+}
+
+.photo-weather-mist .photo-weather {
+  inset: 22% 0 auto;
+  height: 40%;
+  background: linear-gradient(180deg, rgba(247, 243, 223, 0), rgba(247, 243, 223, 0.42), rgba(247, 243, 223, 0));
+}
+
+.photo-weather-wind .photo-weather {
+  left: 10%;
+  right: 10%;
+  top: 30%;
+  height: 32%;
+  border-top: 0.16rem solid rgba(247, 243, 223, 0.42);
+  border-bottom: 0.16rem solid rgba(247, 243, 223, 0.28);
+  transform: skewX(-18deg);
+}
+
+.photo-illustration.season-hiver {
+  background: linear-gradient(180deg, #dbe7df, #eef4f7 58%, #9eb1bd 59%);
+}
+
+.photo-illustration.season-automne {
+  background: linear-gradient(180deg, #d9c57c, #f0bd6c 58%, #8b6840 59%);
+}
+
+.photo-illustration.season-ete {
+  background: linear-gradient(180deg, #67b4c8, #f0bd6c 58%, #7f9b61 59%);
+}
+
 .album-section p + p {
   margin-top: 0.35rem;
 }
