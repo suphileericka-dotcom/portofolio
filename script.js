@@ -60,6 +60,8 @@ const saveKey = "bosquet-lent-save";
 const optionsKey = "bosquet-lent-options";
 const playerKey = "bosquet-lent-player";
 const mainMusicFile = "jean-paul-v-aventures-chinoises-289659.mp3";
+const musicLoopCrossfadeSeconds = 0.12;
+const musicScheduleLookaheadSeconds = 4;
 const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
@@ -220,8 +222,10 @@ const appearanceChoiceGroups = [
 ];
 
 let audio = null;
+let mainMusicArrayBufferPromise = null;
 let lastTime = 0;
 let running = false;
+let startingGame = false;
 let messageTimer = 0;
 let pendingVillagerHelp = null;
 let pendingDiscoveryPopup = null;
@@ -3399,13 +3403,23 @@ function getVillagerPortrait(index) {
   return ["P", "D", "G", "E", "M", "R", "F", "A", "J", "V", "H", "B", "T", "S"][index % 14];
 }
 
-function startGame(reset = false) {
+async function startGame(reset = false) {
+  if (startingGame || running) return;
+  startingGame = true;
   savePlayerProfile();
   if (reset) resetGame();
   state.startedAtLeastOnce = true;
   ui.startScreen.classList.add("is-hidden");
-  running = true;
   setupAudio();
+  if (audio?.context?.state === "suspended") {
+    await audio.context.resume().catch(() => {});
+  }
+  if (audio?.musicDecodePromise && !isAudioMuted() && state.options.music > 0) {
+    await audio.musicDecodePromise.catch(() => {});
+  }
+  running = true;
+  startingGame = false;
+  if (audio) updateAudio();
   initWalkMemory();
   updateMissionTracker();
   if (state.pendingQuestReward) {
@@ -3825,6 +3839,26 @@ function updateMuteButton() {
   if (ui.soundEnabledToggle) ui.soundEnabledToggle.checked = !state.options.muted;
 }
 
+function preloadMainMusic() {
+  if (mainMusicArrayBufferPromise || typeof fetch !== "function") return mainMusicArrayBufferPromise;
+  mainMusicArrayBufferPromise = fetch(mainMusicFile)
+    .then((response) => {
+      if (!response.ok) throw new Error(`Music preload failed: ${response.status}`);
+      return response.arrayBuffer();
+    })
+    .catch((error) => {
+      mainMusicArrayBufferPromise = null;
+      throw error;
+    });
+  return mainMusicArrayBufferPromise;
+}
+
+function decodeMainMusic(context) {
+  const preload = preloadMainMusic();
+  if (!preload) return Promise.reject(new Error("Music preload unavailable"));
+  return preload.then((arrayBuffer) => context.decodeAudioData(arrayBuffer.slice(0)));
+}
+
 function setupAudio() {
   if (audio) return;
   const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -3844,8 +3878,6 @@ function setupAudio() {
   const noiseData = noiseBuffer.getChannelData(0);
   for (let i = 0; i < noiseData.length; i += 1) noiseData[i] = Math.random() * 2 - 1;
   const noise = context.createBufferSource();
-  const musicElement = new Audio(mainMusicFile);
-  let musicSource = null;
 
   toneA.type = "triangle";
   toneA.frequency.value = 98;
@@ -3870,21 +3902,11 @@ function setupAudio() {
   natureFilter.Q.value = 0.28;
   noise.buffer = noiseBuffer;
   noise.loop = true;
-  musicElement.loop = true;
-  musicElement.preload = "auto";
-  musicElement.crossOrigin = "anonymous";
-  musicElement.volume = 1;
 
   [toneA, toneB, toneC].forEach((tone, index) => {
     tone.connect(toneGains[index]);
     toneGains[index].connect(musicFilter);
   });
-  try {
-    musicSource = context.createMediaElementSource(musicElement);
-    musicSource.connect(music);
-  } catch {
-    musicSource = null;
-  }
   musicFilter.connect(music);
   noise.connect(natureFilter);
   natureFilter.connect(nature);
@@ -3897,14 +3919,48 @@ function setupAudio() {
   toneC.start();
   noise.start();
 
-  audio = { context, master, music, nature, effects, musicFilter, natureFilter, musicElement, musicSource };
+  audio = { context, master, music, nature, effects, musicFilter, natureFilter, musicBuffer: null };
   audio.tones = [toneA, toneB, toneC];
   audio.toneGains = toneGains;
+  audio.musicSources = [];
+  audio.musicPlaying = false;
+  audio.musicOffset = 0;
+  audio.musicPlaybackStartedAt = 0;
+  audio.musicNextStartAt = 0;
   audio.nextAmbient = 0;
   audio.nextMusicCue = 0;
-  audio.musicReady = Boolean(musicSource);
-  audio.musicStarted = false;
+  audio.musicReady = false;
+  audio.musicDecodePromise = decodeMainMusic(context)
+    .then((buffer) => {
+      if (!audio || audio.context !== context) return null;
+      audio.musicBuffer = buffer;
+      audio.musicReady = true;
+      updateAudio();
+      return buffer;
+    })
+    .catch(() => {
+      if (audio && audio.context === context) setupFallbackMusicElement();
+      return null;
+    });
   updateAudio();
+}
+
+function setupFallbackMusicElement() {
+  if (!audio || audio.musicFallbackElement) return;
+  const musicElement = new Audio(mainMusicFile);
+  musicElement.loop = true;
+  musicElement.preload = "auto";
+  musicElement.volume = 1;
+  try {
+    const musicSource = audio.context.createMediaElementSource(musicElement);
+    musicSource.connect(audio.music);
+    audio.musicFallbackElement = musicElement;
+    audio.musicFallbackSource = musicSource;
+    audio.musicReady = true;
+    updateAudio();
+  } catch {
+    audio.musicReady = false;
+  }
 }
 
 function updateAudio() {
@@ -3942,22 +3998,128 @@ function updateAudio() {
 }
 
 function syncMusicFilePlayback(mute, musicVolume) {
-  if (!audio?.musicElement || !audio.musicReady) return;
+  if (!audio?.musicReady || (!audio.musicBuffer && !audio.musicFallbackElement)) return;
   const shouldPlay = mute > 0 && musicVolume > 0 && running;
-  audio.musicElement.muted = !shouldPlay;
   if (!shouldPlay) {
-    if (!audio.musicElement.paused) audio.musicElement.pause();
-    audio.musicStarted = false;
+    stopMainMusicPlayback();
     return;
   }
-  if (!audio.musicElement.paused && audio.musicStarted) return;
-  const playPromise = audio.musicElement.play();
-  audio.musicStarted = true;
-  if (playPromise && typeof playPromise.catch === "function") {
-    playPromise.catch(() => {
-      audio.musicStarted = false;
-    });
+  if (audio.context.state === "suspended") {
+    audio.context.resume().catch(() => {});
   }
+  if (audio.musicBuffer) {
+    scheduleMainMusicLoop();
+  } else {
+    syncFallbackMusicPlayback(true);
+  }
+}
+
+function syncFallbackMusicPlayback(shouldPlay) {
+  const musicElement = audio?.musicFallbackElement;
+  if (!musicElement) return;
+  musicElement.muted = !shouldPlay;
+  if (!shouldPlay) {
+    if (!musicElement.paused) musicElement.pause();
+    return;
+  }
+  if (!musicElement.paused) return;
+  const playPromise = musicElement.play();
+  if (playPromise?.catch) playPromise.catch(() => {});
+}
+
+function getMainMusicCycleSeconds() {
+  if (!audio?.musicBuffer) return 0;
+  return Math.max(0.1, audio.musicBuffer.duration - musicLoopCrossfadeSeconds);
+}
+
+function getMainMusicOffset() {
+  if (!audio?.musicBuffer || !audio.musicPlaying) return audio?.musicOffset || 0;
+  const cycle = getMainMusicCycleSeconds();
+  return ((audio.context.currentTime - audio.musicPlaybackStartedAt) % cycle + cycle) % cycle;
+}
+
+function disconnectAudioNode(node) {
+  try { node.disconnect(); } catch {}
+}
+
+function scheduleMainMusicLoop() {
+  if (!audio?.musicBuffer) return;
+  const now = audio.context.currentTime;
+  const buffer = audio.musicBuffer;
+  const cycle = getMainMusicCycleSeconds();
+  if (!audio.musicPlaying) {
+    const offset = Math.min(audio.musicOffset || 0, cycle - 0.01);
+    const startAt = now + 0.03;
+    audio.musicPlaybackStartedAt = startAt - offset;
+    audio.musicNextStartAt = startAt;
+    audio.musicPlaying = true;
+  }
+
+  while (audio.musicNextStartAt < now + musicScheduleLookaheadSeconds) {
+    const isFirstSource = audio.musicSources.length === 0;
+    const offset = isFirstSource ? Math.min(audio.musicOffset || 0, cycle - 0.01) : 0;
+    const startAt = audio.musicNextStartAt;
+    const playableSeconds = Math.max(0.05, buffer.duration - offset);
+    const endAt = startAt + playableSeconds;
+    const source = audio.context.createBufferSource();
+    const sourceGain = audio.context.createGain();
+
+    source.buffer = buffer;
+    sourceGain.gain.setValueAtTime(isFirstSource ? 1 : 0.0001, startAt);
+    if (!isFirstSource) sourceGain.gain.linearRampToValueAtTime(1, startAt + musicLoopCrossfadeSeconds);
+    sourceGain.gain.setValueAtTime(1, Math.max(startAt, endAt - musicLoopCrossfadeSeconds));
+    sourceGain.gain.linearRampToValueAtTime(0.0001, endAt);
+    source.connect(sourceGain);
+    sourceGain.connect(audio.music);
+    source.onended = () => {
+      if (!audio) {
+        disconnectAudioNode(source);
+        disconnectAudioNode(sourceGain);
+        return;
+      }
+      audio.musicSources = audio.musicSources.filter((entry) => entry.source !== source);
+      disconnectAudioNode(source);
+      disconnectAudioNode(sourceGain);
+    };
+    source.start(startAt, offset);
+    source.stop(endAt + 0.02);
+    audio.musicSources.push({ source, gain: sourceGain });
+    audio.musicNextStartAt = startAt + Math.max(0.05, playableSeconds - musicLoopCrossfadeSeconds);
+  }
+  audio.musicOffset = getMainMusicOffset();
+}
+
+function stopMainMusicPlayback() {
+  if (!audio) return;
+  syncFallbackMusicPlayback(false);
+  if (!audio.musicPlaying && audio.musicSources.length === 0) return;
+  audio.musicOffset = getMainMusicOffset();
+  audio.musicPlaying = false;
+  audio.musicNextStartAt = 0;
+  audio.musicSources.forEach(({ source, gain }) => {
+    try { source.stop(); } catch {}
+    disconnectAudioNode(source);
+    disconnectAudioNode(gain);
+  });
+  audio.musicSources = [];
+}
+
+function destroyAudio() {
+  if (!audio) return;
+  stopMainMusicPlayback();
+  audio.tones.forEach((tone) => {
+    try { tone.stop(); } catch {}
+    disconnectAudioNode(tone);
+  });
+  if (audio.musicFallbackElement) {
+    audio.musicFallbackElement.pause();
+    audio.musicFallbackElement.removeAttribute("src");
+    audio.musicFallbackElement.load();
+  }
+  if (audio.musicFallbackSource) disconnectAudioNode(audio.musicFallbackSource);
+  audio.context.close().catch(() => {});
+  audio = null;
+  audioSceneKey = "";
 }
 
 function getAudioScene() {
@@ -4132,6 +4294,7 @@ function playSoftPing() {
 }
 
 window.addEventListener("resize", resize);
+window.addEventListener("pagehide", destroyAudio);
 window.addEventListener("keydown", (event) => {
   keys.add(event.key);
   if (event.key === "e" || event.key === "E" || event.key === " ") {
@@ -4265,6 +4428,7 @@ ui.resetDiscoveryTipsButton.addEventListener("click", () => {
 
 loadPlayerProfile();
 loadOptions();
+preloadMainMusic()?.catch(() => {});
 const hasSave = loadGame();
 ui.nicknameInput.value = state.playerProfile.nickname;
 ui.continueButton.disabled = !hasSave;
