@@ -63,14 +63,22 @@ const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
 const joystick = { active: false, id: null, x: 0, y: 0 };
-const discoveryRespawnSeconds = 45;
+const discoveryRespawnMinSeconds = 15;
+const discoveryRespawnMaxSeconds = 45;
 const letterRespawnDelaySeconds = 35;
 const maxVisibleDiscoveries = 4;
 const minDiscoverySpacing = 400;
+const minDiscoveryVillagerDistance = 230;
+const minDiscoveryDoorDistance = 240;
+const minDiscoveryPlayerSpawnDistance = 520;
+const interactionRanges = { item: 78, letter: 78, secret: 105, villager: 98, companion: 98, lantern: 86, rest: 98 };
+const secretWorldOffset = 100000;
+const secretWorldDurationSeconds = 60;
+const secretDoorCooldowns = [7 * 60, 10 * 60, 15 * 60];
 const missionItemSpacing = 1050;
 const missionItemFirstDistance = 1100;
-const missionItemRevealDelayMin = 10;
-const missionItemRevealDelayMax = 20;
+const missionItemRevealDelayMin = 15;
+const missionItemRevealDelayMax = 45;
 const farFutureTime = 1000000000;
 const playerAppearanceOptions = {
   skin: {
@@ -176,6 +184,9 @@ const state = {
   worldDiscoveries: {},
   discoveryRespawns: {},
   achievements: [],
+  nextSecretAt: 0,
+  secretCycleIndex: 0,
+  activeSecretWorld: null,
   companion: { unlocked: false, offered: false, species: "", name: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0 },
   companionGiverX: 0,
   startedAtLeastOnce: false,
@@ -337,14 +348,36 @@ function isExpandedWorld(x = state.player.x) {
 }
 
 function getChapter(x = state.player.x) {
+  if (isInSecretWorld() || x >= secretWorldOffset) return Number.isFinite(state.activeSecretWorld?.returnChapter) ? state.activeSecretWorld.returnChapter : state.chapter;
   if (x < world.firstRouteEnd) return Math.max(1, Math.floor(x / world.chapterSize) + 1);
   return Math.max(4, Math.floor((x - world.firstRouteEnd) / world.chapterSize) + 4);
 }
 
 function getWeatherForChapter(chapter = state.chapter) {
+  if (isInSecretWorld()) return weatherTypes.find((weather) => weather.id === "mist") || weatherTypes[0];
   if (!isExpandedWorld()) return weatherTypes[0];
   const index = ((chapter - 4) % weatherSchedule.length + weatherSchedule.length) % weatherSchedule.length;
   return weatherTypes.find((weather) => weather.id === weatherSchedule[index]) || weatherTypes[0];
+}
+
+function isInSecretWorld() {
+  return Boolean(state.activeSecretWorld);
+}
+
+function getSecretWorldBounds() {
+  return { start: secretWorldOffset, end: secretWorldOffset + 2800 };
+}
+
+function clampToPlayableWorldX(x) {
+  if (isInSecretWorld()) {
+    const bounds = getSecretWorldBounds();
+    return Math.max(bounds.start + 120, Math.min(bounds.end - 120, x));
+  }
+  return Math.max(110, x);
+}
+
+function getDiscoveryRespawnDelay() {
+  return discoveryRespawnMinSeconds + Math.random() * (discoveryRespawnMaxSeconds - discoveryRespawnMinSeconds);
 }
 
 function getDayPhase() {
@@ -361,6 +394,10 @@ function isNightTime() {
 }
 
 function getProceduralDiscoveries() {
+  if (isInSecretWorld()) {
+    ensureSecretWorldDiscoveries();
+    return limitVisibleDiscoveries(Object.values(state.worldDiscoveries).filter((item) => item.zoneKey === state.activeSecretWorld.zoneKey));
+  }
   ensureVisibleDiscoveryZones();
   return limitVisibleDiscoveries(Object.values(state.worldDiscoveries));
 }
@@ -394,8 +431,89 @@ function ensureVisibleDiscoveryZones() {
 function ensureDiscoveryZone(zoneKey, builder) {
   const hasZone = Object.values(state.worldDiscoveries).some((item) => item.zoneKey === zoneKey);
   if (hasZone) return;
-  builder().forEach((item) => {
-    state.worldDiscoveries[item.id] = item;
+  builder().forEach((item, index) => {
+    const placed = placeDiscoverySafely(item, index);
+    state.worldDiscoveries[placed.id] = placed;
+  });
+}
+
+function placeDiscoverySafely(item, index = 0) {
+  const placed = { ...item };
+  placed.visualType = getItemVisualType(placed);
+  placed.x = placeXClearOfInteractions(placed.x, {
+    salt: hashNumber((placed.id || "item").length + index * 19),
+    sourceItem: placed
+  });
+  placed.place = placed.place || getPlaceType(placed.x);
+  return placed;
+}
+
+function placeXClearOfInteractions(x, options = {}) {
+  const original = Number.isFinite(x) ? x : state.player.x + minDiscoveryPlayerSpawnDistance;
+  let candidate = original;
+  const salt = Number.isFinite(options.salt) ? options.salt : 0;
+  const sourceItem = options.sourceItem || null;
+  const blockers = getInteractionObstacleXs(sourceItem).concat({ x: state.player.x, distance: minDiscoveryPlayerSpawnDistance });
+  const blocking = (value) => blockers
+    .filter((blocker) => Math.abs(value - blocker.x) < blocker.distance)
+    .sort((a, b) => Math.abs(value - a.x) - Math.abs(value - b.x))[0] || null;
+
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    const blocker = blocking(candidate);
+    if (!blocker) return clampToPlayableWorldX(candidate);
+    const side = candidate === blocker.x ? state.player.face || 1 : Math.sign(candidate - blocker.x);
+    candidate = blocker.x + side * (blocker.distance + 42 + attempt * 18 + hashNumber(candidate + salt + attempt) * 28);
+    candidate = clampToPlayableWorldX(candidate);
+  }
+
+  for (let step = 1; step <= 22; step += 1) {
+    for (const direction of [state.player.face || 1, -(state.player.face || 1)]) {
+      const scanned = clampToPlayableWorldX(original + direction * (minDiscoveryPlayerSpawnDistance + step * 140));
+      if (!blocking(scanned)) return scanned;
+    }
+  }
+  return clampToPlayableWorldX(original + minDiscoveryPlayerSpawnDistance + 1200);
+}
+
+function getInteractionObstacleXs(sourceItem = null) {
+  if (isInSecretWorld()) {
+    return Object.values(state.worldDiscoveries)
+      .filter((item) => item !== sourceItem && item.zoneKey === state.activeSecretWorld?.zoneKey && !item.collected)
+      .map((item) => ({ x: item.x, distance: minDiscoverySpacing }));
+  }
+  const obstacles = [];
+  getProceduralVillages().forEach((village) => obstacles.push({ x: village.x + 410, distance: minDiscoveryVillagerDistance }));
+  const companionGiver = getCompanionGiver();
+  if (companionGiver) obstacles.push({ x: companionGiver.x, distance: minDiscoveryVillagerDistance });
+  getProceduralSecretLocations().forEach((secret) => obstacles.push({ x: secret.x, distance: minDiscoveryDoorDistance }));
+  getProceduralLetters().forEach((letter) => obstacles.push({ x: letter.x, distance: 180 }));
+  Object.values(state.worldDiscoveries).forEach((item) => {
+    if (item === sourceItem || item.collected) return;
+    obstacles.push({ x: item.x, distance: minDiscoverySpacing });
+  });
+  return obstacles;
+}
+
+function ensureSecretWorldDiscoveries() {
+  if (!state.activeSecretWorld) return;
+  const zoneKey = state.activeSecretWorld.zoneKey;
+  const hasZone = Object.values(state.worldDiscoveries).some((item) => item.zoneKey === zoneKey);
+  if (hasZone) return;
+  const bounds = getSecretWorldBounds();
+  const pool = ["mushroom", "star", "feather", "shell"].map(getMissionCatalogItem).filter(Boolean);
+  pool.forEach((item, index) => {
+    const x = bounds.start + 760 + index * 520 + hashNumber(state.activeSecretWorld.startedAt + index * 23) * 170;
+    const placed = placeDiscoverySafely({
+      ...item,
+      id: makeId(item.id, Math.floor(state.activeSecretWorld.startedAt * 10) + index + 500),
+      x,
+      place: "Monde temporaire",
+      visualType: getItemVisualType(item),
+      zoneKey,
+      hiddenUntil: state.time + 2 + index * 2,
+      createdAt: state.time
+    }, index);
+    state.worldDiscoveries[placed.id] = placed;
   });
 }
 
@@ -446,11 +564,12 @@ function ensureMissionDiscoveryItems() {
   if (state.time < (state.activeQuest.nextMissionRevealAt || 0)) return;
   if (!state.worldDiscoveries[activeId]) {
     const slotX = slots[activeSlot] || getNextMissionSlotX(activeSlot);
+    const placedX = placeDiscoverySafely({ id: activeId, x: slotX, missionItem: true, visualType: state.activeQuest.itemId }, activeSlot).x;
     state.worldDiscoveries[activeId] = {
       ...templateItem,
       id: activeId,
-      x: slotX,
-      place: getPlaceType(slotX),
+      x: placedX,
+      place: getPlaceType(placedX),
       visualType: state.activeQuest.itemId,
       missionItem: true,
       zoneKey: questZone,
@@ -477,7 +596,7 @@ function ensureActiveQuestMissionSlots() {
 
 function getMissionSlotX(baseX, index) {
   const spread = missionItemSpacing + hashNumber(baseX + index * 17) * 520;
-  return Math.max(160, baseX + index * spread);
+  return placeXClearOfInteractions(Math.max(160, baseX + index * spread), { missionItem: true, salt: index });
 }
 
 function getNextMissionSlotX(index) {
@@ -544,7 +663,7 @@ function limitVisibleDiscoveries(items) {
 }
 
 function getProceduralSecretLocations() {
-  if (!isExpandedWorld() || state.completedQuests < 2) return [];
+  if (isInSecretWorld() || !isExpandedWorld() || state.completedQuests < 2 || state.time < state.nextSecretAt) return [];
   const relativeCamera = state.camera.x - world.firstRouteEnd;
   const start = Math.max(0, Math.floor((relativeCamera - 800) / world.chapterSize));
   const end = Math.floor((relativeCamera + window.innerWidth + 1200) / world.chapterSize);
@@ -557,12 +676,14 @@ function getProceduralSecretLocations() {
         x: world.firstRouteEnd + chapterIndex * world.chapterSize + 1720,
         name: names[chapterIndex % names.length]
       });
+      break;
     }
   }
   return items;
 }
 
 function getProceduralLetters() {
+  if (isInSecretWorld()) return [];
   if (state.activeQuest || state.pendingQuestReward || state.time < state.nextLetterAt) return [];
   if (!isExpandedWorld()) {
     return [{ id: "ancient-letter-start", x: 1240 }];
@@ -583,6 +704,7 @@ function getProceduralLetters() {
 }
 
 function getCompanionGiver() {
+  if (isInSecretWorld()) return null;
   if (state.companion.offered || state.companion.unlocked) return null;
   const eligible = state.player.x > 2600 || state.completedQuests >= 2 || Object.keys(state.villagerRelations).length >= 3;
   if (!eligible) return null;
@@ -598,6 +720,7 @@ function getCompanionGiver() {
 }
 
 function getProceduralLanterns() {
+  if (isInSecretWorld()) return [];
   if (!isExpandedWorld()) return lanterns;
   const relativeCamera = state.camera.x - world.firstRouteEnd;
   const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
@@ -612,6 +735,7 @@ function getProceduralLanterns() {
 }
 
 function getProceduralRests() {
+  if (isInSecretWorld()) return [];
   if (!isExpandedWorld()) return rests;
   const relativeCamera = state.camera.x - world.firstRouteEnd;
   const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
@@ -630,6 +754,7 @@ function getProceduralRests() {
 }
 
 function getProceduralVillages() {
+  if (isInSecretWorld()) return [];
   if (!isExpandedWorld()) return [];
   const relativeCamera = state.camera.x - world.firstRouteEnd;
   const start = Math.max(0, Math.floor((relativeCamera - 800) / world.chapterSize));
@@ -684,6 +809,17 @@ function blendHex(a, b, t) {
 }
 
 function biomeColors() {
+  if (isInSecretWorld()) {
+    return {
+      name: "Monde temporaire",
+      sky: "#d9f0ef",
+      haze: "#9cc8c4",
+      tree: "#263849",
+      leaf: "#5a8a9a",
+      grass: "#667a58",
+      wind: 0.42
+    };
+  }
   const cycleLength = biomes[biomes.length - 1].at + world.chapterSize;
   const x = ((state.player.x % cycleLength) + cycleLength) % cycleLength;
   const currentIndex = Math.max(0, biomes.findIndex((biome, index) => {
@@ -911,6 +1047,7 @@ function drawGround(colors) {
 function drawWorldObjects() {
   ctx.save();
   ctx.translate(-state.camera.x, 0);
+  const interactionTarget = getInteractionTarget();
 
   drawCoverForeground();
 
@@ -937,13 +1074,13 @@ function drawWorldObjects() {
       ctx.fill();
     }
     drawVillager(village.x + 410, village.villager);
-    if (Math.abs(state.player.x - (village.x + 410)) < 90) drawPrompt(village.x + 410, y - 102, "E parler");
+    if (interactionTarget?.kind === "villager" && Math.abs(interactionTarget.entry.x - (village.x + 410)) < 2) drawPrompt(village.x + 410, y - 102, "E Parler");
   });
 
   const companionGiver = getCompanionGiver();
   if (companionGiver) {
     drawVillager(companionGiver.x, companionGiver);
-    if (Math.abs(state.player.x - companionGiver.x) < 90) drawPrompt(companionGiver.x, world.ground - 120, "E parler");
+    if (interactionTarget?.kind === "companion") drawPrompt(companionGiver.x, world.ground - 120, "E Parler");
   }
 
   getProceduralRests().forEach((rest) => {
@@ -957,7 +1094,7 @@ function drawWorldObjects() {
     ctx.fillStyle = "#8c6135";
     roundedRect(rest.x - 50, y - 38, 100, 12, 4);
     ctx.fill();
-    if (Math.abs(state.player.x - rest.x) < 90) drawPrompt(rest.x, y - 64, "E se reposer");
+    if (interactionTarget?.kind === "rest" && Math.abs(interactionTarget.entry.x - rest.x) < 2) drawPrompt(rest.x, y - 64, "E se reposer");
   });
 
   getProceduralLanterns().forEach((lantern) => {
@@ -984,7 +1121,7 @@ function drawWorldObjects() {
     ctx.fillStyle = lit ? "#ffe07a" : "#7a654b";
     roundedRect(lantern.x - 9, y - 14, 18, 22, 5);
     ctx.fill();
-    if (!lit && Math.abs(state.player.x - lantern.x) < 78) drawPrompt(lantern.x, y - 58, "E allumer");
+    if (!lit && interactionTarget?.kind === "lantern" && interactionTarget.entry.id === lantern.id) drawPrompt(lantern.x, y - 58, "E allumer");
   });
 
   getVisibleWorldDiscoveries().forEach((item, index) => {
@@ -992,18 +1129,18 @@ function drawWorldObjects() {
     if (collected) return;
     const y = world.ground - 20 + Math.sin(state.time * 2 + index) * 5;
     drawCollectibleIcon(item, index, item.x, y);
-    if (Math.abs(state.player.x - item.x) < 70) drawPrompt(item.x, y - 42, "E ramasser");
+    if (interactionTarget?.kind === "item" && interactionTarget.entry.id === item.id) drawPrompt(item.x, y - 42, "E Ramasser");
   });
 
   getProceduralLetters().forEach((letter, index) => {
     const y = world.ground - 26 + Math.sin(state.time * 1.8 + index) * 4;
     drawLetterIcon(letter.x, y);
-    if (Math.abs(state.player.x - letter.x) < 76) drawPrompt(letter.x, y - 44, "E lire");
+    if (interactionTarget?.kind === "letter" && interactionTarget.entry.id === letter.id) drawPrompt(letter.x, y - 44, "E lire");
   });
 
   getProceduralSecretLocations().forEach((secret) => {
     drawSecretLocation(secret);
-    if (Math.abs(state.player.x - secret.x) < 100) drawPrompt(secret.x, world.ground - 138, "E explorer");
+    if (interactionTarget?.kind === "secret" && interactionTarget.entry.id === secret.id) drawPrompt(secret.x, world.ground - 138, "E explorer");
   });
 
   drawRiver();
@@ -1369,6 +1506,25 @@ function drawCollectibleIcon(item, index, x, y) {
     ctx.stroke();
     drawEllipse(18, -18, 10, 10, "#f0bd6c");
     drawEllipse(-18, 18, 8, 8, "#67b4c8");
+  } else if (baseId === "rare") {
+    ctx.fillStyle = "#67b4c8";
+    ctx.beginPath();
+    ctx.moveTo(0, -28);
+    ctx.lineTo(24, -7);
+    ctx.lineTo(14, 24);
+    ctx.lineTo(-14, 24);
+    ctx.lineTo(-24, -7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "rgba(247, 243, 223, 0.36)";
+    ctx.beginPath();
+    ctx.moveTo(0, -21);
+    ctx.lineTo(10, -6);
+    ctx.lineTo(4, 15);
+    ctx.lineTo(-8, 7);
+    ctx.closePath();
+    ctx.fill();
   } else {
     ctx.save();
     ctx.rotate(0.7);
@@ -1825,6 +1981,53 @@ function clearMovementIntent() {
   state.player.vx = 0;
 }
 
+function getInteractionTarget() {
+  const p = state.player;
+  const inRange = (entry, range) => Math.abs(entry.x - p.x) < range;
+  const byAim = (a, b) => {
+    const da = a.x - p.x;
+    const db = b.x - p.x;
+    const aFront = Math.sign(da || p.face) === p.face;
+    const bFront = Math.sign(db || p.face) === p.face;
+    return Number(bFront) - Number(aFront) || Math.abs(da) - Math.abs(db);
+  };
+
+  const item = getVisibleWorldDiscoveries()
+    .filter((entry) => !hasCollectedDiscovery(entry) && inRange(entry, interactionRanges.item))
+    .sort(byAim)[0];
+  if (item) return { kind: "item", entry: item };
+
+  const secret = getProceduralSecretLocations().filter((entry) => inRange(entry, interactionRanges.secret)).sort(byAim)[0];
+  if (secret) return { kind: "secret", entry: secret };
+
+  const letter = getProceduralLetters().filter((entry) => inRange(entry, interactionRanges.letter)).sort(byAim)[0];
+  if (letter) return { kind: "letter", entry: letter };
+
+  const companionGiver = getCompanionGiver();
+  if (companionGiver && inRange(companionGiver, interactionRanges.companion)) return { kind: "companion", entry: companionGiver };
+
+  const village = getProceduralVillages()
+    .map((entry) => ({
+      ...entry.villager,
+      x: entry.x + 410,
+      villageId: makeId("village", Math.round(entry.x / world.chapterSize)),
+      need: villagerNeeds[Math.round(entry.x / world.chapterSize) % villagerNeeds.length]
+    }))
+    .filter((entry) => inRange(entry, interactionRanges.villager))
+    .sort(byAim)[0];
+  if (village) return { kind: "villager", entry: village };
+
+  const lantern = getProceduralLanterns()
+    .filter((entry) => !state.lanterns.includes(entry.id) && inRange(entry, interactionRanges.lantern))
+    .sort(byAim)[0];
+  if (lantern) return { kind: "lantern", entry: lantern };
+
+  const rest = getProceduralRests().filter((entry) => inRange(entry, interactionRanges.rest)).sort(byAim)[0];
+  if (rest) return { kind: "rest", entry: rest };
+
+  return null;
+}
+
 function update(dt) {
   state.time += dt;
   const p = state.player;
@@ -1850,7 +2053,7 @@ function update(dt) {
   const target = input * maxSpeed;
   p.vx += (target - p.vx) * Math.min(1, dt * 5.5);
   p.x += p.vx * dt;
-  p.x = Math.max(110, p.x);
+  p.x = clampToPlayableWorldX(p.x);
   p.y = world.ground;
   if (Math.abs(p.vx) > 5) p.face = Math.sign(p.vx);
   p.rest = Math.max(0, p.rest - dt * 0.35);
@@ -1865,6 +2068,7 @@ function update(dt) {
   updateCompanion(dt);
   updateQuestHint(dt);
   updateWorldDiscoveries();
+  updateSecretWorld();
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
   const targetZoom = p.rest > 0 ? 1.08 : 1;
@@ -1881,67 +2085,44 @@ function update(dt) {
 function interact() {
   clearMovementIntent();
   const p = state.player;
-  const companionGiver = getCompanionGiver();
-  if (companionGiver && Math.abs(companionGiver.x - p.x) < 98) {
-    offerCompanion(companionGiver);
-    saveGame();
-    return;
-  }
-
-  const villageNeed = getProceduralVillages()
-    .map((village) => ({
-      ...village.villager,
-      x: village.x + 410,
-      villageId: makeId("village", Math.round(village.x / world.chapterSize)),
-      need: villagerNeeds[Math.round(village.x / world.chapterSize) % villagerNeeds.length]
-    }))
-    .find((entry) => Math.abs(entry.x - p.x) < 98);
-  if (villageNeed) {
-    advanceQuest("talkVillager", 1);
-    if (state.pendingQuestReward) {
-      saveGame();
-      return;
-    }
-    openVillagerHelp(villageNeed);
-    saveGame();
-    return;
-  }
-
-  const letter = getProceduralLetters().find((entry) => Math.abs(entry.x - p.x) < 78);
-  if (letter) {
-    readAncientLetter(letter);
-    saveGame();
-    return;
-  }
-
-  const secret = getProceduralSecretLocations().find((entry) => Math.abs(entry.x - p.x) < 105);
-  if (secret) {
-    exploreSecretLocation(secret);
-    saveGame();
-    return;
-  }
-
-  const item = getVisibleWorldDiscoveries().find((entry) => !hasCollectedDiscovery(entry) && Math.abs(entry.x - p.x) < 78);
-  if (item) {
-    const showedPopup = collectDiscovery(item);
+  const target = getInteractionTarget();
+  if (target?.kind === "item") {
+    const showedPopup = collectDiscovery(target.entry);
     if (!showedPopup) playSoftPing();
     saveGame();
     return;
   }
-
-  const lantern = getProceduralLanterns().find((entry) => !state.lanterns.includes(entry.id) && Math.abs(entry.x - p.x) < 86);
-  if (lantern) {
-    state.lanterns.push(lantern.id);
+  if (target?.kind === "letter") {
+    readAncientLetter(target.entry);
+    saveGame();
+    return;
+  }
+  if (target?.kind === "secret") {
+    enterSecretWorld(target.entry);
+    saveGame();
+    return;
+  }
+  if (target?.kind === "companion") {
+    offerCompanion(target.entry);
+    saveGame();
+    return;
+  }
+  if (target?.kind === "villager") {
+    advanceQuest("talkVillager", 1);
+    if (!state.pendingQuestReward) openVillagerHelp(target.entry);
+    saveGame();
+    return;
+  }
+  if (target?.kind === "lantern") {
+    state.lanterns.push(target.entry.id);
     showMessage("La lanterne s'allume. Le sentier respire un peu plus chaud.");
     playSoftPing();
     saveGame();
     return;
   }
-
-  const rest = getProceduralRests().find((entry) => Math.abs(entry.x - p.x) < 98);
-  if (rest) {
+  if (target?.kind === "rest") {
     p.rest = 1;
-    showMessage(`Tu t'assois un instant sur le ${rest.label}. Tout ralentit.`);
+    showMessage(`Tu t'assois un instant sur le ${target.entry.label}. Tout ralentit.`);
     saveGame();
     return;
   }
@@ -1989,6 +2170,7 @@ function announceWeather() {
 
 function baseDiscoveryId(id) {
   if (typeof id !== "string") return "";
+  if (itemCatalog.some((entry) => entry.id === id) || discoveries.some((entry) => entry.id === id)) return id;
   const parts = id.split("-");
   if (parts.length > 1 && /^\d+$/.test(parts[parts.length - 1])) return parts.slice(0, -1).join("-");
   return id;
@@ -2046,16 +2228,17 @@ function getItemVisualType(itemOrId) {
   if (explicit) return explicit;
   const baseId = baseDiscoveryId(item.id);
   const label = (item.label || "").toLowerCase();
-  if (baseId === "leaf" || label.includes("feuille") || label.includes("foug")) return "leaf";
-  if (baseId === "stone" || label.includes("pierre") || label.includes("galet") || label.includes("silex") || label.includes("rune")) return "stone";
+  if (baseId === "leaf" || label.includes("feuille") || label.includes("foug") || label.includes("branche") || label.includes("ecorce") || label.includes("roseau") || label.includes("herbe")) return "leaf";
+  if (baseId === "stone" || label.includes("pierre") || label.includes("galet") || label.includes("silex") || label.includes("rune") || label.includes("cristal") || label.includes("gemme") || label.includes("ambre")) return "stone";
   if (baseId === "feather" || label.includes("plume") || label.includes("aile")) return "feather";
   if (baseId === "shell" || label.includes("coquillage") || label.includes("coquille") || label.includes("coque")) return "shell";
-  if (baseId === "cone" || label.includes("pomme de pin") || label.includes("noisette") || label.includes("graine")) return "cone";
+  if (baseId === "cone" || label.includes("pomme de pin") || label.includes("noisette") || label.includes("graine") || label.includes("pin")) return "cone";
   if (baseId === "mushroom" || label.includes("champignon")) return "mushroom";
-  if (baseId === "star" || label.includes("etoile") || label.includes("soleil")) return "star";
+  if (baseId === "star" || label.includes("etoile") || label.includes("soleil") || label.includes("lucioles") || label.includes("lumiere")) return "star";
   if (baseId.includes("flower") || baseId.includes("bloom") || label.includes("fleur") || label.includes("petale") || label.includes("rose")) return "flower";
-  if (label.includes("carte") || label.includes("note") || label.includes("sceau")) return "paper";
-  if (label.includes("clef") || label.includes("boussole") || label.includes("medaille") || label.includes("bague")) return "tool";
+  if (label.includes("carte") || label.includes("note") || label.includes("sceau") || label.includes("lettre") || label.includes("enveloppe")) return "paper";
+  if (label.includes("clef") || label.includes("boussole") || label.includes("medaille") || label.includes("bague") || label.includes("miroir") || label.includes("fiole") || label.includes("lanterne")) return "tool";
+  if (item.rarity === "Rare" || item.rarity === "Legendaire") return "rare";
   return "charm";
 }
 
@@ -2072,6 +2255,7 @@ function getItemConditionHint(itemOrId) {
     flower: "Lieu : clairiere. Condition : printemps ou beau temps.",
     paper: "Lieu : village ou ancien chemin. Condition : pres des enveloppes et des habitants.",
     tool: "Lieu : village, ponts et lieux secrets. Condition : objet rare de progression.",
+    rare: "Lieu : monde rare ou passage special. Condition : demande de l'exploration patiente.",
     charm: "Lieu : chemin d'exploration. Condition : peut apparaitre dans plusieurs zones."
   };
   return hints[type] || hints.charm;
@@ -2108,6 +2292,7 @@ function isNightPlace() {
 }
 
 function getPlaceType(x = state.player.x) {
+  if (isInSecretWorld() || x >= secretWorldOffset) return "Monde temporaire";
   const secret = getProceduralSecretLocations().find((entry) => state.openedSecrets.includes(entry.id) && Math.abs(x - entry.x) < 420);
   if (secret) return "Lieu secret";
   const nearVillage = getProceduralVillages().some((village) => Math.abs(x - (village.x + 170)) < 620);
@@ -2207,20 +2392,63 @@ function openCompanionPopup() {
   ui.companionDialog.showModal();
 }
 
-function exploreSecretLocation(secret) {
+function enterSecretWorld(secret) {
+  if (isInSecretWorld()) return;
   const firstOpen = !state.openedSecrets.includes(secret.id);
   if (firstOpen) {
     state.openedSecrets.push(secret.id);
     rememberPlace(secret.name);
     advanceQuest("secret", 1);
-    const legendary = itemCatalog.find((item) => item.rarity === "Legendaire") || discoveries[discoveries.length - 1];
-    collectDiscovery({ ...legendary, id: makeId(legendary.id, state.chapter + state.openedSecrets.length + 120), place: "Lieu secret" }, true);
-    showMessage(`${secret.name} s'ouvre. Un objet legendaire rejoint ton album.`);
-  } else {
-    showMessage(`${secret.name} est deja ouvert. Le passage reste dans ton album.`);
   }
+  state.activeSecretWorld = {
+    id: secret.id,
+    name: secret.name,
+    zoneKey: makeId("secret-world", state.openedSecrets.length || 1),
+    startedAt: state.time,
+    returnAt: state.time + secretWorldDurationSeconds,
+    returnX: state.player.x,
+    returnCameraX: state.camera.x,
+    returnChapter: state.chapter,
+    returnWeather: state.weather
+  };
+  state.player.x = secretWorldOffset + 260;
+  state.player.vx = 0;
+  state.player.rest = 0;
+  state.camera.x = secretWorldOffset;
+  ensureSecretWorldDiscoveries();
+  showTransition(`${secret.name} s'ouvre. Le chemin bascule pour une minute.`);
   updateAchievements();
   playSoftPing();
+}
+
+function updateSecretWorld() {
+  if (!state.activeSecretWorld || state.time < state.activeSecretWorld.returnAt) return;
+  leaveSecretWorld();
+}
+
+function leaveSecretWorld() {
+  const secretWorld = state.activeSecretWorld;
+  if (!secretWorld) return;
+  state.player.x = Number.isFinite(secretWorld.returnX) ? secretWorld.returnX : world.firstRouteEnd;
+  state.player.vx = 0;
+  state.camera.x = Number.isFinite(secretWorld.returnCameraX) ? secretWorld.returnCameraX : Math.max(0, state.player.x - window.innerWidth * 0.45);
+  state.chapter = Number.isFinite(secretWorld.returnChapter) ? secretWorld.returnChapter : getChapter(state.player.x);
+  state.weather = secretWorld.returnWeather || getWeatherForChapter(state.chapter).id;
+  Object.values(state.worldDiscoveries).forEach((item) => {
+    if (item.zoneKey === secretWorld.zoneKey) delete state.worldDiscoveries[item.id];
+  });
+  state.activeSecretWorld = null;
+  const cooldown = secretDoorCooldowns[state.secretCycleIndex % secretDoorCooldowns.length];
+  state.secretCycleIndex = (state.secretCycleIndex + 1) % secretDoorCooldowns.length;
+  state.nextSecretAt = state.time + cooldown;
+  showTransition("Tu reviens exactement la ou la porte t'avait trouve.");
+  saveGame();
+}
+
+function showTransition(text) {
+  ui.cinematicText.textContent = text;
+  ui.cinematic.classList.add("is-visible");
+  setTimeout(() => ui.cinematic.classList.remove("is-visible"), 1400);
 }
 
 const questTemplates = [
@@ -2299,6 +2527,8 @@ function updateWorldDiscoveries() {
       return;
     }
     if (item.collected && Number.isFinite(item.respawnAt) && state.time >= item.respawnAt) {
+      item.x = placeXClearOfInteractions(item.x + 360 + hashNumber(state.time + item.x) * 900, { sourceItem: item });
+      item.place = getPlaceType(item.x);
       item.collected = false;
       item.respawnAt = 0;
       delete state.discoveryRespawns[item.id];
@@ -2473,10 +2703,11 @@ function collectDiscovery(item, quiet = false) {
   const firstTime = !hasCollectedBaseItem(baseId);
   if (!quiet) setPlayerAction((item.rarity === "Legendaire" || item.rarity === "Rare") ? "rare" : "pickup", 1.2);
   if (!quiet) {
-    if (!item.missionItem) state.discoveryRespawns[item.id] = state.time + discoveryRespawnSeconds;
+    const respawnAt = state.time + getDiscoveryRespawnDelay();
+    if (!item.missionItem) state.discoveryRespawns[item.id] = respawnAt;
     if (state.worldDiscoveries[item.id]) {
       state.worldDiscoveries[item.id].collected = true;
-      state.worldDiscoveries[item.id].respawnAt = item.missionItem ? Number.POSITIVE_INFINITY : state.time + discoveryRespawnSeconds;
+      state.worldDiscoveries[item.id].respawnAt = item.missionItem ? Number.POSITIVE_INFINITY : respawnAt;
     }
   }
   state.discoveries.push(item.id);
@@ -2973,6 +3204,9 @@ function resetGame() {
   state.worldDiscoveries = {};
   state.discoveryRespawns = {};
   state.achievements = [];
+  state.nextSecretAt = 0;
+  state.secretCycleIndex = 0;
+  state.activeSecretWorld = null;
   state.companion = getEmptyCompanionState();
   state.companionGiverX = 0;
   state.time = 0;
@@ -3012,6 +3246,9 @@ function saveGame() {
     worldDiscoveries: state.worldDiscoveries,
     discoveryRespawns: state.discoveryRespawns,
     achievements: state.achievements,
+    nextSecretAt: state.nextSecretAt,
+    secretCycleIndex: state.secretCycleIndex,
+    activeSecretWorld: state.activeSecretWorld,
     companion: state.companion,
     companionGiverX: state.companionGiverX,
     startedAtLeastOnce: state.startedAtLeastOnce,
@@ -3057,6 +3294,9 @@ function loadGame() {
     state.worldDiscoveries = payload.worldDiscoveries && typeof payload.worldDiscoveries === "object" ? payload.worldDiscoveries : {};
     state.discoveryRespawns = payload.discoveryRespawns && typeof payload.discoveryRespawns === "object" ? payload.discoveryRespawns : {};
     state.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
+    state.nextSecretAt = Number.isFinite(payload.nextSecretAt) ? payload.nextSecretAt : 0;
+    state.secretCycleIndex = Number.isFinite(payload.secretCycleIndex) ? payload.secretCycleIndex : 0;
+    state.activeSecretWorld = payload.activeSecretWorld && typeof payload.activeSecretWorld === "object" ? payload.activeSecretWorld : null;
     state.companion = normalizeCompanionState(payload.companion);
     state.companionGiverX = Number.isFinite(payload.companionGiverX) ? payload.companionGiverX : 0;
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);

@@ -936,6 +936,26 @@ h2 {
   transform: rotate(45deg);
 }
 
+.item-icon-rare .item-shape-main {
+  left: 0.56rem;
+  top: 0.45rem;
+  width: 2.1rem;
+  height: 2.35rem;
+  background: linear-gradient(160deg, #67b4c8, #f0bd6c);
+  clip-path: polygon(50% 0, 92% 28%, 72% 100%, 28% 100%, 8% 28%);
+  filter: drop-shadow(0 0 0.45rem rgba(103, 180, 200, 0.35));
+}
+
+.item-icon-rare .item-shape-detail {
+  left: 1.35rem;
+  top: 0.78rem;
+  width: 0.55rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  background: rgba(247, 243, 223, 0.36);
+  transform: rotate(24deg);
+}
+
 .item-icon-unknown {
   display: grid;
   place-items: center;
