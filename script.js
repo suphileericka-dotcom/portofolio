@@ -59,6 +59,7 @@ const ui = {
 const saveKey = "bosquet-lent-save";
 const optionsKey = "bosquet-lent-options";
 const playerKey = "bosquet-lent-player";
+const mainMusicFile = "jean-paul-v-aventures-chinoises-289659.mp3";
 const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
@@ -75,6 +76,80 @@ const interactionRanges = { item: 78, letter: 78, secret: 105, villager: 98, com
 const secretWorldOffset = 100000;
 const secretWorldDurationSeconds = 60;
 const secretDoorCooldowns = [7 * 60, 10 * 60, 15 * 60];
+const secretWorlds = [
+  {
+    id: "firefly-garden",
+    name: "Jardin des lucioles",
+    entry: "Vous entrez dans le Jardin des lucioles.",
+    sky: "#162a3a",
+    haze: "#28545a",
+    tree: "#1d3440",
+    leaf: "#3f7f75",
+    grass: "#4f8d72",
+    ground: "#243b39",
+    path: "#395a52",
+    accent: "#d7f77c",
+    wind: 0.38,
+    night: 0.82,
+    ambient: "mist",
+    notes: [82.41, 123.47, 196],
+    items: ["mushroom", "star", "feather", "mushroom"]
+  },
+  {
+    id: "cloud-valley",
+    name: "Vallee des nuages",
+    entry: "Vous entrez dans la Vallee des nuages.",
+    sky: "#e7f2ee",
+    haze: "#b9d6d7",
+    tree: "#9db8aa",
+    leaf: "#e9efe2",
+    grass: "#d9e5d8",
+    ground: "#cad6c7",
+    path: "#f0ead5",
+    accent: "#ffffff",
+    wind: 1.45,
+    night: 0,
+    ambient: "wind",
+    notes: [146.83, 220, 329.63],
+    items: ["feather", "leaf", "star", "feather"]
+  },
+  {
+    id: "golden-forest",
+    name: "Foret doree",
+    entry: "Vous entrez dans la Foret doree.",
+    sky: "#f4d28a",
+    haze: "#d9a75d",
+    tree: "#5a3f28",
+    leaf: "#d99b35",
+    grass: "#a67534",
+    ground: "#6b4c27",
+    path: "#d2a459",
+    accent: "#f6cf36",
+    wind: 0.72,
+    night: 0,
+    ambient: "birds",
+    notes: [123.47, 185, 277.18],
+    items: ["cone", "leaf", "stone", "mushroom"]
+  },
+  {
+    id: "star-river",
+    name: "Riviere des etoiles",
+    entry: "Vous entrez dans la Riviere des etoiles.",
+    sky: "#14213d",
+    haze: "#23365a",
+    tree: "#182c4a",
+    leaf: "#315d88",
+    grass: "#2f6b89",
+    ground: "#102237",
+    path: "#274762",
+    accent: "#67b4c8",
+    wind: 0.55,
+    night: 0.68,
+    ambient: "river",
+    notes: [98, 146.83, 220],
+    items: ["stone", "star", "shell", "stone"]
+  }
+];
 const missionItemSpacing = 1050;
 const missionItemFirstDistance = 1100;
 const missionItemRevealDelayMin = 15;
@@ -152,6 +227,7 @@ let pendingVillagerHelp = null;
 let pendingDiscoveryPopup = null;
 let audioSceneKey = "";
 let appearanceDraft = null;
+let secretTransitionToken = 0;
 
 const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0, action: "", actionUntil: 0 },
@@ -187,6 +263,8 @@ const state = {
   nextSecretAt: 0,
   secretCycleIndex: 0,
   activeSecretWorld: null,
+  lastSecretWorldId: "",
+  lastSecretEdgeMessageAt: 0,
   companion: { unlocked: false, offered: false, species: "", name: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0 },
   companionGiverX: 0,
   startedAtLeastOnce: false,
@@ -364,6 +442,17 @@ function isInSecretWorld() {
   return Boolean(state.activeSecretWorld);
 }
 
+function getSecretWorldConfig(id = state.activeSecretWorld?.worldId) {
+  return secretWorlds.find((worldConfig) => worldConfig.id === id) || secretWorlds[0];
+}
+
+function pickSecretWorldConfig() {
+  const choices = secretWorlds.filter((worldConfig) => worldConfig.id !== state.lastSecretWorldId);
+  const pool = choices.length ? choices : secretWorlds;
+  const index = Math.floor(hashNumber(state.time + state.player.x + state.openedSecrets.length * 31 + Date.now() * 0.001) * pool.length) % pool.length;
+  return pool[index];
+}
+
 function getSecretWorldBounds() {
   return { start: secretWorldOffset, end: secretWorldOffset + 2800 };
 }
@@ -500,14 +589,15 @@ function ensureSecretWorldDiscoveries() {
   const hasZone = Object.values(state.worldDiscoveries).some((item) => item.zoneKey === zoneKey);
   if (hasZone) return;
   const bounds = getSecretWorldBounds();
-  const pool = ["mushroom", "star", "feather", "shell"].map(getMissionCatalogItem).filter(Boolean);
+  const secretWorld = getSecretWorldConfig();
+  const pool = secretWorld.items.map(getMissionCatalogItem).filter(Boolean);
   pool.forEach((item, index) => {
     const x = bounds.start + 760 + index * 520 + hashNumber(state.activeSecretWorld.startedAt + index * 23) * 170;
     const placed = placeDiscoverySafely({
       ...item,
       id: makeId(item.id, Math.floor(state.activeSecretWorld.startedAt * 10) + index + 500),
       x,
-      place: "Monde temporaire",
+      place: secretWorld.name,
       visualType: getItemVisualType(item),
       zoneKey,
       hiddenUntil: state.time + 2 + index * 2,
@@ -810,14 +900,19 @@ function blendHex(a, b, t) {
 
 function biomeColors() {
   if (isInSecretWorld()) {
+    const secretWorld = getSecretWorldConfig();
     return {
-      name: "Monde temporaire",
-      sky: "#d9f0ef",
-      haze: "#9cc8c4",
-      tree: "#263849",
-      leaf: "#5a8a9a",
-      grass: "#667a58",
-      wind: 0.42
+      name: secretWorld.name,
+      sky: secretWorld.sky,
+      haze: secretWorld.haze,
+      tree: secretWorld.tree,
+      leaf: secretWorld.leaf,
+      grass: secretWorld.grass,
+      ground: secretWorld.ground,
+      path: secretWorld.path,
+      accent: secretWorld.accent,
+      wind: secretWorld.wind,
+      secretNight: secretWorld.night
     };
   }
   const cycleLength = biomes[biomes.length - 1].at + world.chapterSize;
@@ -860,6 +955,10 @@ function roundedRect(x, y, w, h, r) {
 }
 
 function drawBackground(colors) {
+  if (isInSecretWorld()) {
+    drawSecretWorldBackground(colors);
+    return;
+  }
   const w = window.innerWidth;
   const h = window.innerHeight;
   const phase = getDayPhase();
@@ -906,6 +1005,57 @@ function drawBackground(colors) {
   ctx.translate(-state.camera.x * 0.12, 0);
   for (let i = -1; i < 8; i += 1) {
     drawShrubBand(i * 210, h * 0.67, i);
+  }
+  ctx.restore();
+}
+
+function drawSecretWorldBackground(colors) {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const secretWorld = getSecretWorldConfig();
+  const gradient = ctx.createLinearGradient(0, 0, 0, h);
+  gradient.addColorStop(0, colors.sky);
+  gradient.addColorStop(0.56, colors.haze);
+  gradient.addColorStop(1, colors.ground || colors.grass);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.save();
+  if (secretWorld.id === "cloud-valley") {
+    ctx.globalAlpha = 0.78;
+    for (let i = -1; i < 8; i += 1) {
+      drawCloud(i * 240 - (state.camera.x * 0.05) % 240, h * (0.5 + hashNumber(i + 3) * 0.22), 190 + hashNumber(i) * 90);
+    }
+  } else if (secretWorld.id === "star-river") {
+    ctx.globalAlpha = 0.78;
+    ctx.fillStyle = "rgba(247, 243, 223, 0.8)";
+    for (let i = 0; i < 48; i += 1) {
+      const x = (i * 97 + Math.floor(state.camera.x * 0.04)) % w;
+      const y = 24 + (i * 43) % Math.floor(h * 0.5);
+      ctx.globalAlpha = 0.26 + hashNumber(i + 7) * 0.48;
+      ctx.beginPath();
+      ctx.arc(x, y, 1 + hashNumber(i) * 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    drawCoverRiver(w * 0.52 + state.camera.x * 0.03, h * 0.66);
+  } else if (secretWorld.id === "firefly-garden") {
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = colors.accent;
+    for (let i = 0; i < 70; i += 1) {
+      const x = (i * 83 + Math.floor(state.camera.x * 0.08)) % w;
+      const y = h * 0.18 + (i * 37) % Math.floor(h * 0.54);
+      ctx.globalAlpha = 0.16 + Math.abs(Math.sin(state.time * 1.7 + i)) * 0.52;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.2 + hashNumber(i) * 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    ctx.globalAlpha = 0.48;
+    for (let i = -1; i < 7; i += 1) {
+      drawRoundedHill(i * 270 - (state.camera.x * 0.04) % 270, h * 0.56, 360, h * 0.16, "rgba(246, 207, 54, 0.22)");
+      ctx.fillStyle = "rgba(255, 226, 112, 0.2)";
+      ctx.fillRect(i * 260 + 120 - (state.camera.x * 0.02) % 260, h * 0.05, 18, h * 0.62);
+    }
   }
   ctx.restore();
 }
@@ -1006,13 +1156,13 @@ function drawParallaxTrees(colors) {
 function drawGround(colors) {
   const h = window.innerHeight;
   const w = window.innerWidth;
-  ctx.fillStyle = "#241f18";
+  ctx.fillStyle = colors.ground || "#241f18";
   ctx.fillRect(0, world.ground + 34, w, h - world.ground - 34);
-  ctx.fillStyle = "#5f6f31";
+  ctx.fillStyle = blendHex(colors.grass, colors.ground || "#241f18", 0.32);
   ctx.fillRect(0, world.ground + 10, w, 42);
-  ctx.fillStyle = "#c6a15f";
+  ctx.fillStyle = colors.path || "#c6a15f";
   ctx.fillRect(0, world.ground - 18, w, 42);
-  ctx.fillStyle = "#d1b06b";
+  ctx.fillStyle = blendHex(colors.path || "#d1b06b", "#f7f3df", 0.12);
   ctx.fillRect(0, world.ground - 13, w, 13);
   ctx.fillStyle = "#53672d";
   for (let x = -24; x < w + 34; x += 30) {
@@ -1914,7 +2064,9 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
 function drawOverlay() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const night = Math.max(0, Math.min(1, (state.player.x - 5200) / 2800));
+  const night = isInSecretWorld()
+    ? getSecretWorldConfig().night
+    : Math.max(0, Math.min(1, (state.player.x - 5200) / 2800));
   const hasLight = hasCollectedBaseItem("mushroom") || hasCollectedBaseItem("star");
   const darkness = 0.08 + night * (hasLight ? 0.13 : 0.2);
   ctx.fillStyle = `rgba(10, 16, 30, ${darkness})`;
@@ -1930,8 +2082,9 @@ function drawOverlay() {
     ctx.beginPath();
     ctx.arc(px, py, hasLight ? 190 : 135, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
+      ctx.restore();
   }
+  drawSecretWorldHud();
   if (state.player.rest > 0) {
     ctx.save();
     ctx.globalAlpha = state.player.rest * 0.24;
@@ -1939,6 +2092,34 @@ function drawOverlay() {
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
   }
+}
+
+function drawSecretWorldHud() {
+  if (!state.activeSecretWorld) return;
+  const remaining = Math.max(0, Math.ceil(state.activeSecretWorld.returnAt - state.time));
+  const minutes = Math.floor(remaining / 60).toString().padStart(2, "0");
+  const seconds = (remaining % 60).toString().padStart(2, "0");
+  const secretWorld = getSecretWorldConfig();
+  const x = window.innerWidth - 18;
+  const y = 78;
+  ctx.save();
+  ctx.textAlign = "right";
+  ctx.font = "900 13px Nunito";
+  const title = secretWorld.name;
+  const timer = `Retour dans ${minutes}:${seconds}`;
+  const width = Math.max(ctx.measureText(title).width, ctx.measureText(timer).width) + 34;
+  roundedRect(x - width, y - 44, width, 60, 7);
+  ctx.fillStyle = "rgba(20, 34, 33, 0.72)";
+  ctx.fill();
+  ctx.strokeStyle = `${secretWorld.accent}88`;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = secretWorld.accent;
+  ctx.fillText(title, x - 16, y - 20);
+  ctx.fillStyle = "#f7f3df";
+  ctx.font = "800 12px Nunito";
+  ctx.fillText(timer, x - 16, y + 2);
+  ctx.restore();
 }
 
 function draw() {
@@ -1967,7 +2148,7 @@ function isModalOpen() {
     || ui.customizeDialog.open
     || ui.optionsDialog.open
     || ui.infoDialog.open
-    || ui.cinematic.classList.contains("is-visible")
+    || (ui.cinematic.classList.contains("is-visible") && !ui.cinematic.classList.contains("is-nonblocking"))
   );
 }
 
@@ -2052,8 +2233,14 @@ function update(dt) {
   const maxSpeed = (p.rest > 0.15 ? 55 : 185) * weatherSlowdown;
   const target = input * maxSpeed;
   p.vx += (target - p.vx) * Math.min(1, dt * 5.5);
+  const beforeMoveX = p.x;
   p.x += p.vx * dt;
+  const unclampedX = p.x;
   p.x = clampToPlayableWorldX(p.x);
+  if (isInSecretWorld() && Math.abs(unclampedX - p.x) > 0.5 && Math.abs(input) > 0.2 && state.time - state.lastSecretEdgeMessageAt > 3) {
+    state.lastSecretEdgeMessageAt = state.time;
+    showMessageFor("Le bord de ce monde se replie. Reviens vers le chemin lumineux.", 2600);
+  }
   p.y = world.ground;
   if (Math.abs(p.vx) > 5) p.face = Math.sign(p.vx);
   p.rest = Math.max(0, p.rest - dt * 0.35);
@@ -2068,7 +2255,7 @@ function update(dt) {
   updateCompanion(dt);
   updateQuestHint(dt);
   updateWorldDiscoveries();
-  updateSecretWorld();
+  updateSecretWorld(dt, input, beforeMoveX);
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
   const targetZoom = p.rest > 0 ? 1.08 : 1;
@@ -2292,7 +2479,7 @@ function isNightPlace() {
 }
 
 function getPlaceType(x = state.player.x) {
-  if (isInSecretWorld() || x >= secretWorldOffset) return "Monde temporaire";
+  if (isInSecretWorld() || x >= secretWorldOffset) return getSecretWorldConfig().name;
   const secret = getProceduralSecretLocations().find((entry) => state.openedSecrets.includes(entry.id) && Math.abs(x - entry.x) < 420);
   if (secret) return "Lieu secret";
   const nearVillage = getProceduralVillages().some((village) => Math.abs(x - (village.x + 170)) < 620);
@@ -2394,6 +2581,7 @@ function openCompanionPopup() {
 
 function enterSecretWorld(secret) {
   if (isInSecretWorld()) return;
+  const secretWorld = pickSecretWorldConfig();
   const firstOpen = !state.openedSecrets.includes(secret.id);
   if (firstOpen) {
     state.openedSecrets.push(secret.id);
@@ -2403,52 +2591,102 @@ function enterSecretWorld(secret) {
   state.activeSecretWorld = {
     id: secret.id,
     name: secret.name,
+    worldId: secretWorld.id,
+    worldName: secretWorld.name,
     zoneKey: makeId("secret-world", state.openedSecrets.length || 1),
     startedAt: state.time,
     returnAt: state.time + secretWorldDurationSeconds,
     returnX: state.player.x,
     returnCameraX: state.camera.x,
     returnChapter: state.chapter,
-    returnWeather: state.weather
+    returnWeather: state.weather,
+    lastX: secretWorldOffset + 260,
+    stuckSince: 0,
+    forceReturnAt: state.time + secretWorldDurationSeconds + 5
   };
   state.player.x = secretWorldOffset + 260;
   state.player.vx = 0;
   state.player.rest = 0;
   state.camera.x = secretWorldOffset;
   ensureSecretWorldDiscoveries();
-  showTransition(`${secret.name} s'ouvre. Le chemin bascule pour une minute.`);
+  showSecretTransition(`${secretWorld.entry}\nRetour dans 01:00.`);
+  showMessageFor(`${secretWorld.entry} Retour dans 01:00.`, 5200);
   updateAchievements();
   playSoftPing();
 }
 
-function updateSecretWorld() {
-  if (!state.activeSecretWorld || state.time < state.activeSecretWorld.returnAt) return;
-  leaveSecretWorld();
-}
-
-function leaveSecretWorld() {
+function updateSecretWorld(dt = 0, input = 0, beforeMoveX = state.player.x) {
   const secretWorld = state.activeSecretWorld;
   if (!secretWorld) return;
+  const moved = Math.abs(state.player.x - beforeMoveX);
+  if (Math.abs(input) > 0.2 && moved < 0.1 && state.time < secretWorld.returnAt) {
+    if (!secretWorld.stuckSince) secretWorld.stuckSince = state.time;
+  } else {
+    secretWorld.stuckSince = 0;
+  }
+  if (secretWorld.stuckSince && state.time - secretWorld.stuckSince > 5) {
+    leaveSecretWorld("force");
+    return;
+  }
+  if (state.time >= secretWorld.returnAt) {
+    leaveSecretWorld(state.time > (secretWorld.forceReturnAt || secretWorld.returnAt + 5) ? "force" : "auto");
+  }
+}
+
+function leaveSecretWorld(reason = "auto") {
+  const secretWorld = state.activeSecretWorld;
+  if (!secretWorld) return;
+  clearSecretWorldTransition();
+  pointer.active = false;
+  joystick.active = false;
+  joystick.x = 0;
+  joystick.y = 0;
+  ui.padKnob.style.transform = "translate(-50%, -50%)";
   state.player.x = Number.isFinite(secretWorld.returnX) ? secretWorld.returnX : world.firstRouteEnd;
   state.player.vx = 0;
+  state.player.rest = 0;
+  state.player.action = "";
+  state.player.actionUntil = 0;
   state.camera.x = Number.isFinite(secretWorld.returnCameraX) ? secretWorld.returnCameraX : Math.max(0, state.player.x - window.innerWidth * 0.45);
   state.chapter = Number.isFinite(secretWorld.returnChapter) ? secretWorld.returnChapter : getChapter(state.player.x);
   state.weather = secretWorld.returnWeather || getWeatherForChapter(state.chapter).id;
   Object.values(state.worldDiscoveries).forEach((item) => {
     if (item.zoneKey === secretWorld.zoneKey) delete state.worldDiscoveries[item.id];
   });
+  state.lastSecretWorldId = secretWorld.worldId || state.lastSecretWorldId;
   state.activeSecretWorld = null;
   const cooldown = secretDoorCooldowns[state.secretCycleIndex % secretDoorCooldowns.length];
   state.secretCycleIndex = (state.secretCycleIndex + 1) % secretDoorCooldowns.length;
   state.nextSecretAt = state.time + cooldown;
-  showTransition("Tu reviens exactement la ou la porte t'avait trouve.");
+  showSecretTransition(reason === "force"
+    ? "Le passage te ramene avant que le chemin ne se bloque."
+    : "Tu reviens exactement la ou la porte t'avait trouve.");
   saveGame();
 }
 
 function showTransition(text) {
+  secretTransitionToken += 1;
+  ui.cinematic.classList.remove("is-nonblocking");
   ui.cinematicText.textContent = text;
   ui.cinematic.classList.add("is-visible");
   setTimeout(() => ui.cinematic.classList.remove("is-visible"), 1400);
+}
+
+function showSecretTransition(text) {
+  secretTransitionToken += 1;
+  const token = secretTransitionToken;
+  ui.cinematicText.textContent = text;
+  ui.cinematic.classList.add("is-nonblocking");
+  ui.cinematic.classList.add("is-visible");
+  setTimeout(() => {
+    if (token === secretTransitionToken) clearSecretWorldTransition();
+  }, 1200);
+}
+
+function clearSecretWorldTransition() {
+  secretTransitionToken += 1;
+  ui.cinematic.classList.remove("is-visible");
+  ui.cinematic.classList.remove("is-nonblocking");
 }
 
 const questTemplates = [
@@ -2841,6 +3079,7 @@ function playRouteEndCinematic() {
     "A partir d'ici, les villages apparaissent, les habitants demandent de l'aide, et la route ne s'arrete plus."
   ];
   let index = 0;
+  ui.cinematic.classList.remove("is-nonblocking");
   ui.cinematic.classList.add("is-visible");
   ui.cinematicText.textContent = frames[index];
   const timer = setInterval(() => {
@@ -3207,6 +3446,8 @@ function resetGame() {
   state.nextSecretAt = 0;
   state.secretCycleIndex = 0;
   state.activeSecretWorld = null;
+  state.lastSecretWorldId = "";
+  state.lastSecretEdgeMessageAt = 0;
   state.companion = getEmptyCompanionState();
   state.companionGiverX = 0;
   state.time = 0;
@@ -3249,6 +3490,7 @@ function saveGame() {
     nextSecretAt: state.nextSecretAt,
     secretCycleIndex: state.secretCycleIndex,
     activeSecretWorld: state.activeSecretWorld,
+    lastSecretWorldId: state.lastSecretWorldId,
     companion: state.companion,
     companionGiverX: state.companionGiverX,
     startedAtLeastOnce: state.startedAtLeastOnce,
@@ -3297,6 +3539,17 @@ function loadGame() {
     state.nextSecretAt = Number.isFinite(payload.nextSecretAt) ? payload.nextSecretAt : 0;
     state.secretCycleIndex = Number.isFinite(payload.secretCycleIndex) ? payload.secretCycleIndex : 0;
     state.activeSecretWorld = payload.activeSecretWorld && typeof payload.activeSecretWorld === "object" ? payload.activeSecretWorld : null;
+    state.lastSecretWorldId = typeof payload.lastSecretWorldId === "string" ? payload.lastSecretWorldId : "";
+    state.lastSecretEdgeMessageAt = 0;
+    if (state.activeSecretWorld) {
+      const secretWorld = getSecretWorldConfig(state.activeSecretWorld.worldId);
+      state.activeSecretWorld.worldId = secretWorld.id;
+      state.activeSecretWorld.worldName = secretWorld.name;
+      if (!Number.isFinite(state.activeSecretWorld.returnAt)) state.activeSecretWorld.returnAt = state.time + 5;
+      if (!Number.isFinite(state.activeSecretWorld.forceReturnAt)) state.activeSecretWorld.forceReturnAt = state.activeSecretWorld.returnAt + 5;
+      if (!Number.isFinite(state.activeSecretWorld.returnX)) state.activeSecretWorld.returnX = world.firstRouteEnd;
+      if (state.player.x < secretWorldOffset) state.player.x = secretWorldOffset + 260;
+    }
     state.companion = normalizeCompanionState(payload.companion);
     state.companionGiverX = Number.isFinite(payload.companionGiverX) ? payload.companionGiverX : 0;
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
@@ -3581,37 +3834,60 @@ function setupAudio() {
   const music = context.createGain();
   const nature = context.createGain();
   const effects = context.createGain();
-  const lfo = context.createOscillator();
-  const filter = context.createBiquadFilter();
+  const musicFilter = context.createBiquadFilter();
+  const natureFilter = context.createBiquadFilter();
   const toneA = context.createOscillator();
   const toneB = context.createOscillator();
   const toneC = context.createOscillator();
+  const toneGains = [context.createGain(), context.createGain(), context.createGain()];
   const noiseBuffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
   const noiseData = noiseBuffer.getChannelData(0);
   for (let i = 0; i < noiseData.length; i += 1) noiseData[i] = Math.random() * 2 - 1;
   const noise = context.createBufferSource();
+  const musicElement = new Audio(mainMusicFile);
+  let musicSource = null;
 
-  toneA.type = "sine";
-  toneA.frequency.value = 130.81;
+  toneA.type = "triangle";
+  toneA.frequency.value = 98;
   toneB.type = "sine";
-  toneB.frequency.value = 196;
-  toneC.type = "sine";
-  toneC.frequency.value = 261.63;
+  toneB.frequency.value = 146.83;
+  toneC.type = "triangle";
+  toneC.frequency.value = 196;
+  toneA.detune.value = -3;
+  toneC.detune.value = 4;
+  toneGains[0].gain.value = 0.32;
+  toneGains[1].gain.value = 0.18;
+  toneGains[2].gain.value = 0.12;
   master.gain.value = 0;
   music.gain.value = 0;
   nature.gain.value = 0;
   effects.gain.value = 0;
-  filter.type = "lowpass";
-  filter.frequency.value = 360;
-  lfo.frequency.value = 0.04;
+  musicFilter.type = "lowpass";
+  musicFilter.frequency.value = 720;
+  musicFilter.Q.value = 0.45;
+  natureFilter.type = "lowpass";
+  natureFilter.frequency.value = 320;
+  natureFilter.Q.value = 0.28;
   noise.buffer = noiseBuffer;
   noise.loop = true;
+  musicElement.loop = true;
+  musicElement.preload = "auto";
+  musicElement.crossOrigin = "anonymous";
+  musicElement.volume = 1;
 
-  toneA.connect(music);
-  toneB.connect(music);
-  toneC.connect(music);
-  noise.connect(filter);
-  filter.connect(nature);
+  [toneA, toneB, toneC].forEach((tone, index) => {
+    tone.connect(toneGains[index]);
+    toneGains[index].connect(musicFilter);
+  });
+  try {
+    musicSource = context.createMediaElementSource(musicElement);
+    musicSource.connect(music);
+  } catch {
+    musicSource = null;
+  }
+  musicFilter.connect(music);
+  noise.connect(natureFilter);
+  natureFilter.connect(nature);
   music.connect(master);
   nature.connect(master);
   effects.connect(master);
@@ -3620,15 +3896,19 @@ function setupAudio() {
   toneB.start();
   toneC.start();
   noise.start();
-  lfo.start();
 
-  audio = { context, master, music, nature, effects, filter };
+  audio = { context, master, music, nature, effects, musicFilter, natureFilter, musicElement, musicSource };
   audio.tones = [toneA, toneB, toneC];
+  audio.toneGains = toneGains;
   audio.nextAmbient = 0;
+  audio.nextMusicCue = 0;
+  audio.musicReady = Boolean(musicSource);
+  audio.musicStarted = false;
   updateAudio();
 }
 
 function updateAudio() {
+  if (!audio) return;
   const streamDistance = Math.abs(state.player.x - 3820);
   const stream = Math.max(0, 1 - streamDistance / 900);
   const now = audio.context.currentTime;
@@ -3636,97 +3916,151 @@ function updateAudio() {
   const scene = getAudioScene();
   if (scene.key !== audioSceneKey) {
     audioSceneKey = scene.key;
-    audio.tones.forEach((tone, index) => tone.frequency.setTargetAtTime(scene.notes[index], now, 1.8));
+    audio.tones.forEach((tone, index) => tone.frequency.setTargetAtTime(scene.notes[index], now, 4.5));
+    audio.nextMusicCue = now + 1.8 + hashNumber(state.time + state.player.x) * 4.5;
+    audio.nextAmbient = now + 2.5 + hashNumber(state.player.x + scene.notes[0]) * 6;
   }
-  const musicVolume = state.options.music <= 0 ? 0 : state.options.music * scene.musicLevel * (0.08 + state.player.rest * 0.02);
-  const natureVolume = state.options.nature <= 0 ? 0 : state.options.nature * scene.natureLevel * (0.05 + stream * 0.06);
+  const musicVolume = state.options.music <= 0 ? 0 : state.options.music * scene.musicLevel * 0.13;
+  const natureVolume = state.options.nature <= 0 ? 0 : state.options.nature * scene.natureLevel * (0.07 + stream * 0.04);
   const effectsVolume = state.options.effects <= 0 ? 0 : state.options.effects;
-  audio.master.gain.setTargetAtTime(mute, now, mute <= 0 ? 0.01 : 0.15);
-  audio.music.gain.setTargetAtTime(musicVolume, now, state.options.music <= 0 ? 0.02 : 1.4);
-  audio.nature.gain.setTargetAtTime(natureVolume, now, state.options.nature <= 0 ? 0.02 : 1.2);
+  audio.master.gain.setTargetAtTime(mute, now, mute <= 0 ? 0.01 : 0.12);
+  audio.music.gain.setTargetAtTime(musicVolume, now, state.options.music <= 0 ? 0.02 : 1.8);
+  audio.nature.gain.setTargetAtTime(natureVolume, now, state.options.nature <= 0 ? 0.02 : 1.8);
   audio.effects.gain.setTargetAtTime(effectsVolume, now, state.options.effects <= 0 ? 0.01 : 0.08);
-  audio.filter.frequency.setTargetAtTime(scene.filter + stream * 360, now, 0.9);
-  if (mute > 0 && state.options.nature > 0 && now >= audio.nextAmbient) {
+  audio.musicFilter.frequency.setTargetAtTime(scene.filter, now, 1.4);
+  audio.natureFilter.frequency.setTargetAtTime(scene.natureFilter + stream * 240, now, 1.4);
+  syncMusicFilePlayback(mute, musicVolume);
+  if (mute <= 0) return;
+  if (!audio.musicReady && state.options.music > 0 && now >= audio.nextMusicCue) {
+    playMusicCue(scene);
+    audio.nextMusicCue = now + scene.cueInterval + hashNumber(now + state.player.x) * scene.cueJitter;
+  }
+  if (state.options.nature > 0 && now >= audio.nextAmbient) {
     playAmbientCue(scene);
-    audio.nextAmbient = now + scene.interval;
+    audio.nextAmbient = now + scene.interval + hashNumber(now + scene.filter) * scene.ambientJitter;
+  }
+}
+
+function syncMusicFilePlayback(mute, musicVolume) {
+  if (!audio?.musicElement || !audio.musicReady) return;
+  const shouldPlay = mute > 0 && musicVolume > 0 && running;
+  audio.musicElement.muted = !shouldPlay;
+  if (!shouldPlay) {
+    if (!audio.musicElement.paused) audio.musicElement.pause();
+    audio.musicStarted = false;
+    return;
+  }
+  if (!audio.musicElement.paused && audio.musicStarted) return;
+  const playPromise = audio.musicElement.play();
+  audio.musicStarted = true;
+  if (playPromise && typeof playPromise.catch === "function") {
+    playPromise.catch(() => {
+      audio.musicStarted = false;
+    });
   }
 }
 
 function getAudioScene() {
+  if (isInSecretWorld()) {
+    const secretWorld = getSecretWorldConfig();
+    return {
+      key: `secret-${secretWorld.id}`,
+      notes: secretWorld.notes,
+      filter: secretWorld.id === "cloud-valley" ? 760 : secretWorld.id === "star-river" ? 520 : 420,
+      natureFilter: secretWorld.id === "cloud-valley" ? 620 : secretWorld.id === "star-river" ? 460 : 340,
+      musicLevel: secretWorld.id === "firefly-garden" ? 0.72 : 0.86,
+      natureLevel: secretWorld.id === "star-river" ? 1.45 : 1.15,
+      ambient: secretWorld.ambient,
+      interval: secretWorld.id === "firefly-garden" ? 6.5 : secretWorld.id === "cloud-valley" ? 8.2 : 9.6,
+      ambientJitter: 7,
+      cueInterval: secretWorld.id === "cloud-valley" ? 13 : 15,
+      cueJitter: 9
+    };
+  }
   const season = getSeason();
   const weather = getWeatherForChapter().id;
   const place = getPlaceType();
   const night = isNightPlace();
   const scene = {
     key: `${season}-${weather}-${place}-${night ? "night" : "day"}`,
-    notes: [130.81, 196, 261.63],
-    filter: 220,
+    notes: [98, 146.83, 196],
+    filter: 560,
+    natureFilter: 320,
     musicLevel: 1,
     natureLevel: 1,
     ambient: "birds",
-    interval: 5.5
+    interval: 12,
+    ambientJitter: 9,
+    cueInterval: 14,
+    cueJitter: 10
   };
   if (season === "Printemps") {
-    scene.notes = [146.83, 220, 329.63];
-    scene.filter = 420;
+    scene.notes = [110, 164.81, 220];
+    scene.filter = 620;
     scene.natureLevel = 1.2;
   } else if (season === "Ete") {
-    scene.notes = [164.81, 246.94, 329.63];
-    scene.filter = 360;
+    scene.notes = [123.47, 185, 246.94];
+    scene.filter = 680;
   } else if (season === "Automne") {
-    scene.notes = [123.47, 185, 277.18];
-    scene.filter = 260;
+    scene.notes = [98, 146.83, 220];
+    scene.filter = 500;
   } else {
-    scene.notes = [110, 164.81, 220];
-    scene.filter = 180;
+    scene.notes = [82.41, 123.47, 185];
+    scene.filter = 420;
     scene.musicLevel = 0.82;
   }
   if (weather === "rain") {
     scene.notes = scene.notes.map((note) => note * 0.94);
-    scene.filter = 720;
+    scene.filter = 520;
+    scene.natureFilter = 520;
     scene.natureLevel = 1.65;
     scene.ambient = "rain-wind";
-    scene.interval = 2.4;
+    scene.interval = 7;
   } else if (weather === "wind") {
-    scene.notes = scene.notes.map((note) => note * 1.08);
-    scene.filter = 540;
+    scene.notes = scene.notes.map((note) => note * 1.04);
+    scene.filter = 640;
+    scene.natureFilter = 620;
     scene.natureLevel = 1.35;
     scene.ambient = "wind";
-    scene.interval = 3.2;
+    scene.interval = 8;
   } else if (weather === "snow") {
     scene.notes = scene.notes.map((note) => note * 0.88);
-    scene.filter = 150;
+    scene.filter = 380;
+    scene.natureFilter = 240;
     scene.natureLevel = 0.72;
     scene.ambient = "snow";
-    scene.interval = 7;
+    scene.interval = 13;
   } else if (weather === "mist") {
-    scene.filter = 130;
+    scene.filter = 360;
+    scene.natureFilter = 260;
     scene.musicLevel = 0.75;
     scene.ambient = "mist";
-    scene.interval = 6.4;
+    scene.interval = 11;
   }
   if (night) {
-    scene.notes = [98, 146.83, 196];
-    scene.filter = Math.min(scene.filter, 210);
+    scene.notes = [82.41, 123.47, 196];
+    scene.filter = Math.min(scene.filter, 430);
     scene.natureLevel += 0.38;
     scene.ambient = "crickets";
-    scene.interval = 1.8;
+    scene.interval = 9.5;
+    scene.cueInterval = 18;
   }
   if (place === "Village") {
-    scene.notes = [174.61, 220, 349.23];
+    scene.notes = [110, 164.81, 246.94];
     scene.musicLevel += 0.18;
     scene.ambient = "village";
-    scene.interval = 4.6;
+    scene.interval = 13;
   } else if (place === "Riviere") {
-    scene.filter += 260;
+    scene.filter += 80;
+    scene.natureFilter += 260;
     scene.natureLevel += 0.42;
     scene.ambient = weather === "rain" ? "rain-wind" : "river";
-    scene.interval = 2.8;
+    scene.interval = 8.5;
   } else if (place === "Montagne") {
     scene.notes = scene.notes.map((note) => note * 0.82);
     scene.musicLevel = Math.max(0.55, scene.musicLevel - 0.16);
     scene.ambient = weather === "snow" ? "snow" : "wind";
-    scene.interval = 4;
+    scene.interval = 12;
   }
   return scene;
 }
@@ -3736,43 +4070,65 @@ function playAmbientCue(scene) {
   const now = audio.context.currentTime;
   const gain = audio.context.createGain();
   const oscillator = audio.context.createOscillator();
-  oscillator.type = scene.ambient === "rain-wind" || scene.ambient === "wind" ? "sawtooth" : "sine";
+  oscillator.type = scene.ambient === "wind" || scene.ambient === "rain-wind" ? "triangle" : "sine";
   const frequencies = {
-    birds: [880, 1174.66],
-    "rain-wind": [180, 95],
-    wind: [146.83, 110],
-    crickets: [1760, 1567.98],
-    village: [523.25, 392],
-    river: [329.63, 246.94],
-    snow: [220, 164.81],
-    mist: [261.63, 196]
+    birds: [440, 493.88],
+    "rain-wind": [130.81, 98],
+    wind: [164.81, 123.47],
+    crickets: [659.25, 587.33],
+    village: [329.63, 261.63],
+    river: [246.94, 196],
+    snow: [196, 146.83],
+    mist: [220, 164.81]
   };
   const pair = frequencies[scene.ambient] || frequencies.birds;
   oscillator.frequency.setValueAtTime(pair[0], now);
-  oscillator.frequency.exponentialRampToValueAtTime(pair[1], now + 0.28);
+  oscillator.frequency.exponentialRampToValueAtTime(pair[1], now + 0.85);
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.018, now + 0.04);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + (scene.ambient === "village" ? 1.1 : 0.42));
+  gain.gain.exponentialRampToValueAtTime(0.009, now + 0.18);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + (scene.ambient === "river" || scene.ambient === "wind" ? 1.9 : 1.25));
   oscillator.connect(gain);
   gain.connect(audio.nature);
   oscillator.start(now);
-  oscillator.stop(now + (scene.ambient === "village" ? 1.2 : 0.5));
+  oscillator.stop(now + (scene.ambient === "river" || scene.ambient === "wind" ? 2 : 1.35));
+}
+
+function playMusicCue(scene) {
+  if (!audio || isAudioMuted() || state.options.music <= 0) return;
+  const now = audio.context.currentTime;
+  const base = scene.notes[Math.floor(hashNumber(now + state.player.x) * scene.notes.length) % scene.notes.length];
+  const harmony = base * (hashNumber(now + scene.filter) > 0.55 ? 1.5 : 1.25);
+  [base, harmony].forEach((frequency, index) => {
+    const oscillator = audio.context.createOscillator();
+    const gain = audio.context.createGain();
+    oscillator.type = index === 0 ? "triangle" : "sine";
+    oscillator.frequency.setValueAtTime(frequency, now + index * 0.12);
+    oscillator.detune.value = index === 0 ? -2 : 3;
+    gain.gain.setValueAtTime(0.0001, now + index * 0.12);
+    gain.gain.exponentialRampToValueAtTime(index === 0 ? 0.013 : 0.007, now + 0.28 + index * 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.4 + index * 0.2);
+    oscillator.connect(gain);
+    gain.connect(audio.music);
+    oscillator.start(now + index * 0.12);
+    oscillator.stop(now + 2.55 + index * 0.2);
+  });
 }
 
 function playSoftPing() {
   if (!audio || isAudioMuted() || state.options.effects <= 0) return;
   const oscillator = audio.context.createOscillator();
   const gain = audio.context.createGain();
-  oscillator.type = "sine";
-  oscillator.frequency.setValueAtTime(523.25, audio.context.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(783.99, audio.context.currentTime + 0.22);
-  gain.gain.setValueAtTime(0.0001, audio.context.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.035, audio.context.currentTime + 0.04);
-  gain.gain.exponentialRampToValueAtTime(0.0001, audio.context.currentTime + 0.5);
+  const now = audio.context.currentTime;
+  oscillator.type = "triangle";
+  oscillator.frequency.setValueAtTime(329.63, now);
+  oscillator.frequency.exponentialRampToValueAtTime(440, now + 0.12);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.018, now + 0.025);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
   oscillator.connect(gain);
   gain.connect(audio.effects);
-  oscillator.start();
-  oscillator.stop(audio.context.currentTime + 0.55);
+  oscillator.start(now);
+  oscillator.stop(now + 0.38);
 }
 
 window.addEventListener("resize", resize);
