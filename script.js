@@ -76,6 +76,9 @@ const minDiscoveryDoorDistance = 240;
 const minDiscoveryPlayerSpawnDistance = 520;
 const interactionRanges = { item: 78, letter: 78, secret: 105, villager: 98, companion: 98, lantern: 86, rest: 98 };
 const secretWorldOffset = 100000;
+const secretWorldWidth = 10000;
+const secretWorldEdgePadding = 120;
+const secretWorldItemSpacing = 760;
 const secretWorldDurationSeconds = 60;
 const secretDoorCooldowns = [7 * 60, 10 * 60, 15 * 60];
 const secretWorlds = [
@@ -458,15 +461,23 @@ function pickSecretWorldConfig() {
 }
 
 function getSecretWorldBounds() {
-  return { start: secretWorldOffset, end: secretWorldOffset + 2800 };
+  return { start: secretWorldOffset, end: secretWorldOffset + secretWorldWidth };
 }
 
 function clampToPlayableWorldX(x) {
   if (isInSecretWorld()) {
     const bounds = getSecretWorldBounds();
-    return Math.max(bounds.start + 120, Math.min(bounds.end - 120, x));
+    return Math.max(bounds.start + secretWorldEdgePadding, Math.min(bounds.end - secretWorldEdgePadding, x));
   }
   return Math.max(110, x);
+}
+
+function isPushingSecretWorldEdge(input = 0) {
+  if (!isInSecretWorld() || Math.abs(input) <= 0.2) return false;
+  const bounds = getSecretWorldBounds();
+  const leftEdge = bounds.start + secretWorldEdgePadding + 1;
+  const rightEdge = bounds.end - secretWorldEdgePadding - 1;
+  return (input < -0.2 && state.player.x <= leftEdge) || (input > 0.2 && state.player.x >= rightEdge);
 }
 
 function getDiscoveryRespawnDelay() {
@@ -595,8 +606,14 @@ function ensureSecretWorldDiscoveries() {
   const bounds = getSecretWorldBounds();
   const secretWorld = getSecretWorldConfig();
   const pool = secretWorld.items.map(getMissionCatalogItem).filter(Boolean);
-  pool.forEach((item, index) => {
-    const x = bounds.start + 760 + index * 520 + hashNumber(state.activeSecretWorld.startedAt + index * 23) * 170;
+  const usableWidth = Math.max(0, bounds.end - bounds.start - 1400);
+  const itemCount = Math.max(pool.length, Math.floor(usableWidth / secretWorldItemSpacing));
+  Array.from({ length: itemCount }).forEach((_, index) => {
+    const item = pool[index % pool.length];
+    if (!item) return;
+    const progress = itemCount <= 1 ? 0.5 : index / (itemCount - 1);
+    const jitter = (hashNumber(state.activeSecretWorld.startedAt + index * 23) - 0.5) * 260;
+    const x = bounds.start + 700 + progress * usableWidth + jitter;
     const placed = placeDiscoverySafely({
       ...item,
       id: makeId(item.id, Math.floor(state.activeSecretWorld.startedAt * 10) + index + 500),
@@ -604,7 +621,7 @@ function ensureSecretWorldDiscoveries() {
       place: secretWorld.name,
       visualType: getItemVisualType(item),
       zoneKey,
-      hiddenUntil: state.time + 2 + index * 2,
+      hiddenUntil: state.time + 2 + index * 1.2,
       createdAt: state.time
     }, index);
     state.worldDiscoveries[placed.id] = placed;
@@ -2623,7 +2640,11 @@ function updateSecretWorld(dt = 0, input = 0, beforeMoveX = state.player.x) {
   const secretWorld = state.activeSecretWorld;
   if (!secretWorld) return;
   const moved = Math.abs(state.player.x - beforeMoveX);
-  if (Math.abs(input) > 0.2 && moved < 0.1 && state.time < secretWorld.returnAt) {
+  const waitingForReturn = state.time < secretWorld.returnAt;
+  const tryingToMove = Math.abs(input) > 0.2;
+  const barelyMoved = moved < 0.1;
+  const atWorldEdge = isPushingSecretWorldEdge(input);
+  if (tryingToMove && barelyMoved && !atWorldEdge && waitingForReturn) {
     if (!secretWorld.stuckSince) secretWorld.stuckSince = state.time;
   } else {
     secretWorld.stuckSince = 0;
