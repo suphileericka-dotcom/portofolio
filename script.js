@@ -5,6 +5,7 @@ const ui = {
   startScreen: document.getElementById("startScreen"),
   startButton: document.getElementById("startButton"),
   continueButton: document.getElementById("continueButton"),
+  fullscreenButton: document.getElementById("fullscreenButton"),
   journalButton: document.getElementById("journalButton"),
   customizeButton: document.getElementById("customizeButton"),
   optionsButton: document.getElementById("optionsButton"),
@@ -276,7 +277,7 @@ const state = {
   companionGiverX: 0,
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur", appearance: { skin: "warm", hair: "dark", outfit: "berry", accessory: "bag" } },
-  options: { music: 0.1, nature: 0.16, effects: 0.25, muted: false, audioVersion: 5 }
+  options: { music: 0.22, nature: 0.32, effects: 0.34, muted: false, audioVersion: 6 }
 };
 
 const biomes = [
@@ -883,15 +884,38 @@ function getProceduralVillages() {
   return items;
 }
 
+function getViewportSize() {
+  const viewport = window.visualViewport;
+  return {
+    width: Math.max(1, Math.floor(viewport?.width || window.innerWidth || document.documentElement.clientWidth || 1)),
+    height: Math.max(1, Math.floor(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 1))
+  };
+}
+
 function resize() {
+  const size = getViewportSize();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.floor(window.innerWidth * dpr);
-  canvas.height = Math.floor(window.innerHeight * dpr);
-  canvas.style.width = `${window.innerWidth}px`;
-  canvas.style.height = `${window.innerHeight}px`;
+  canvas.width = Math.floor(size.width * dpr);
+  canvas.height = Math.floor(size.height * dpr);
+  canvas.style.width = `${size.width}px`;
+  canvas.style.height = `${size.height}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  world.ground = window.innerHeight * 0.72;
+  world.ground = size.height * 0.72;
   state.player.y = world.ground;
+  if (running) state.camera.x = Math.max(0, state.player.x - size.width * 0.45);
+  updateMobileLayoutClasses();
+}
+
+function updateMobileLayoutClasses() {
+  const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+  document.body.classList.toggle("landscape", isLandscape);
+  document.body.classList.toggle("portrait", !isLandscape);
+  document.body.classList.toggle("is-game-running", running);
+}
+
+function resizeGame() {
+  resize();
+  resetTouchControls();
 }
 
 function getBiome(x) {
@@ -1366,50 +1390,101 @@ function drawCompanionAnimal(companion, moving = false, sleeping = false) {
   const accent = companion.accent || "#f0bd6c";
   const species = companion.species || "Renard";
   const sit = !moving || sleeping;
+  const bird = species === "Petit oiseau";
+  const rabbit = species === "Lapin";
+  const hedgehog = species === "Herisson";
+  const squirrel = species === "Ecureuil";
+  const cat = species === "Chat";
+  const dog = species === "Chien";
+  const fox = species === "Renard";
+  const bodyWidth = bird ? 17 : hedgehog ? 22 : rabbit ? 20 : dog ? 27 : 24;
+  const bodyHeight = bird ? 11 : hedgehog ? 11 : sit ? 13 : 14;
+  const headSize = bird ? 9 : hedgehog ? 10 : dog ? 13 : 12;
+  const headX = bird ? 16 : hedgehog ? 18 : 20;
+  const headY = sit ? -15 : -17;
   ctx.fillStyle = "rgba(0,0,0,0.16)";
   ctx.beginPath();
-  ctx.ellipse(0, 10, 25, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 10, bodyWidth + 1, 6, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.ellipse(0, sit ? -8 : -10, 24, sit ? 13 : 14, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, sit ? -8 : -10, bodyWidth, bodyHeight, hedgehog ? -0.08 : 0, 0, Math.PI * 2);
   ctx.fill();
-  if (species === "Petit oiseau") {
+  if (bird) {
     ctx.fillStyle = accent;
     ctx.beginPath();
-    ctx.moveTo(17, -17);
-    ctx.lineTo(32, -13);
-    ctx.lineTo(18, -9);
+    ctx.ellipse(-3, -11, 13, 6, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#e7a04d";
+    ctx.beginPath();
+    ctx.moveTo(23, -16);
+    ctx.lineTo(34, -13);
+    ctx.lineTo(23, -10);
     ctx.fill();
   }
   ctx.beginPath();
-  ctx.arc(20, sit ? -15 : -17, 12, 0, Math.PI * 2);
+  ctx.arc(headX, headY, headSize, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = accent;
   ctx.beginPath();
-  if (species === "Lapin") {
+  if (rabbit) {
     ctx.moveTo(13, -25);
     ctx.lineTo(15, -51);
     ctx.lineTo(22, -25);
     ctx.moveTo(23, -25);
     ctx.lineTo(30, -50);
     ctx.lineTo(32, -24);
-  } else {
-    ctx.moveTo(12, -26);
-    ctx.lineTo(17, -43);
+  } else if (dog) {
+    ctx.moveTo(11, -25);
+    ctx.quadraticCurveTo(7, -36, 14, -39);
+    ctx.quadraticCurveTo(21, -34, 16, -23);
+    ctx.moveTo(25, -24);
+    ctx.quadraticCurveTo(37, -34, 35, -19);
+    ctx.quadraticCurveTo(28, -17, 25, -24);
+  } else if (bird) {
+    ctx.moveTo(12, -25);
+    ctx.lineTo(17, -36);
+    ctx.lineTo(22, -25);
+  } else if (cat) {
+    ctx.moveTo(12, -25);
+    ctx.lineTo(18, -43);
     ctx.lineTo(24, -25);
     ctx.moveTo(24, -25);
-    ctx.lineTo(34, -40);
+    ctx.lineTo(33, -42);
+    ctx.lineTo(34, -22);
+  } else {
+    ctx.moveTo(12, -26);
+    ctx.lineTo(fox ? 15 : 17, fox ? -45 : -43);
+    ctx.lineTo(24, -25);
+    ctx.moveTo(24, -25);
+    ctx.lineTo(fox ? 37 : 34, fox ? -39 : -40);
     ctx.lineTo(34, -21);
   }
   ctx.fill();
   ctx.strokeStyle = color;
-  ctx.lineWidth = species === "Herisson" ? 0 : 5;
-  ctx.beginPath();
-  ctx.moveTo(-20, -10);
-  ctx.quadraticCurveTo(-44, species === "Ecureuil" ? -44 : -28, -56, -5);
-  ctx.stroke();
-  if (species === "Herisson") {
+  if (!hedgehog && !bird) {
+    ctx.lineWidth = squirrel ? 8 : dog ? 6 : 5;
+    ctx.beginPath();
+    ctx.moveTo(-20, -10);
+    if (squirrel) {
+      ctx.quadraticCurveTo(-54, -52, -28, -58);
+      ctx.quadraticCurveTo(-5, -58, -16, -31);
+    } else if (rabbit) {
+      ctx.quadraticCurveTo(-34, -20, -42, -7);
+    } else if (dog) {
+      ctx.quadraticCurveTo(-42, -24 + Math.sin(state.time * 8) * 4, -55, -18);
+    } else {
+      ctx.quadraticCurveTo(-44, fox ? -32 : -28, -56, fox ? -7 : -5);
+    }
+    ctx.stroke();
+    if (fox) {
+      ctx.fillStyle = accent;
+      ctx.beginPath();
+      ctx.ellipse(-56, -7, 7, 4, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (hedgehog) {
     ctx.strokeStyle = accent;
     ctx.lineWidth = 2;
     for (let i = -16; i <= 12; i += 7) {
@@ -1419,9 +1494,19 @@ function drawCompanionAnimal(companion, moving = false, sleeping = false) {
       ctx.stroke();
     }
   }
+  if (cat) {
+    ctx.strokeStyle = "rgba(247,243,223,0.72)";
+    ctx.lineWidth = 1;
+    [-2, 2].forEach((side) => {
+      ctx.beginPath();
+      ctx.moveTo(27, headY - 2);
+      ctx.lineTo(39, headY + side * 2);
+      ctx.stroke();
+    });
+  }
   ctx.fillStyle = "#24312e";
   ctx.beginPath();
-  ctx.arc(25, sit ? -17 : -19, sleeping ? 1.6 : 2.4, 0, Math.PI * 2);
+  ctx.arc(headX + 5, headY - 2, sleeping ? 1.6 : 2.4, 0, Math.PI * 2);
   ctx.fill();
   if (sleeping) {
     ctx.font = "800 10px Nunito";
@@ -2181,6 +2266,16 @@ function clearMovementIntent() {
   joystick.y = 0;
   ui.padKnob.style.transform = "translate(-50%, -50%)";
   state.player.vx = 0;
+}
+
+function resetTouchControls() {
+  pointer.active = false;
+  pointer.worldX = state.player.x;
+  joystick.active = false;
+  joystick.id = null;
+  joystick.x = 0;
+  joystick.y = 0;
+  ui.padKnob.style.transform = "translate(-50%, -50%)";
 }
 
 function getInteractionTarget() {
@@ -3432,14 +3527,11 @@ async function startGame(reset = false) {
   state.startedAtLeastOnce = true;
   ui.startScreen.classList.add("is-hidden");
   setupAudio();
-  if (audio?.context?.state === "suspended") {
-    await audio.context.resume().catch(() => {});
-  }
-  if (audio?.musicDecodePromise && !isAudioMuted() && state.options.music > 0) {
-    await audio.musicDecodePromise.catch(() => {});
-  }
+  await unlockAudioFromUserGesture();
   running = true;
   startingGame = false;
+  updateMobileLayoutClasses();
+  resizeGame();
   if (audio) updateAudio();
   initWalkMemory();
   updateMissionTracker();
@@ -3821,11 +3913,11 @@ function loadOptions() {
     state.options.nature = Number.isFinite(payload.nature) ? payload.nature : state.options.nature;
     state.options.effects = Number.isFinite(payload.effects) ? payload.effects : state.options.effects;
     state.options.muted = Boolean(payload.muted);
-    if (payload.audioVersion !== 5) {
-      state.options.music = Math.min(state.options.music, 0.1);
-      state.options.nature = Math.min(state.options.nature, 0.16);
-      state.options.effects = Math.min(state.options.effects, 0.25);
-      state.options.audioVersion = 5;
+    if (payload.audioVersion !== 6) {
+      state.options.music = Math.max(state.options.music, 0.22);
+      state.options.nature = Math.max(state.options.nature, 0.32);
+      state.options.effects = Math.max(state.options.effects, 0.34);
+      state.options.audioVersion = 6;
       saveOptions();
     }
     syncOptionControls();
@@ -3853,6 +3945,10 @@ function isAudioMuted() {
     || (state.options.music <= 0 && state.options.nature <= 0 && state.options.effects <= 0);
 }
 
+function reportAudioError(message, error) {
+  console.warn(`[audio] ${message}`, error);
+}
+
 function updateMuteButton() {
   ui.muteButton.classList.toggle("is-muted", state.options.muted);
   ui.muteButton.title = state.options.muted ? "Remettre le son" : "Couper le son";
@@ -3869,6 +3965,7 @@ function preloadMainMusic() {
     })
     .catch((error) => {
       mainMusicArrayBufferPromise = null;
+      reportAudioError(`Impossible de charger ${mainMusicFile}`, error);
       throw error;
     });
   return mainMusicArrayBufferPromise;
@@ -3884,7 +3981,13 @@ function setupAudio() {
   if (audio) return;
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   if (!AudioContext) return;
-  const context = new AudioContext();
+  let context;
+  try {
+    context = new AudioContext();
+  } catch (error) {
+    reportAudioError("Creation AudioContext impossible.", error);
+    return;
+  }
   const master = context.createGain();
   const music = context.createGain();
   const nature = context.createGain();
@@ -3959,7 +4062,8 @@ function setupAudio() {
       updateAudio();
       return buffer;
     })
-    .catch(() => {
+    .catch((error) => {
+      reportAudioError("Decodage Web Audio impossible, tentative avec l'element Audio.", error);
       if (audio && audio.context === context) setupFallbackMusicElement();
       return null;
     });
@@ -3979,9 +4083,21 @@ function setupFallbackMusicElement() {
     audio.musicFallbackSource = musicSource;
     audio.musicReady = true;
     updateAudio();
-  } catch {
+  } catch (error) {
+    reportAudioError("Creation du lecteur audio de secours impossible.", error);
     audio.musicReady = false;
   }
+}
+
+async function unlockAudioFromUserGesture() {
+  if (!audio) return;
+  if (audio.context.state === "suspended") {
+    await audio.context.resume().catch((error) => reportAudioError("AudioContext bloque apres l'interaction utilisateur.", error));
+  }
+  if (audio.musicDecodePromise && !isAudioMuted() && state.options.music > 0) {
+    await audio.musicDecodePromise.catch((error) => reportAudioError("Musique principale indisponible apres le demarrage.", error));
+  }
+  updateAudio();
 }
 
 function updateAudio() {
@@ -4026,7 +4142,7 @@ function syncMusicFilePlayback(mute, musicVolume) {
     return;
   }
   if (audio.context.state === "suspended") {
-    audio.context.resume().catch(() => {});
+    audio.context.resume().catch((error) => reportAudioError("Reprise AudioContext refusee.", error));
   }
   if (audio.musicBuffer) {
     scheduleMainMusicLoop();
@@ -4045,7 +4161,7 @@ function syncFallbackMusicPlayback(shouldPlay) {
   }
   if (!musicElement.paused) return;
   const playPromise = musicElement.play();
-  if (playPromise?.catch) playPromise.catch(() => {});
+  if (playPromise?.catch) playPromise.catch((error) => reportAudioError("Lecture de la musique de secours refusee.", error));
 }
 
 function getMainMusicCycleSeconds() {
@@ -4138,9 +4254,57 @@ function destroyAudio() {
     audio.musicFallbackElement.load();
   }
   if (audio.musicFallbackSource) disconnectAudioNode(audio.musicFallbackSource);
-  audio.context.close().catch(() => {});
+  audio.context.close().catch((error) => reportAudioError("Fermeture AudioContext impossible.", error));
   audio = null;
   audioSceneKey = "";
+}
+
+function pauseAudioForPageHide() {
+  if (!audio) return;
+  stopMainMusicPlayback();
+  if (audio.context.state === "running") {
+    audio.context.suspend().catch((error) => reportAudioError("Suspension audio impossible.", error));
+  }
+}
+
+function resumeAudioAfterMobileInterruption() {
+  if (!running || isAudioMuted()) return;
+  setupAudio();
+  if (audio?.context?.state === "suspended") {
+    audio.context.resume().catch((error) => reportAudioError("Reprise audio apres interruption refusee.", error));
+  }
+  if (audio) updateAudio();
+}
+
+function getFullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+function updateFullscreenButton() {
+  const active = Boolean(getFullscreenElement());
+  ui.fullscreenButton.classList.toggle("is-active", active);
+  ui.fullscreenButton.title = active ? "Quitter le plein ecran" : "Plein ecran";
+  ui.fullscreenButton.setAttribute("aria-label", ui.fullscreenButton.title);
+}
+
+function toggleFullscreen() {
+  const target = document.querySelector(".game-shell") || document.documentElement;
+  const active = getFullscreenElement();
+  if (active) {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) {
+      const promise = exit.call(document);
+      if (promise?.catch) promise.catch((error) => console.warn("[fullscreen] Sortie plein ecran refusee.", error));
+    }
+    return;
+  }
+  const request = target.requestFullscreen || target.webkitRequestFullscreen;
+  if (!request) {
+    console.info("[fullscreen] API Fullscreen indisponible sur ce navigateur.");
+    return;
+  }
+  const promise = request.call(target);
+  if (promise?.catch) promise.catch((error) => console.warn("[fullscreen] Plein ecran refuse.", error));
 }
 
 function getAudioScene() {
@@ -4314,8 +4478,28 @@ function playSoftPing() {
   oscillator.stop(now + 0.38);
 }
 
-window.addEventListener("resize", resize);
-window.addEventListener("pagehide", destroyAudio);
+window.addEventListener("resize", resizeGame);
+window.addEventListener("orientationchange", () => {
+  setTimeout(resizeGame, 200);
+  setTimeout(resumeAudioAfterMobileInterruption, 250);
+});
+window.visualViewport?.addEventListener("resize", resizeGame);
+window.addEventListener("pagehide", pauseAudioForPageHide);
+window.addEventListener("pageshow", () => {
+  resizeGame();
+  resumeAudioAfterMobileInterruption();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    pauseAudioForPageHide();
+  } else {
+    resizeGame();
+    resumeAudioAfterMobileInterruption();
+  }
+});
+window.addEventListener("focus", resumeAudioAfterMobileInterruption);
+document.addEventListener("fullscreenchange", updateFullscreenButton);
+document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
 window.addEventListener("keydown", (event) => {
   keys.add(event.key);
   if (event.key === "e" || event.key === "E" || event.key === " ") {
@@ -4408,16 +4592,19 @@ ui.journalList.addEventListener("keydown", (event) => {
 ui.infoButton.addEventListener("click", () => ui.infoDialog.showModal());
 ui.discoveryDialog.addEventListener("close", closeDiscoveryPopup);
 ui.optionsButton.addEventListener("click", () => ui.optionsDialog.showModal());
+ui.fullscreenButton.addEventListener("click", toggleFullscreen);
 ui.muteButton.addEventListener("click", () => {
   state.options.muted = !state.options.muted;
   updateMuteButton();
   saveOptions();
+  resumeAudioAfterMobileInterruption();
   if (audio) updateAudio();
 });
 ui.soundEnabledToggle.addEventListener("change", () => {
   state.options.muted = !ui.soundEnabledToggle.checked;
   updateMuteButton();
   saveOptions();
+  resumeAudioAfterMobileInterruption();
   if (audio) updateAudio();
 });
 ui.resetButton.addEventListener("click", () => {
@@ -4449,12 +4636,13 @@ ui.resetDiscoveryTipsButton.addEventListener("click", () => {
 
 loadPlayerProfile();
 loadOptions();
-preloadMainMusic()?.catch(() => {});
+preloadMainMusic()?.catch((error) => reportAudioError("Prechargement initial de la musique impossible.", error));
 const hasSave = loadGame();
 ui.nicknameInput.value = state.playerProfile.nickname;
 ui.continueButton.disabled = !hasSave;
 ui.continueButton.style.opacity = hasSave ? "1" : "0.55";
 updateMissionTracker();
-resize();
+resizeGame();
+updateFullscreenButton();
 draw();
 requestAnimationFrame(loop);

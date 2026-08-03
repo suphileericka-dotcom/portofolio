@@ -1,11 +1,12 @@
-const CACHE_NAME = "bosquet-lent-v30";
+const CACHE_NAME = "bosquet-lent-v31";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./script.js",
   "./manifest.webmanifest",
-  "./icon.svg"
+  "./icon.svg",
+  "./jean-paul-v-aventures-chinoises-289659.mp3"
 ];
 
 self.addEventListener("install", (event) => {

@@ -19,14 +19,18 @@ html,
 body {
   width: 100%;
   height: 100%;
+  min-height: 100%;
+  margin: 0;
   overflow: hidden;
 }
 
 body {
-  margin: 0;
+  min-height: 100dvh;
   color: var(--ink);
   background: #101817;
   font-family: "Nunito", system-ui, sans-serif;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 button,
@@ -42,9 +46,9 @@ button {
 
 .game-shell {
   position: relative;
-  width: 100vw;
-  height: 100vh;
-  min-height: 28rem;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
   overflow: hidden;
   background: #101817;
 }
@@ -199,9 +203,9 @@ h2 {
 .hud {
   position: absolute;
   z-index: 4;
-  top: 1rem;
-  left: 1rem;
-  right: 1rem;
+  top: max(1rem, env(safe-area-inset-top));
+  left: max(1rem, env(safe-area-inset-left));
+  right: max(1rem, env(safe-area-inset-right));
   display: flex;
   justify-content: flex-end;
   gap: 0.8rem;
@@ -216,7 +220,8 @@ h2 {
 }
 
 .icon-button,
-.sound-button {
+.sound-button,
+.fullscreen-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -236,12 +241,17 @@ h2 {
   pointer-events: auto;
 }
 
-.sound-button {
+.sound-button,
+.fullscreen-button {
   width: 2.55rem;
   padding: 0;
   color: transparent;
   pointer-events: auto;
   position: relative;
+}
+
+.fullscreen-button {
+  display: none;
 }
 
 .sound-button::before {
@@ -278,11 +288,29 @@ h2 {
   transform: rotate(-42deg);
 }
 
+.fullscreen-button::before,
+.fullscreen-button::after {
+  content: "";
+  position: absolute;
+  inset: 0.68rem;
+  border: 2px solid var(--ink);
+}
+
+.fullscreen-button::before {
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.fullscreen-button::after {
+  border-left: 0;
+  border-top: 0;
+}
+
 .message {
   position: absolute;
   z-index: 5;
   left: 50%;
-  bottom: 2rem;
+  bottom: max(2rem, calc(env(safe-area-inset-bottom) + 1rem));
   width: min(34rem, calc(100% - 2rem));
   padding: 0.95rem 1rem;
   border-radius: 0.5rem;
@@ -335,8 +363,8 @@ h2 {
 
 .version-badge {
   position: absolute;
-  right: 0.8rem;
-  bottom: 0.65rem;
+  right: max(0.8rem, env(safe-area-inset-right));
+  bottom: max(0.65rem, env(safe-area-inset-bottom));
   z-index: 3;
   padding: 0.28rem 0.48rem;
   border-radius: 0.35rem;
@@ -388,8 +416,8 @@ h2 {
 .mobile-pad {
   position: absolute;
   z-index: 4;
-  left: 1.1rem;
-  bottom: 1.1rem;
+  left: max(1.1rem, calc(env(safe-area-inset-left) + 0.9rem));
+  bottom: max(1.1rem, calc(env(safe-area-inset-bottom) + 0.9rem));
   width: 7.5rem;
   height: 7.5rem;
   border-radius: 50%;
@@ -398,6 +426,43 @@ h2 {
   backdrop-filter: blur(12px);
   display: none;
   touch-action: none;
+}
+
+.rotate-phone {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: none;
+  place-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: radial-gradient(circle at 50% 38%, rgba(240, 189, 108, 0.16), transparent 16rem), rgba(12, 22, 21, 0.92);
+  color: var(--ink);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.rotate-phone p {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.phone-illustration {
+  width: 5.2rem;
+  height: 7.6rem;
+  display: grid;
+  place-items: center;
+  border: 0.28rem solid rgba(247, 243, 223, 0.84);
+  border-radius: 1rem;
+  transform: rotate(90deg);
+}
+
+.phone-illustration span {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 50%;
+  background: var(--sun);
 }
 
 .pad-knob {
@@ -413,7 +478,7 @@ h2 {
 
 .panel-dialog {
   width: min(34rem, calc(100vw - 1.4rem));
-  max-height: min(44rem, calc(100vh - 1.4rem));
+  max-height: min(44rem, calc(100dvh - 1.4rem));
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 0.75rem;
@@ -429,6 +494,8 @@ h2 {
 
 .panel-dialog form {
   padding: 1rem;
+  max-height: calc(100dvh - 1.4rem);
+  overflow: auto;
 }
 
 #journalDialog {
@@ -561,7 +628,7 @@ h2 {
 .journal-list {
   display: grid;
   gap: 0.9rem;
-  max-height: min(34rem, calc(100vh - 8rem));
+  max-height: min(34rem, calc(100dvh - 8rem));
   overflow: auto;
   padding-right: 0.25rem;
 }
@@ -1260,26 +1327,41 @@ input[type="range"] {
 }
 
 @media (pointer: coarse), (max-width: 760px) {
+  button,
+  input,
+  .encyclopedia-card.is-known {
+    touch-action: manipulation;
+  }
+
   .mobile-pad {
     display: block;
+    width: 8.5rem;
+    height: 8.5rem;
   }
 
   .hud {
-    top: 0.7rem;
-    left: 0.7rem;
-    right: 0.7rem;
+    top: max(0.7rem, env(safe-area-inset-top));
+    left: max(0.7rem, env(safe-area-inset-left));
+    right: max(0.7rem, env(safe-area-inset-right));
   }
 
   .icon-button,
-  .sound-button {
-    min-height: 2.35rem;
-    padding: 0 0.62rem;
+  .sound-button,
+  .fullscreen-button {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    padding: 0 0.7rem;
     font-size: 0.8rem;
   }
 
-  .sound-button {
-    width: 2.35rem;
+  .sound-button,
+  .fullscreen-button {
+    width: 2.75rem;
     padding: 0;
+  }
+
+  .fullscreen-button {
+    display: inline-flex;
   }
 
   .journal-card {
@@ -1303,7 +1385,17 @@ input[type="range"] {
   }
 
   .message {
-    bottom: 9.1rem;
+    bottom: max(9.8rem, calc(env(safe-area-inset-bottom) + 9rem));
+  }
+
+  .panel-dialog {
+    width: min(34rem, calc(100vw - 1rem));
+    max-height: calc(100dvh - 1rem);
+  }
+
+  .panel-dialog form {
+    max-height: calc(100dvh - 1rem);
+    padding: 0.85rem;
   }
 }
 
@@ -1319,5 +1411,49 @@ input[type="range"] {
 
   .field-row {
     width: 100%;
+  }
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+  body.is-game-running .rotate-phone {
+    display: grid;
+  }
+}
+
+@media (pointer: coarse) and (orientation: landscape) {
+  .game-shell {
+    min-height: 100dvh;
+  }
+
+  .hud {
+    justify-content: flex-end;
+  }
+
+  .hud-group {
+    max-width: min(31rem, calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 1.4rem));
+    justify-content: flex-end;
+  }
+
+  .mobile-pad {
+    left: max(1.25rem, calc(env(safe-area-inset-left) + 1rem));
+    bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 1rem));
+    width: min(8.2rem, 24dvh);
+    height: min(8.2rem, 24dvh);
+  }
+
+  .message {
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    width: min(32rem, calc(100vw - 12rem));
+  }
+
+  .mission-tracker {
+    top: max(4.25rem, calc(env(safe-area-inset-top) + 3.2rem));
+    left: max(1rem, env(safe-area-inset-left));
+    width: min(18rem, 36vw);
+  }
+
+  .panel-dialog {
+    width: min(38rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 1rem);
   }
 }
