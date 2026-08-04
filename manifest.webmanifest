@@ -4,10 +4,11 @@
   "description": "Jeu contemplatif de marche, de villages et de petites decouvertes.",
   "start_url": "./index.html",
   "scope": "./",
-  "display": "standalone",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
   "background_color": "#101817",
   "theme_color": "#142221",
-  "orientation": "portrait",
+  "orientation": "any",
   "icons": [
     {
       "src": "icon.svg",

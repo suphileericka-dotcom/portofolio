@@ -9,6 +9,7 @@
   --water: #67b4c8;
   --berry: #ce6f75;
   --shadow: 0 22px 70px rgba(0, 0, 0, 0.35);
+  --app-height: 100dvh;
 }
 
 * {
@@ -25,7 +26,7 @@ body {
 }
 
 body {
-  min-height: 100dvh;
+  min-height: var(--app-height);
   color: var(--ink);
   background: #101817;
   font-family: "Nunito", system-ui, sans-serif;
@@ -48,7 +49,7 @@ button {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 100dvh;
+  min-height: var(--app-height);
   overflow: hidden;
   background: #101817;
 }
@@ -58,8 +59,31 @@ button {
   inset: 0;
   width: 100%;
   height: 100%;
+  min-height: var(--app-height);
   display: block;
   touch-action: none;
+}
+
+.game-shell:fullscreen,
+.game-shell:-webkit-full-screen,
+html:fullscreen,
+html:-webkit-full-screen,
+body:fullscreen,
+body:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #101817;
+}
+
+.game-shell:fullscreen #gameCanvas,
+.game-shell:-webkit-full-screen #gameCanvas,
+html:fullscreen #gameCanvas,
+html:-webkit-full-screen #gameCanvas {
+  width: 100%;
+  height: 100%;
 }
 
 .start-screen {
@@ -426,43 +450,6 @@ h2 {
   backdrop-filter: blur(12px);
   display: none;
   touch-action: none;
-}
-
-.rotate-phone {
-  position: absolute;
-  inset: 0;
-  z-index: 7;
-  display: none;
-  place-items: center;
-  gap: 1rem;
-  padding: 1.5rem;
-  background: radial-gradient(circle at 50% 38%, rgba(240, 189, 108, 0.16), transparent 16rem), rgba(12, 22, 21, 0.92);
-  color: var(--ink);
-  text-align: center;
-  pointer-events: auto;
-}
-
-.rotate-phone p {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 900;
-}
-
-.phone-illustration {
-  width: 5.2rem;
-  height: 7.6rem;
-  display: grid;
-  place-items: center;
-  border: 0.28rem solid rgba(247, 243, 223, 0.84);
-  border-radius: 1rem;
-  transform: rotate(90deg);
-}
-
-.phone-illustration span {
-  width: 0.48rem;
-  height: 0.48rem;
-  border-radius: 50%;
-  background: var(--sun);
 }
 
 .pad-knob {
@@ -1411,12 +1398,6 @@ input[type="range"] {
 
   .field-row {
     width: 100%;
-  }
-}
-
-@media (pointer: coarse) and (orientation: portrait) {
-  body.is-game-running .rotate-phone {
-    display: grid;
   }
 }
 

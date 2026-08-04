@@ -6,6 +6,7 @@
   <title>Bosquet Lent - Jeu contemplatif</title>
   <meta name="theme-color" content="#142221">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Bosquet Lent">
   <link rel="manifest" href="manifest.webmanifest">
@@ -45,7 +46,7 @@
 
     <aside id="message" class="message" aria-live="polite"></aside>
     <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
-    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.31</aside>
+    <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.32</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -55,13 +56,6 @@
     <div id="mobilePad" class="mobile-pad" aria-hidden="true">
       <div id="padKnob" class="pad-knob"></div>
     </div>
-
-    <section class="rotate-phone" aria-live="polite">
-      <div class="phone-illustration" aria-hidden="true">
-        <span></span>
-      </div>
-      <p>Tournez votre telephone pour jouer</p>
-    </section>
 
     <dialog id="journalDialog" class="panel-dialog">
       <form method="dialog">
@@ -224,7 +218,7 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.31").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.32").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});

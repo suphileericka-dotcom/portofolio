@@ -277,7 +277,7 @@ const state = {
   companionGiverX: 0,
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur", appearance: { skin: "warm", hair: "dark", outfit: "berry", accessory: "bag" } },
-  options: { music: 0.22, nature: 0.32, effects: 0.34, muted: false, audioVersion: 6 }
+  options: { music: 0.38, nature: 0.46, effects: 0.5, muted: false, audioVersion: 7 }
 };
 
 const biomes = [
@@ -895,6 +895,7 @@ function getViewportSize() {
 function resize() {
   const size = getViewportSize();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  document.documentElement.style.setProperty("--app-height", `${size.height}px`);
   canvas.width = Math.floor(size.width * dpr);
   canvas.height = Math.floor(size.height * dpr);
   canvas.style.width = `${size.width}px`;
@@ -910,7 +911,6 @@ function updateMobileLayoutClasses() {
   const isLandscape = window.matchMedia("(orientation: landscape)").matches;
   document.body.classList.toggle("landscape", isLandscape);
   document.body.classList.toggle("portrait", !isLandscape);
-  document.body.classList.toggle("is-game-running", running);
 }
 
 function resizeGame() {
@@ -3527,9 +3527,9 @@ async function startGame(reset = false) {
   state.startedAtLeastOnce = true;
   ui.startScreen.classList.add("is-hidden");
   setupAudio();
-  await unlockAudioFromUserGesture();
   running = true;
   startingGame = false;
+  await unlockAudioFromUserGesture();
   updateMobileLayoutClasses();
   resizeGame();
   if (audio) updateAudio();
@@ -3913,11 +3913,11 @@ function loadOptions() {
     state.options.nature = Number.isFinite(payload.nature) ? payload.nature : state.options.nature;
     state.options.effects = Number.isFinite(payload.effects) ? payload.effects : state.options.effects;
     state.options.muted = Boolean(payload.muted);
-    if (payload.audioVersion !== 6) {
-      state.options.music = Math.max(state.options.music, 0.22);
-      state.options.nature = Math.max(state.options.nature, 0.32);
-      state.options.effects = Math.max(state.options.effects, 0.34);
-      state.options.audioVersion = 6;
+    if (payload.audioVersion !== 7) {
+      state.options.music = Math.max(state.options.music, 0.38);
+      state.options.nature = Math.max(state.options.nature, 0.46);
+      state.options.effects = Math.max(state.options.effects, 0.5);
+      state.options.audioVersion = 7;
       saveOptions();
     }
     syncOptionControls();
@@ -4054,17 +4054,11 @@ function setupAudio() {
   audio.nextAmbient = 0;
   audio.nextMusicCue = 0;
   audio.musicReady = false;
-  audio.musicDecodePromise = decodeMainMusic(context)
-    .then((buffer) => {
-      if (!audio || audio.context !== context) return null;
-      audio.musicBuffer = buffer;
-      audio.musicReady = true;
-      updateAudio();
-      return buffer;
-    })
+  setupFallbackMusicElement();
+  audio.musicDecodePromise = preloadMainMusic()
+    .then(() => null)
     .catch((error) => {
-      reportAudioError("Decodage Web Audio impossible, tentative avec l'element Audio.", error);
-      if (audio && audio.context === context) setupFallbackMusicElement();
+      reportAudioError(`Verification du fichier ${mainMusicFile} impossible.`, error);
       return null;
     });
   updateAudio();
@@ -4076,6 +4070,11 @@ function setupFallbackMusicElement() {
   musicElement.loop = true;
   musicElement.preload = "auto";
   musicElement.volume = 1;
+  musicElement.setAttribute("playsinline", "");
+  musicElement.setAttribute("webkit-playsinline", "");
+  musicElement.addEventListener("error", () => reportAudioError(`Erreur de lecture du fichier ${mainMusicFile}.`, musicElement.error));
+  musicElement.addEventListener("stalled", () => reportAudioError(`Chargement audio interrompu pour ${mainMusicFile}.`, musicElement.networkState));
+  musicElement.addEventListener("abort", () => reportAudioError(`Chargement audio annule pour ${mainMusicFile}.`, musicElement.networkState));
   try {
     const musicSource = audio.context.createMediaElementSource(musicElement);
     musicSource.connect(audio.music);
@@ -4113,8 +4112,8 @@ function updateAudio() {
     audio.nextMusicCue = now + 1.8 + hashNumber(state.time + state.player.x) * 4.5;
     audio.nextAmbient = now + 2.5 + hashNumber(state.player.x + scene.notes[0]) * 6;
   }
-  const musicVolume = state.options.music <= 0 ? 0 : state.options.music * scene.musicLevel * 0.13;
-  const natureVolume = state.options.nature <= 0 ? 0 : state.options.nature * scene.natureLevel * (0.07 + stream * 0.04);
+  const musicVolume = state.options.music <= 0 ? 0 : state.options.music * scene.musicLevel * 0.34;
+  const natureVolume = state.options.nature <= 0 ? 0 : state.options.nature * scene.natureLevel * (0.18 + stream * 0.08);
   const effectsVolume = state.options.effects <= 0 ? 0 : state.options.effects;
   audio.master.gain.setTargetAtTime(mute, now, mute <= 0 ? 0.01 : 0.12);
   audio.music.gain.setTargetAtTime(musicVolume, now, state.options.music <= 0 ? 0.02 : 1.8);
@@ -4280,15 +4279,39 @@ function getFullscreenElement() {
   return document.fullscreenElement || document.webkitFullscreenElement || null;
 }
 
+function isStandaloneDisplay() {
+  return window.matchMedia?.("(display-mode: fullscreen)")?.matches
+    || window.matchMedia?.("(display-mode: standalone)")?.matches
+    || navigator.standalone === true;
+}
+
 function updateFullscreenButton() {
-  const active = Boolean(getFullscreenElement());
+  const active = Boolean(getFullscreenElement()) || isStandaloneDisplay();
   ui.fullscreenButton.classList.toggle("is-active", active);
-  ui.fullscreenButton.title = active ? "Quitter le plein ecran" : "Plein ecran";
+  ui.fullscreenButton.title = active ? "Plein ecran actif" : "Plein ecran";
   ui.fullscreenButton.setAttribute("aria-label", ui.fullscreenButton.title);
 }
 
-function toggleFullscreen() {
-  const target = document.querySelector(".game-shell") || document.documentElement;
+function handleFullscreenChange() {
+  updateFullscreenButton();
+  setTimeout(resizeGame, 80);
+}
+
+async function lockLandscapeIfPossible() {
+  if (!screen.orientation?.lock) return;
+  if (!window.matchMedia?.("(pointer: coarse)")?.matches) return;
+  await screen.orientation.lock("landscape").catch((error) => console.info("[fullscreen] Verrouillage orientation indisponible.", error));
+}
+
+function getFullscreenTargets() {
+  return [
+    document.documentElement,
+    document.querySelector(".game-shell"),
+    canvas
+  ].filter(Boolean);
+}
+
+async function toggleFullscreen() {
   const active = getFullscreenElement();
   if (active) {
     const exit = document.exitFullscreen || document.webkitExitFullscreen;
@@ -4298,13 +4321,22 @@ function toggleFullscreen() {
     }
     return;
   }
-  const request = target.requestFullscreen || target.webkitRequestFullscreen;
-  if (!request) {
-    console.info("[fullscreen] API Fullscreen indisponible sur ce navigateur.");
-    return;
+  const targets = getFullscreenTargets().filter((candidate) => candidate.requestFullscreen || candidate.webkitRequestFullscreen);
+  for (const target of targets) {
+    const request = target.requestFullscreen || target.webkitRequestFullscreen;
+    try {
+      const promise = request.call(target, { navigationUI: "hide" });
+      if (promise?.then) await promise;
+      resizeGame();
+      lockLandscapeIfPossible();
+      return;
+    } catch (error) {
+      console.warn("[fullscreen] Plein ecran refuse pour une cible.", error);
+    }
   }
-  const promise = request.call(target);
-  if (promise?.catch) promise.catch((error) => console.warn("[fullscreen] Plein ecran refuse.", error));
+  console.info("[fullscreen] API Fullscreen indisponible ou refusee. Sur iPhone Safari, installe la PWA via Ajouter a l'ecran d'accueil pour supprimer la barre du navigateur.");
+  showMessageFor("Ce navigateur garde parfois ses barres. La PWA donne le vrai plein ecran.", 4200);
+  updateFullscreenButton();
 }
 
 function getAudioScene() {
@@ -4432,7 +4464,7 @@ function playAmbientCue(scene) {
   oscillator.frequency.setValueAtTime(pair[0], now);
   oscillator.frequency.exponentialRampToValueAtTime(pair[1], now + 0.85);
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.009, now + 0.18);
+  gain.gain.exponentialRampToValueAtTime(0.024, now + 0.18);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + (scene.ambient === "river" || scene.ambient === "wind" ? 1.9 : 1.25));
   oscillator.connect(gain);
   gain.connect(audio.nature);
@@ -4452,7 +4484,7 @@ function playMusicCue(scene) {
     oscillator.frequency.setValueAtTime(frequency, now + index * 0.12);
     oscillator.detune.value = index === 0 ? -2 : 3;
     gain.gain.setValueAtTime(0.0001, now + index * 0.12);
-    gain.gain.exponentialRampToValueAtTime(index === 0 ? 0.013 : 0.007, now + 0.28 + index * 0.12);
+    gain.gain.exponentialRampToValueAtTime(index === 0 ? 0.026 : 0.014, now + 0.28 + index * 0.12);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.4 + index * 0.2);
     oscillator.connect(gain);
     gain.connect(audio.music);
@@ -4470,7 +4502,7 @@ function playSoftPing() {
   oscillator.frequency.setValueAtTime(329.63, now);
   oscillator.frequency.exponentialRampToValueAtTime(440, now + 0.12);
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.018, now + 0.025);
+  gain.gain.exponentialRampToValueAtTime(0.055, now + 0.025);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
   oscillator.connect(gain);
   gain.connect(audio.effects);
@@ -4498,8 +4530,8 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 window.addEventListener("focus", resumeAudioAfterMobileInterruption);
-document.addEventListener("fullscreenchange", updateFullscreenButton);
-document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+document.addEventListener("fullscreenchange", handleFullscreenChange);
+document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
 window.addEventListener("keydown", (event) => {
   keys.add(event.key);
   if (event.key === "e" || event.key === "E" || event.key === " ") {
