@@ -7,10 +7,14 @@
     "check": "node --check script.js",
     "build": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Test-Path dist) { Remove-Item dist -Recurse -Force }; New-Item -ItemType Directory -Force dist | Out-Null; Copy-Item index.html,styles.css,script.js,manifest.webmanifest,sw.js,icon.svg,cover-bosquet-lent-game-style.png,jean-paul-v-aventures-chinoises-289659.mp3 dist\"",
     "cap:sync": "npm run build && npx cap sync",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:bundle": "npm run android:sync && cd android && gradlew.bat bundleRelease",
+    "android:apk": "npm run android:sync && cd android && gradlew.bat assembleRelease",
     "ios:add": "npm run build && npx cap add ios",
     "ios:open": "npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.8",
     "@capacitor/cli": "^7.6.8",
     "@capacitor/core": "^7.6.8",
     "@capacitor/ios": "^7.6.8"

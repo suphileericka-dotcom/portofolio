@@ -30,6 +30,35 @@ Dans Xcode, ouvrir `ios/App/App.xcworkspace`, choisir l'equipe Apple Developer, 
 
 Avant soumission, remplacer les icones iOS par les icones finales de l'app dans Xcode et creer la fiche App Store Connect.
 
+## Google Play Android
+
+Le projet Android est prepare avec Capacitor dans `android/`. Android Studio n'est pas obligatoire, mais il faut un JDK et le SDK Android installes.
+
+Commandes utiles:
+
+```bash
+npm install
+npm run android:sync
+```
+
+Pour signer une version release, creer une cle de televersement privee dans `android/`:
+
+```bash
+cd android
+keytool -genkeypair -v -keystore upload-keystore.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000
+copy keystore.properties.example keystore.properties
+```
+
+Modifier ensuite `android/keystore.properties` avec les vrais mots de passe. Ce fichier et la cle `.jks` sont ignores par Git.
+
+Pour generer le bundle Google Play:
+
+```bash
+npm run android:bundle
+```
+
+Le fichier a televerser dans Google Play Console sera dans `android/app/build/outputs/bundle/release/`.
+
 Nouveautes:
 - Identifiant anonyme genere au premier lancement, sans creation de compte visible
 - Pseudo joueur et reprise de partie
