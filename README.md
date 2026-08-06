@@ -6,6 +6,30 @@ Ouvrir `index.html` dans un navigateur pour jouer.
 
 Le jeu est entierement solo et ne depend d'aucun serveur temps reel.
 
+## App Store iOS
+
+Le projet iOS est prepare avec Capacitor dans `ios/`.
+
+Commandes utiles:
+
+```bash
+npm run build
+npx cap sync ios
+```
+
+Sur un Mac avec Xcode:
+
+```bash
+npm install
+npm run build
+npx cap sync ios
+npx cap open ios
+```
+
+Dans Xcode, ouvrir `ios/App/App.xcworkspace`, choisir l'equipe Apple Developer, verifier le Bundle Identifier `com.suphileericka.bosquetlent`, puis generer une archive avec `Product > Archive`. Envoyer ensuite l'archive vers App Store Connect depuis l'Organizer.
+
+Avant soumission, remplacer les icones iOS par les icones finales de l'app dans Xcode et creer la fiche App Store Connect.
+
 Nouveautes:
 - Identifiant anonyme genere au premier lancement, sans creation de compte visible
 - Pseudo joueur et reprise de partie

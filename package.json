@@ -4,6 +4,15 @@
   "private": true,
   "description": "Jeu contemplatif solo.",
   "scripts": {
-    "check": "node --check script.js"
+    "check": "node --check script.js",
+    "build": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Test-Path dist) { Remove-Item dist -Recurse -Force }; New-Item -ItemType Directory -Force dist | Out-Null; Copy-Item index.html,styles.css,script.js,manifest.webmanifest,sw.js,icon.svg,cover-bosquet-lent-game-style.png,jean-paul-v-aventures-chinoises-289659.mp3 dist\"",
+    "cap:sync": "npm run build && npx cap sync",
+    "ios:add": "npm run build && npx cap add ios",
+    "ios:open": "npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/cli": "^7.6.8",
+    "@capacitor/core": "^7.6.8",
+    "@capacitor/ios": "^7.6.8"
   }
 }
