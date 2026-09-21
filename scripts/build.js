@@ -13,10 +13,17 @@ const files = [
   "cover-bosquet-lent-game-style.png",
   "jean-paul-v-aventures-chinoises-289659.mp3",
 ];
+const directories = ["pwa-icons"];
 
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 
 for (const file of files) {
   fs.copyFileSync(path.join(root, file), path.join(outDir, file));
+}
+
+for (const directory of directories) {
+  fs.cpSync(path.join(root, directory), path.join(outDir, directory), {
+    recursive: true,
+  });
 }

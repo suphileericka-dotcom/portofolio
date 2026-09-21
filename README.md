@@ -59,6 +59,27 @@ npm run android:bundle
 
 Le fichier a televerser dans Google Play Console sera dans `android/app/build/outputs/bundle/release/`.
 
+## Bubblewrap / TWA
+
+Adresse publique de la PWA:
+
+```text
+https://bosquet-lent.vercel.app
+```
+
+Le manifeste PWA est disponible ici:
+
+```text
+https://bosquet-lent.vercel.app/manifest.webmanifest
+```
+
+Pour generer un Android App Bundle avec Bubblewrap, installer d'abord Java/JDK et le SDK Android, puis lancer:
+
+```bash
+npx @bubblewrap/cli init --manifest=https://bosquet-lent.vercel.app/manifest.webmanifest
+npx @bubblewrap/cli build
+```
+
 Nouveautes:
 - Identifiant anonyme genere au premier lancement, sans creation de compte visible
 - Pseudo joueur et reprise de partie
