@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.suphileericka.bosquetlent",
+      "sha256_cert_fingerprints": [
+        "AF:D8:1E:A7:C3:12:70:41:77:05:4F:74:57:1A:C2:CE:A5:14:DD:98:33:29:06:D3:C5:0D:57:A5:B6:FF:76:50"
+      ]
+    }
+  }
+]

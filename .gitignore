@@ -1,3 +1,5 @@
 node_modules/
 dist/
+.tools/
+bubblewrap-twa/
 server-save.json
