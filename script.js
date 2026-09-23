@@ -6,6 +6,7 @@ const ui = {
   startButton: document.getElementById("startButton"),
   continueButton: document.getElementById("continueButton"),
   fullscreenButton: document.getElementById("fullscreenButton"),
+  pauseButton: document.getElementById("pauseButton"),
   journalButton: document.getElementById("journalButton"),
   customizeButton: document.getElementById("customizeButton"),
   optionsButton: document.getElementById("optionsButton"),
@@ -228,6 +229,7 @@ const appearanceChoiceGroups = [
 let audio = null;
 let mainMusicArrayBufferPromise = null;
 let lastTime = 0;
+let lastAutosaveAt = -Infinity;
 let running = false;
 let startingGame = false;
 let messageTimer = 0;
@@ -2278,6 +2280,14 @@ function resetTouchControls() {
   ui.padKnob.style.transform = "translate(-50%, -50%)";
 }
 
+function stopJoystick() {
+  joystick.active = false;
+  joystick.id = null;
+  joystick.x = 0;
+  joystick.y = 0;
+  ui.padKnob.style.transform = "translate(-50%, -50%)";
+}
+
 function getInteractionTarget() {
   const p = state.player;
   const inRange = (entry, range) => Math.abs(entry.x - p.x) < range;
@@ -2340,7 +2350,6 @@ function update(dt) {
   if (keys.has("ArrowLeft") || keys.has("q") || keys.has("Q") || keys.has("a") || keys.has("A")) input -= 1;
   if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) input += 1;
   if (joystick.active) input += joystick.x;
-  if (pointer.active && Math.abs(pointer.worldX - p.x) > 12) input += Math.sign(pointer.worldX - p.x) * 0.82;
   input = Math.max(-1, Math.min(1, input));
 
   const weather = getWeatherForChapter();
@@ -3538,9 +3547,23 @@ async function startGame(reset = false) {
   if (state.pendingQuestReward) {
     openQuestCompletePopup(state.pendingQuestReward);
   } else {
-    showMessage("Fleches, ZQSD ou clic pour marcher. Espace ou E pour interagir.");
+    showMessage("Fleches, ZQSD ou joystick pour marcher. Espace, E ou tap pres du joueur pour interagir.");
   }
   saveGame();
+}
+
+function pauseGame() {
+  if (!running) return;
+  running = false;
+  keys.clear();
+  resetTouchControls();
+  state.player.vx = 0;
+  saveGame();
+  ui.continueButton.disabled = false;
+  ui.continueButton.style.opacity = "1";
+  ui.startScreen.classList.remove("is-hidden");
+  if (audio) updateAudio();
+  showMessage("Partie en pause. Continue quand tu veux.");
 }
 
 function resetGame() {
@@ -3583,6 +3606,7 @@ function resetGame() {
   state.weather = "clear";
   state.cinematicPlayed = false;
   state.player.rest = 0;
+  lastAutosaveAt = -Infinity;
   localStorage.removeItem(saveKey);
 }
 
@@ -3629,7 +3653,9 @@ function saveGame() {
 }
 
 function autosave() {
-  if (Math.floor(state.time * 2) % 8 === 0) saveGame();
+  if (state.time - lastAutosaveAt < 4) return;
+  lastAutosaveAt = state.time;
+  saveGame();
 }
 
 function loadGame() {
@@ -4530,9 +4556,18 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 window.addEventListener("focus", resumeAudioAfterMobileInterruption);
+window.addEventListener("blur", () => {
+  keys.clear();
+  resetTouchControls();
+});
 document.addEventListener("fullscreenchange", handleFullscreenChange);
 document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && running && !isModalOpen()) {
+    event.preventDefault();
+    pauseGame();
+    return;
+  }
   keys.add(event.key);
   if (event.key === "e" || event.key === "E" || event.key === " ") {
     event.preventDefault();
@@ -4543,7 +4578,7 @@ window.addEventListener("keyup", (event) => keys.delete(event.key));
 
 canvas.addEventListener("pointerdown", (event) => {
   if (!running) return;
-  pointer.active = true;
+  pointer.active = false;
   pointer.x = event.clientX;
   pointer.y = event.clientY;
   pointer.worldX = state.camera.x + event.clientX;
@@ -4551,13 +4586,18 @@ canvas.addEventListener("pointerdown", (event) => {
 });
 
 canvas.addEventListener("pointermove", (event) => {
-  if (!pointer.active) return;
   pointer.x = event.clientX;
   pointer.y = event.clientY;
   pointer.worldX = state.camera.x + event.clientX;
 });
 
 canvas.addEventListener("pointerup", () => {
+  pointer.active = false;
+});
+canvas.addEventListener("pointercancel", () => {
+  pointer.active = false;
+});
+canvas.addEventListener("pointerleave", () => {
   pointer.active = false;
 });
 
@@ -4580,15 +4620,13 @@ ui.mobilePad.addEventListener("pointermove", (event) => {
   ui.padKnob.style.transform = `translate(calc(-50% + ${joystick.x * max}px), calc(-50% + ${joystick.y * max}px))`;
 });
 
-ui.mobilePad.addEventListener("pointerup", () => {
-  joystick.active = false;
-  joystick.x = 0;
-  joystick.y = 0;
-  ui.padKnob.style.transform = "translate(-50%, -50%)";
-});
+ui.mobilePad.addEventListener("pointerup", stopJoystick);
+ui.mobilePad.addEventListener("pointercancel", stopJoystick);
+ui.mobilePad.addEventListener("lostpointercapture", stopJoystick);
 
 ui.startButton.addEventListener("click", () => startGame(true));
 ui.continueButton.addEventListener("click", () => startGame(false));
+ui.pauseButton.addEventListener("click", pauseGame);
 ui.customizeButton.addEventListener("click", openCustomizeDialog);
 ui.appearanceChoices.addEventListener("click", (event) => {
   const button = event.target.closest(".appearance-choice");

@@ -5,7 +5,6 @@ const ASSETS = [
   "./styles.css",
   "./script.js",
   "./manifest.webmanifest",
-  "./icon.svg",
   "./pwa-icons/icon-192.png",
   "./pwa-icons/icon-512.png",
   "./jean-paul-v-aventures-chinoises-289659.mp3"

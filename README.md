@@ -88,8 +88,9 @@ Nouveautes:
 - Mini scene narrative a la fin de la premiere longue route
 
 Controles:
-- Fleches, ZQSD ou clic pour marcher
+- Fleches, ZQSD ou joystick discret sur mobile pour marcher
 - E ou espace pour interagir
+- Bouton Pause ou Echap pour revenir a l'accueil et reprendre plus tard
 - Joystick discret sur mobile
 - Bouton son en haut a droite pour couper ou remettre l'audio
 
