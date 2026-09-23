@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://bosquet-lent.vercel.app/sitemap.xml

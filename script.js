@@ -77,6 +77,28 @@ const minDiscoveryVillagerDistance = 230;
 const minDiscoveryDoorDistance = 240;
 const minDiscoveryPlayerSpawnDistance = 520;
 const interactionRanges = { item: 78, letter: 78, secret: 105, villager: 98, companion: 98, lantern: 86, rest: 98 };
+
+function openDialog(dialog) {
+  if (!dialog) return;
+  if (typeof dialog.showModal === "function") {
+    if (!dialog.open) dialog.showModal();
+    return;
+  }
+  dialog.setAttribute("open", "");
+  dialog.classList.add("is-fallback-open");
+}
+
+function closeDialog(dialog) {
+  if (!dialog) return;
+  if (typeof dialog.close === "function") {
+    dialog.close();
+    return;
+  }
+  dialog.removeAttribute("open");
+  dialog.classList.remove("is-fallback-open");
+  dialog.dispatchEvent(new Event("close"));
+}
+
 const secretWorldOffset = 100000;
 const secretWorldWidth = 10000;
 const secretWorldEdgePadding = 120;
@@ -2701,7 +2723,7 @@ function openCompanionPopup() {
     <p>${companion.description}</p>
     <p><strong>Personnalite :</strong> ${companion.personality}</p>
   `;
-  ui.companionDialog.showModal();
+  openDialog(ui.companionDialog);
 }
 
 function enterSecretWorld(secret) {
@@ -2946,7 +2968,7 @@ function openQuestPopup(quest) {
     <p><strong>Indice :</strong> ${getQuestHint(quest)}</p>
     <p><strong>Recompense :</strong> 2 objets aleatoires</p>
   `;
-  ui.questDialog.showModal();
+  openDialog(ui.questDialog);
 }
 
 function openQuestCompletePopup(reward) {
@@ -2959,7 +2981,7 @@ function openQuestCompletePopup(reward) {
       ${rewardItems.map((item) => `<li>${getItemIcon(item, "small")}<span>${item.label}</span></li>`).join("")}
     </ul>
   `;
-  ui.questCompleteDialog.showModal();
+  openDialog(ui.questCompleteDialog);
 }
 
 function claimQuestReward() {
@@ -3114,7 +3136,7 @@ function openDiscoveryPopup(item) {
     <p><strong>Rareté</strong> ${item.rarity || "Commun"}</p>
     <p><strong>Utilité</strong> ${getItemUse(item.id)}</p>
   `;
-  ui.discoveryDialog.showModal();
+  openDialog(ui.discoveryDialog);
 }
 
 function closeDiscoveryPopup() {
@@ -3160,7 +3182,7 @@ function openVillagerHelp(villager) {
   pendingVillagerHelp = villager;
   updateAchievements();
   saveGame();
-  ui.villagerDialog.showModal();
+  openDialog(ui.villagerDialog);
 }
 
 function getVillagerRelationLine(villager, meetings) {
@@ -3174,14 +3196,14 @@ function givePendingItem() {
   if (!pendingVillagerHelp) return;
   if (state.helpedVillagers.includes(pendingVillagerHelp.villageId)) {
     showMessage("Cet habitant a deja recu de l'aide dans cette partie.");
-    ui.villagerDialog.close();
+    closeDialog(ui.villagerDialog);
     pendingVillagerHelp = null;
     return;
   }
   state.helpedVillagers.push(pendingVillagerHelp.villageId);
   advanceQuest("helpVillager", 1);
   showMessage(`${pendingVillagerHelp.role} te remercie. Le monde devient un peu plus vivant.`);
-  ui.villagerDialog.close();
+  closeDialog(ui.villagerDialog);
   pendingVillagerHelp = null;
   playSoftPing();
   updateAchievements();
@@ -3191,7 +3213,7 @@ function givePendingItem() {
 function refusePendingHelp() {
   if (!pendingVillagerHelp) return;
   const name = pendingVillagerHelp.role;
-  ui.villagerDialog.close();
+  closeDialog(ui.villagerDialog);
   pendingVillagerHelp = null;
   showMessage(`${name} hoche la tete et reprend son histoire plus doucement.`);
 }
@@ -3318,7 +3340,7 @@ function openEncyclopediaDetail(itemId) {
     <p><strong>Rarete</strong> ${getRarityStars(item.rarity)} - ${item.rarity || "Commun"}</p>
     <p><strong>Date de decouverte</strong> ${formatDiscoveryDate(item.id)}</p>
   `;
-  ui.encyclopediaDetailDialog.showModal();
+  openDialog(ui.encyclopediaDetailDialog);
 }
 
 function renderVillagers() {
@@ -3774,7 +3796,7 @@ function openCustomizeDialog() {
   ui.nicknameInput.value = state.playerProfile.nickname;
   renderAppearanceChoices();
   drawAppearancePreview();
-  ui.customizeDialog.showModal();
+  openDialog(ui.customizeDialog);
 }
 
 function renderAppearanceChoices() {
@@ -4628,6 +4650,12 @@ ui.startButton.addEventListener("click", () => startGame(true));
 ui.continueButton.addEventListener("click", () => startGame(false));
 ui.pauseButton.addEventListener("click", pauseGame);
 ui.customizeButton.addEventListener("click", openCustomizeDialog);
+document.querySelectorAll(".panel-dialog form").forEach((form) => {
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    closeDialog(form.closest(".panel-dialog"));
+  });
+});
 ui.appearanceChoices.addEventListener("click", (event) => {
   const button = event.target.closest(".appearance-choice");
   if (!button) return;
@@ -4646,7 +4674,7 @@ ui.missionTracker.addEventListener("click", () => {
 });
 ui.journalButton.addEventListener("click", () => {
   buildJournal();
-  ui.journalDialog.showModal();
+  openDialog(ui.journalDialog);
 });
 ui.journalList.addEventListener("click", (event) => {
   const card = event.target.closest(".encyclopedia-card[data-item-id]");
@@ -4659,9 +4687,9 @@ ui.journalList.addEventListener("keydown", (event) => {
   event.preventDefault();
   openEncyclopediaDetail(card.dataset.itemId);
 });
-ui.infoButton.addEventListener("click", () => ui.infoDialog.showModal());
+ui.infoButton.addEventListener("click", () => openDialog(ui.infoDialog));
 ui.discoveryDialog.addEventListener("close", closeDiscoveryPopup);
-ui.optionsButton.addEventListener("click", () => ui.optionsDialog.showModal());
+ui.optionsButton.addEventListener("click", () => openDialog(ui.optionsDialog));
 ui.fullscreenButton.addEventListener("click", toggleFullscreen);
 ui.muteButton.addEventListener("click", () => {
   state.options.muted = !state.options.muted;
@@ -4680,7 +4708,7 @@ ui.soundEnabledToggle.addEventListener("change", () => {
 ui.resetButton.addEventListener("click", () => {
   resetGame();
   saveGame();
-  ui.optionsDialog.close();
+  closeDialog(ui.optionsDialog);
   showMessage("Nouvelle promenade prete.");
 });
 ui.musicVolume.addEventListener("input", () => {

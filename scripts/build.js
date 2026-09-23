@@ -9,6 +9,8 @@ const files = [
   "script.js",
   "manifest.webmanifest",
   "sw.js",
+  "robots.txt",
+  "sitemap.xml",
   "cover-bosquet-lent-game-style.png",
   "jean-paul-v-aventures-chinoises-289659.mp3",
 ];
