@@ -13,7 +13,7 @@ const files = [
   "cover-bosquet-lent-game-style.png",
   "jean-paul-v-aventures-chinoises-289659.mp3",
 ];
-const directories = ["pwa-icons", ".well-known"];
+const directories = ["pwa-icons", ".well-known", "privacy"];
 
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
