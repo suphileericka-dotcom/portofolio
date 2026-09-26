@@ -4,3 +4,13 @@ dist/
 bubblewrap-twa/
 *.aab
 server-save.json
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+keystore.properties
+*.pem
+*.p12
+*.pfx
+*.key
