@@ -83,10 +83,16 @@
       </div>
     </section>
 
-    <div id="mobilePad" class="mobile-pad" aria-hidden="true">
-      <span class="pad-action pad-action-walk" data-pad-action="walk">🚶</span>
-      <span class="pad-action pad-action-run" data-pad-action="run">🏃</span>
-      <span class="pad-action pad-action-jump" data-pad-action="jump">⤴</span>
+    <div id="mobilePad" class="mobile-pad">
+      <button id="padJumpButton" class="pad-action pad-action-jump" type="button" aria-label="Sauter">⤴</button>
+      <div class="pad-mode-shell">
+        <button id="padModeButton" class="pad-action pad-action-mode" type="button" aria-label="Choisir marche ou course">🚶</button>
+        <div id="padModeMenu" class="pad-mode-menu" aria-hidden="true">
+          <button class="pad-mode-option" type="button" data-move-mode="walk" aria-label="Marcher">🚶</button>
+          <button class="pad-mode-option" type="button" data-move-mode="run" aria-label="Courir">🏃</button>
+        </div>
+      </div>
+      <button id="padCompanionButton" class="pad-action pad-action-companion is-locked" type="button" aria-label="Faire venir ou rappeler le compagnon">🐾</button>
       <div id="padKnob" class="pad-knob"></div>
     </div>
 

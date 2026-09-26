@@ -57,7 +57,11 @@ const ui = {
   effectsVolume: document.getElementById("effectsVolume"),
   resetDiscoveryTipsButton: document.getElementById("resetDiscoveryTipsButton"),
   mobilePad: document.getElementById("mobilePad"),
-  padKnob: document.getElementById("padKnob")
+  padKnob: document.getElementById("padKnob"),
+  padJumpButton: document.getElementById("padJumpButton"),
+  padModeButton: document.getElementById("padModeButton"),
+  padModeMenu: document.getElementById("padModeMenu"),
+  padCompanionButton: document.getElementById("padCompanionButton")
 };
 
 const saveKey = "bosquet-lent-save";
@@ -70,6 +74,7 @@ const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
 const joystick = { active: false, id: null, x: 0, y: 0, mode: "walk", jumpArmed: true, lastZone: "walk" };
+const weatherVisual = { rain: 0, targetRain: 0, rainMood: 0 };
 const discoveryRespawnMinSeconds = 15;
 const discoveryRespawnMaxSeconds = 45;
 const letterRespawnDelaySeconds = 35;
@@ -2293,6 +2298,14 @@ function drawRiver() {
   }
 }
 
+function getVisibleRiverX() {
+  const riverX = isExpandedWorld()
+    ? Math.floor((state.camera.x + window.innerWidth / 2 - world.firstRouteEnd) / 4200) * 4200 + world.firstRouteEnd + 3820
+    : 3820;
+  if (riverX < state.camera.x - 600 || riverX > state.camera.x + window.innerWidth + 600) return null;
+  return riverX - state.camera.x;
+}
+
 function drawVillager(x, villager) {
   const y = world.ground;
   const bob = Math.sin(state.time * 2 + x) * 3;
@@ -2372,18 +2385,7 @@ function drawWeather() {
   const h = window.innerHeight;
   const protectedFromWeather = getWeatherProtection(weather.id);
   ctx.save();
-  if (weather.id === "rain") {
-    ctx.strokeStyle = protectedFromWeather ? "rgba(216, 235, 241, 0.18)" : "rgba(216, 235, 241, 0.34)";
-    ctx.lineWidth = 1.4;
-    for (let i = 0; i < (protectedFromWeather ? 36 : 64); i += 1) {
-      const x = (i * 47 + state.time * 360) % (w + 80) - 40;
-      const y = (i * 91 + state.time * 520) % (h + 90) - 60;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x - 18, y + 42);
-      ctx.stroke();
-    }
-  }
+  if (weatherVisual.rain > 0.01) drawRainWeather(weatherVisual.rain, protectedFromWeather);
   if (weather.id === "mist") {
     ctx.fillStyle = protectedFromWeather ? "rgba(236, 242, 226, 0.07)" : "rgba(236, 242, 226, 0.13)";
     for (let i = 0; i < (protectedFromWeather ? 3 : 5); i += 1) {
@@ -2412,6 +2414,78 @@ function drawWeather() {
       ctx.arc(x, y, 1.4 + (i % 3) * 0.7, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+  ctx.restore();
+}
+
+function getRainTargetIntensity(weather = getWeatherForChapter()) {
+  if (weather.id !== "rain") return 0;
+  if (getWeatherProtection("rain")) return 0.36;
+  const seed = hashNumber(state.chapter * 19 + Math.floor(state.player.x / 900));
+  if (seed > 0.72) return 0.95;
+  if (seed > 0.34) return 0.68;
+  return 0.44;
+}
+
+function updateWeatherVisual(dt) {
+  weatherVisual.targetRain = getRainTargetIntensity();
+  weatherVisual.rain += (weatherVisual.targetRain - weatherVisual.rain) * Math.min(1, dt * 0.75);
+  if (weatherVisual.targetRain <= 0.01 && weatherVisual.rain < 0.012) weatherVisual.rain = 0;
+  weatherVisual.rainMood += (weatherVisual.rain - weatherVisual.rainMood) * Math.min(1, dt * 0.45);
+}
+
+function drawRainWeather(intensity, protectedFromWeather = false) {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const mobileFactor = Math.min(w, h) < 680 ? 0.68 : 1;
+  const rain = Math.max(0, Math.min(1, intensity));
+  const groundY = world.ground + 16;
+  const riverX = getVisibleRiverX();
+  ctx.save();
+  ctx.fillStyle = `rgba(18, 28, 29, ${0.06 + rain * 0.08})`;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = `rgba(35, 55, 50, ${0.06 + rain * 0.07})`;
+  ctx.fillRect(0, world.ground - 18, w, h - world.ground + 18);
+
+  const layers = [
+    { count: 18, speed: 260, length: 18, alpha: 0.12, width: 0.8, drift: 6 },
+    { count: 42, speed: 430, length: 28, alpha: 0.2, width: 1, drift: 12 },
+    { count: 18, speed: 620, length: 42, alpha: 0.32, width: 1.35, drift: 20 }
+  ];
+  layers.forEach((layer, layerIndex) => {
+    const count = Math.max(5, Math.round(layer.count * rain * mobileFactor));
+    ctx.strokeStyle = `rgba(216, 235, 241, ${layer.alpha * (protectedFromWeather ? 0.62 : 1)})`;
+    ctx.lineWidth = layer.width;
+    ctx.lineCap = "round";
+    for (let i = 0; i < count; i += 1) {
+      const seed = hashNumber(i * 31 + layerIndex * 97);
+      const seedB = hashNumber(i * 47 + layerIndex * 131);
+      const travel = (state.time * layer.speed + seed * h * 1.8) % (h + 120);
+      const x = (i * (w / Math.max(1, count)) + seedB * 140 + state.time * layer.drift) % (w + 100) - 50;
+      const y = travel - 80;
+      const len = layer.length * (0.72 + seed * 0.72) * (0.85 + rain * 0.28);
+      const slant = (10 + layerIndex * 5 + rain * 12) * (0.8 + seedB * 0.45);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - slant, y + len);
+      ctx.stroke();
+    }
+  });
+
+  const impactCount = Math.round((8 + rain * 18) * mobileFactor);
+  for (let i = 0; i < impactCount; i += 1) {
+    const seed = hashNumber(i * 73 + Math.floor(state.time * 2.6));
+    if (seed > 0.42 + rain * 0.28) continue;
+    const life = (state.time * (0.75 + rain * 0.5) + seed * 8 + i * 0.23) % 1;
+    const x = (i * 157 + seed * 340 + Math.floor(state.camera.x * 0.08)) % (w + 120) - 60;
+    const nearWater = riverX !== null && Math.abs(x - riverX) < 350 && seed > 0.52;
+    const y = nearWater ? world.ground + 25 + Math.sin(i + state.time * 2) * 10 : groundY + seed * 18;
+    const radius = (nearWater ? 9 : 4) + life * (nearWater ? 18 : 9);
+    ctx.strokeStyle = `rgba(216, 235, 241, ${(1 - life) * (nearWater ? 0.22 : 0.14) * rain})`;
+    ctx.lineWidth = nearWater ? 1.1 : 0.8;
+    ctx.beginPath();
+    ctx.ellipse(x, y, radius, radius * (nearWater ? 0.34 : 0.18), 0, 0, Math.PI * 2);
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -2690,11 +2764,10 @@ function clearMovementIntent() {
   joystick.active = false;
   joystick.x = 0;
   joystick.y = 0;
-  joystick.mode = "walk";
   joystick.jumpArmed = true;
-  joystick.lastZone = "walk";
+  joystick.lastZone = "idle";
   ui.padKnob.style.transform = "translate(-50%, -50%)";
-  updateMobilePadActionState("walk");
+  updateMobilePadActionState("idle");
   state.player.vx = 0;
 }
 
@@ -2705,11 +2778,10 @@ function resetTouchControls() {
   joystick.id = null;
   joystick.x = 0;
   joystick.y = 0;
-  joystick.mode = "walk";
   joystick.jumpArmed = true;
-  joystick.lastZone = "walk";
+  joystick.lastZone = "idle";
   ui.padKnob.style.transform = "translate(-50%, -50%)";
-  updateMobilePadActionState("walk");
+  updateMobilePadActionState("idle");
 }
 
 function stopJoystick() {
@@ -2717,24 +2789,39 @@ function stopJoystick() {
   joystick.id = null;
   joystick.x = 0;
   joystick.y = 0;
-  joystick.mode = "walk";
   joystick.jumpArmed = true;
-  joystick.lastZone = "walk";
+  joystick.lastZone = "idle";
   ui.padKnob.style.transform = "translate(-50%, -50%)";
-  updateMobilePadActionState("walk");
+  updateMobilePadActionState("idle");
 }
 
-function updateMobilePadActionState(zone = "walk") {
-  ui.mobilePad.classList.toggle("is-walk", zone === "walk");
-  ui.mobilePad.classList.toggle("is-run", zone === "run");
+function updateMobilePadModeState() {
+  ui.padModeButton.textContent = joystick.mode === "run" ? "🏃" : "🚶";
+  ui.padModeButton.classList.toggle("is-active", joystick.mode === "run");
+  ui.padModeMenu.querySelectorAll("[data-move-mode]").forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.moveMode === joystick.mode);
+  });
+}
+
+function updateMobilePadCompanionState() {
+  const unlocked = state.companion.unlocked;
+  ui.padCompanionButton.classList.toggle("is-locked", !unlocked);
+  ui.padCompanionButton.classList.toggle("is-hidden", unlocked && state.companion.present === false);
+  ui.padCompanionButton.classList.toggle("is-active", unlocked && state.companion.present !== false);
+  ui.padCompanionButton.setAttribute("aria-label", state.companion.present === false ? "Faire venir le compagnon" : "Rappeler le compagnon");
+}
+
+function updateMobilePadActionState(zone = "idle") {
   ui.mobilePad.classList.toggle("is-jump", zone === "jump");
+  updateMobilePadModeState();
+  updateMobilePadCompanionState();
 }
 
 function setJoystickZone(zone) {
   if (joystick.lastZone === zone) return;
   joystick.lastZone = zone;
   updateMobilePadActionState(zone);
-  if (navigator.vibrate && (zone === "run" || zone === "jump")) navigator.vibrate(zone === "jump" ? 18 : 10);
+  if (navigator.vibrate && zone === "jump") navigator.vibrate(18);
 }
 
 function updateJoystickFromPointer(event) {
@@ -2748,8 +2835,7 @@ function updateJoystickFromPointer(event) {
   joystick.x = (dx / length) * radial;
   joystick.y = (dy / length) * radial;
   const jumpZone = radial > 0.72 && dy < -max * 0.55;
-  joystick.mode = !jumpZone && radial > 0.76 ? "run" : "walk";
-  const zone = jumpZone ? "jump" : joystick.mode;
+  const zone = jumpZone ? "jump" : "move";
   setJoystickZone(zone);
   if (jumpZone && joystick.jumpArmed) {
     triggerPlayerHop();
@@ -2757,6 +2843,20 @@ function updateJoystickFromPointer(event) {
   }
   if (!jumpZone && radial < 0.66) joystick.jumpArmed = true;
   ui.padKnob.style.transform = `translate(calc(-50% + ${joystick.x * max}px), calc(-50% + ${joystick.y * max}px))`;
+}
+
+function setJoystickMoveMode(mode) {
+  joystick.mode = mode === "run" ? "run" : "walk";
+  ui.mobilePad.classList.remove("is-mode-menu-open");
+  ui.padModeMenu.setAttribute("aria-hidden", "true");
+  updateMobilePadActionState(joystick.lastZone);
+  if (navigator.vibrate) navigator.vibrate(10);
+}
+
+function togglePadModeMenu() {
+  const isOpen = ui.mobilePad.classList.toggle("is-mode-menu-open");
+  ui.padModeMenu.setAttribute("aria-hidden", isOpen ? "false" : "true");
+  updateMobilePadModeState();
 }
 
 function getInteractionTarget() {
@@ -2842,8 +2942,10 @@ function update(dt) {
     announceWeather();
     advanceQuest("weather", 1);
   }
+  updateWeatherVisual(dt);
   updateVillagerAwareness(dt, input);
   updateCompanion(dt);
+  updateMobilePadCompanionState();
   updateQuestHint(dt);
   updateWorldDiscoveries(dt);
   updateMicroEvents(dt);
@@ -4948,7 +5050,8 @@ function updateAudio() {
     audio.nextAmbient = now + 2.5 + hashNumber(state.player.x + scene.notes[0]) * 6;
   }
   const musicVolume = state.options.music <= 0 ? 0 : state.options.music * scene.musicLevel * 0.34;
-  const natureVolume = state.options.nature <= 0 ? 0 : state.options.nature * scene.natureLevel * (0.18 + stream * 0.08);
+  const rainBed = scene.ambient === "rain-wind" ? weatherVisual.rain * 0.09 : 0;
+  const natureVolume = state.options.nature <= 0 ? 0 : state.options.nature * scene.natureLevel * (0.18 + stream * 0.08 + rainBed);
   const effectsVolume = state.options.effects <= 0 ? 0 : state.options.effects;
   audio.master.gain.setTargetAtTime(mute, now, mute <= 0 ? 0.01 : 0.12);
   audio.music.gain.setTargetAtTime(musicVolume, now, state.options.music <= 0 ? 0.02 : 1.8);
@@ -5413,9 +5516,12 @@ canvas.addEventListener("pointerleave", () => {
 });
 
 ui.mobilePad.addEventListener("pointerdown", (event) => {
+  if (event.target.closest(".pad-action, .pad-mode-menu")) return;
   joystick.active = true;
   joystick.id = event.pointerId;
   joystick.jumpArmed = true;
+  ui.mobilePad.classList.remove("is-mode-menu-open");
+  ui.padModeMenu.setAttribute("aria-hidden", "true");
   ui.mobilePad.setPointerCapture(event.pointerId);
   updateJoystickFromPointer(event);
 });
@@ -5428,6 +5534,26 @@ ui.mobilePad.addEventListener("pointermove", (event) => {
 ui.mobilePad.addEventListener("pointerup", stopJoystick);
 ui.mobilePad.addEventListener("pointercancel", stopJoystick);
 ui.mobilePad.addEventListener("lostpointercapture", stopJoystick);
+ui.padJumpButton.addEventListener("click", () => {
+  triggerPlayerHop();
+  setJoystickZone("jump");
+  window.setTimeout(() => updateMobilePadActionState(joystick.active ? joystick.lastZone : "idle"), 180);
+});
+ui.padModeButton.addEventListener("click", togglePadModeMenu);
+ui.padModeMenu.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-move-mode]");
+  if (!button) return;
+  setJoystickMoveMode(button.dataset.moveMode);
+});
+ui.padCompanionButton.addEventListener("click", () => {
+  if (!state.companion.unlocked) {
+    showMessage("Tu n'as pas encore de compagnon sur ce chemin.");
+    return;
+  }
+  toggleCompanionPresence();
+  updateMobilePadCompanionState();
+  if (navigator.vibrate) navigator.vibrate(12);
+});
 
 ui.startButton.addEventListener("click", () => startGame(true));
 ui.continueButton.addEventListener("click", () => startGame(false));
