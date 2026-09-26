@@ -1206,6 +1206,35 @@ h2 {
   line-height: 1.55;
 }
 
+.dialog-choice-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
+.dialog-choice-list[hidden] {
+  display: none;
+}
+
+.dialog-choice-button {
+  width: 100%;
+  padding: 0.72rem 0.85rem;
+  border: 1px solid rgba(240, 189, 108, 0.28);
+  border-radius: 0.55rem;
+  background: rgba(247, 243, 223, 0.08);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dialog-choice-button:hover,
+.dialog-choice-button:focus-visible {
+  border-color: rgba(240, 189, 108, 0.62);
+  background: rgba(240, 189, 108, 0.16);
+}
+
 .discovery-body {
   display: grid;
   gap: 0.6rem;

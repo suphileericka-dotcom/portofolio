@@ -37,6 +37,8 @@ const ui = {
   villagerDialog: document.getElementById("villagerDialog"),
   villagerTitle: document.getElementById("villagerTitle"),
   villagerText: document.getElementById("villagerText"),
+  villagerChoices: document.getElementById("villagerChoices"),
+  villagerActions: document.getElementById("villagerActions"),
   giveItemButton: document.getElementById("giveItemButton"),
   refuseHelpButton: document.getElementById("refuseHelpButton"),
   questDialog: document.getElementById("questDialog"),
@@ -260,6 +262,9 @@ let pendingDiscoveryPopup = null;
 let audioSceneKey = "";
 let appearanceDraft = null;
 let secretTransitionToken = 0;
+let pendingVillagerConversation = null;
+const villagerBubbles = {};
+const villagerProximity = {};
 
 const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0, action: "", actionUntil: 0 },
@@ -276,6 +281,7 @@ const state = {
   helpedVillagers: [],
   villagerRelations: {},
   villagerLastMet: {},
+  villagerMemory: {},
   discoveredPlaces: [],
   visitedVillages: [],
   journalEvents: [],
@@ -297,6 +303,7 @@ const state = {
   activeSecretWorld: null,
   lastSecretWorldId: "",
   lastSecretEdgeMessageAt: 0,
+  recentDiscoveryNotice: null,
   companion: { unlocked: false, offered: false, species: "", name: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0 },
   companionGiverX: 0,
   startedAtLeastOnce: false,
@@ -337,6 +344,82 @@ const villagers = [
   { role: "Botaniste", line: "Une feuille nervuree peut proteger une carte fragile de la pluie. C'est un tres bon debut." },
   { role: "Vieux sage", line: "Aide les gens sans attendre de cadeau. Le monde, lui, se souviendra." }
 ];
+
+const villagerPersonalities = {
+  Pecheur: {
+    mood: "reserve",
+    greetings: ["La riviere t'a laisse revenir.", "Ah... te revoila.", "Tu marches comme quelqu'un qui cherche encore."],
+    spontaneous: ["L'eau parle bas aujourd'hui.", "Ne cours pas trop pres du quai.", "Il commence a faire froid..."],
+    running: ["Tu vas continuer a courir comme ca longtemps ?", "Doucement. Les poissons entendent les pas."],
+    waiting: ["Tu veux me parler ou juste regarder l'horizon ?", "Je peux attendre. La riviere m'a appris."],
+    companion: ["Joli compagnon.", "Il a l'air de connaitre les bons sentiers."],
+    weather: { rain: "Cette pluie n'en finit plus...", mist: "La brume garde les secrets pres de l'eau.", wind: "Le vent ride toute la riviere.", snow: "Meme l'eau semble ralentir." }
+  },
+  "Vieille dame": {
+    mood: "chaleureuse",
+    greetings: ["Bonjour... je ne crois pas t'avoir deja vu ici.", "Ah, c'est toi !", "Je me demandais quand tu reviendrais."],
+    spontaneous: ["Prends ton temps, le village respire mieux ainsi.", "Les pierres t'ont reconnu avant moi.", "Tu es encore la ? C'est bien."],
+    running: ["Tu vas user le chemin avec ces pas-la.", "Le village n'est pas en retard, tu sais."],
+    waiting: ["Tu peux rester silencieux. Ce n'est pas vide.", "On dirait que tu as quelque chose sur le coeur."],
+    companion: ["Ton petit ami veille bien sur toi.", "Il a les yeux d'un voyageur sage."],
+    weather: { rain: "La pluie lave les vieilles inquietudes.", mist: "Par brume, les souvenirs parlent plus fort.", wind: "Ce vent annonce souvent une visite.", snow: "La neige rend tout le monde plus doux." }
+  },
+  "Garde forestier": {
+    mood: "attentif",
+    greetings: ["Halte douce. Je t'ai vu arriver.", "Tu connais mieux la route maintenant.", "Tu reviens avec de la poussiere de chemin."],
+    spontaneous: ["Le sentier bouge quand personne ne regarde.", "Je surveille les lanternes.", "Ne quitte pas trop longtemps la route."],
+    running: ["Pas si vite pres des maisons.", "Garde ton souffle pour la foret."],
+    waiting: ["Tu attends un signe ?", "Si tu cherches une piste, regarde le sol."],
+    companion: ["Bon compagnon de marche.", "Il t'aidera a entendre ce que tu rates."],
+    weather: { rain: "Sous la pluie, les traces disparaissent vite.", mist: "Brume basse. Reste pres des lumieres.", wind: "Le vent casse les vieilles branches.", snow: "La neige garde les empreintes." }
+  },
+  Enfant: {
+    mood: "energique",
+    greetings: ["Oh ! Tu es revenu !", "Je t'avais presque vu arriver !", "Tu connais des coins secrets maintenant ?"],
+    spontaneous: ["Tu as trouve quelque chose ?", "Moi aussi je peux courir vite.", "Tu es encore la ? Haha."],
+    running: ["Attends-moi !", "Tu fais la course avec le vent ?"],
+    waiting: ["Pourquoi tu restes immobile ?", "Tu joues a devenir une statue ?"],
+    companion: ["Il est trop bien ton compagnon !", "Je peux lui dire bonjour ?"],
+    weather: { rain: "La pluie fait des tambours sur les toits !", mist: "On dirait que le village a disparu.", wind: "Le vent pousse mes mots partout.", snow: "La neige donne envie de sauter." }
+  },
+  Musicien: {
+    mood: "reveur",
+    greetings: ["Tiens... ton pas revient dans la melodie.", "Je reconnais ton rythme.", "La route t'a garde en mesure."],
+    spontaneous: ["Le silence vient de changer de note.", "Marche doucement, ca sonne mieux.", "Ce village a un refrain discret."],
+    running: ["Trop vite, tu perds le tempo.", "La route n'est pas une batterie."],
+    waiting: ["Tu ecoutes aussi ?", "Il y a une pause dans l'air."],
+    companion: ["Votre duo marche bien.", "Ton compagnon a un joli rythme."],
+    weather: { rain: "La pluie joue en trio avec les toits.", mist: "La brume etouffe les notes graves.", wind: "Le vent improvise encore.", snow: "La neige coupe le son du monde." }
+  },
+  Marchand: {
+    mood: "drole",
+    greetings: ["Client sans boutique, te revoila.", "Je ne vends toujours rien, mais j'observe.", "Ah, mon meilleur fournisseur d'histoires."],
+    spontaneous: ["Une histoire contre un sourire ?", "Tout a un prix, sauf les bons silences.", "Je collectionne les retours."],
+    running: ["Tu fuis une facture imaginaire ?", "A cette vitesse, meme mes histoires perdent leur etiquette."],
+    waiting: ["Tu negocies avec ton ombre ?", "Si tu restes la, je vais devoir t'inventorier."],
+    companion: ["Beau compagnon. Valeur sentimentale elevee.", "Celui-la, je ne l'aurais pas vendu non plus."],
+    weather: { rain: "La pluie ruine les etalages inexistants.", mist: "La brume augmente le mystere, pas les prix.", wind: "Le vent emporte mes meilleures excuses.", snow: "La neige vend du calme sans demander." }
+  },
+  Facteur: {
+    mood: "curieux",
+    greetings: ["J'ai cru entendre ton nom dans une enveloppe.", "Te revoila entre deux adresses.", "La route t'a livre jusqu'ici."],
+    spontaneous: ["Une lettre choisit toujours son moment.", "J'aurais peut-etre quelque chose a te demander...", "Les messages marchent plus loin que nous."],
+    running: ["Si tu vas si vite, les nouvelles arrivent en retard.", "Attends, meme les lettres respirent."],
+    waiting: ["Tu attends du courrier ?", "Rester la, c'est deja envoyer un signe."],
+    companion: ["Il ferait un bon messager.", "Ton compagnon sait garder un secret ?"],
+    weather: { rain: "Les lettres n'aiment pas cette pluie.", mist: "Par brume, les adresses se melangent.", wind: "Le vent distribue tout sans permission.", snow: "La neige retarde les nouvelles." }
+  }
+};
+
+const defaultVillagerPersonality = {
+  mood: "calme",
+  greetings: ["Bonjour, voyageur.", "Ah, c'est toi.", "Je me demandais quand tu reviendrais."],
+  spontaneous: ["Le village est calme aujourd'hui.", "On finit par reconnaitre les pas.", "Tu vas rester un moment ?"],
+  running: ["Doucement pres du village.", "Le chemin ne partira pas."],
+  waiting: ["Tu peux parler quand tu veux.", "Je vois que tu hesites."],
+  companion: ["Joli compagnon.", "Il semble bien t'aimer."],
+  weather: { rain: "Cette pluie n'en finit plus...", mist: "La brume rend tout plus proche.", wind: "Le vent a change.", snow: "Il commence a faire froid..." }
+};
 
 const companionSpecies = [
   { species: "Renard", name: "Roux", color: "#c86f3f", accent: "#f0bd6c", personality: "curieux et discret", description: "Il marche sans bruit et observe les sentiers avant de s'approcher." },
@@ -451,6 +534,269 @@ function hashNumber(value) {
 
 function makeId(prefix, index) {
   return `${prefix}-${index}`;
+}
+
+function pickLine(lines, seed = state.time) {
+  if (!Array.isArray(lines) || !lines.length) return "";
+  return lines[Math.floor(hashNumber(seed) * lines.length) % lines.length];
+}
+
+function getVillagerPersonality(villager) {
+  return villagerPersonalities[villager.role] || defaultVillagerPersonality;
+}
+
+function getVillageIdFromX(x) {
+  return makeId("village", Math.round(x / world.chapterSize));
+}
+
+function getVillagerKey(villager) {
+  return villager.villageId || `${villager.role}-${Math.round((villager.x || 0) / world.chapterSize)}`;
+}
+
+function normalizeVillagerMemory(raw = {}) {
+  return {
+    visits: Number.isFinite(raw.visits) ? raw.visits : 0,
+    relation: Number.isFinite(raw.relation) ? raw.relation : 0,
+    helpCount: Number.isFinite(raw.helpCount) ? raw.helpCount : 0,
+    quickTalks: Number.isFinite(raw.quickTalks) ? raw.quickTalks : 0,
+    choices: raw.choices && typeof raw.choices === "object" ? raw.choices : {},
+    gifts: Array.isArray(raw.gifts) ? raw.gifts : [],
+    lastSeenAt: Number.isFinite(raw.lastSeenAt) ? raw.lastSeenAt : -Infinity,
+    lastTalkAt: Number.isFinite(raw.lastTalkAt) ? raw.lastTalkAt : -Infinity,
+    lastBubbleAt: Number.isFinite(raw.lastBubbleAt) ? raw.lastBubbleAt : -Infinity,
+    nextBubbleAt: Number.isFinite(raw.nextBubbleAt) ? raw.nextBubbleAt : 0,
+    lastWeather: typeof raw.lastWeather === "string" ? raw.lastWeather : "",
+    companionNoticed: Boolean(raw.companionNoticed),
+    noticedDiscoveryId: typeof raw.noticedDiscoveryId === "string" ? raw.noticedDiscoveryId : "",
+    completedQuestNoticed: Number.isFinite(raw.completedQuestNoticed) ? raw.completedQuestNoticed : 0
+  };
+}
+
+function getVillagerMemory(villager) {
+  const key = getVillagerKey(villager);
+  state.villagerMemory[key] = normalizeVillagerMemory(state.villagerMemory[key]);
+  return state.villagerMemory[key];
+}
+
+function rememberVillagerChoice(villager, choiceId) {
+  const memory = getVillagerMemory(villager);
+  memory.choices[choiceId] = (memory.choices[choiceId] || 0) + 1;
+}
+
+function getResidentForVillage(village) {
+  const chapterIndex = Number.isFinite(village.chapterIndex)
+    ? village.chapterIndex
+    : Math.round((village.x - world.firstRouteEnd - 520) / world.chapterSize);
+  const villageId = getVillageIdFromX(village.x);
+  const villager = village.villager || villagers[chapterIndex % villagers.length];
+  return {
+    ...villager,
+    x: village.x + 410,
+    villageId,
+    villageName: village.name,
+    need: villagerNeeds[Math.round(village.x / world.chapterSize) % villagerNeeds.length],
+    personality: getVillagerPersonality(villager)
+  };
+}
+
+function getVisibleVillageResidents() {
+  return getProceduralVillages().map(getResidentForVillage);
+}
+
+function showVillagerBubble(villager, text, options = {}) {
+  if (!text || isModalOpen()) return false;
+  const key = getVillagerKey(villager);
+  const memory = getVillagerMemory(villager);
+  if (!options.force && state.time < (memory.nextBubbleAt || 0)) return false;
+  const duration = options.duration || 3.8;
+  villagerBubbles[key] = {
+    text,
+    startedAt: state.time,
+    endsAt: state.time + duration,
+    duration
+  };
+  memory.lastBubbleAt = state.time;
+  memory.nextBubbleAt = state.time + (options.cooldown || 16 + hashNumber(state.time + villager.x) * 18);
+  return true;
+}
+
+function getContextualBubbleLine(villager, reason = "idle") {
+  const personality = getVillagerPersonality(villager);
+  const memory = getVillagerMemory(villager);
+  const seed = state.time + villager.x + memory.visits * 13;
+  if (reason === "arrival") {
+    if (memory.visits <= 0) return pickLine(personality.greetings, seed);
+    if (state.time - memory.lastSeenAt > 90) return "Je me demandais quand tu reviendrais.";
+    return memory.visits >= 3 ? "Ah, c'est toi !" : pickLine(personality.greetings, seed);
+  }
+  if (reason === "running") return pickLine(personality.running, seed);
+  if (reason === "waiting") return pickLine(personality.waiting, seed);
+  if (reason === "companion") return pickLine(personality.companion, seed);
+  if (reason === "quest") return "Tu as tenu parole. Le village s'en souviendra.";
+  if (reason === "discovery" && state.recentDiscoveryNotice?.label) return `Tu as trouve ${state.recentDiscoveryNotice.label.toLowerCase()} ?`;
+  if (reason === "night") return "La nuit change le son des pas.";
+  if (reason === "day") return "Le jour revient doucement.";
+  if (personality.weather && personality.weather[state.weather] && reason === "weather") return personality.weather[state.weather];
+  if (!state.activeQuest && !state.pendingQuestReward && state.time >= state.nextLetterAt && hashNumber(seed) > 0.72) return "J'aurais peut-etre quelque chose a te demander...";
+  return pickLine(personality.spontaneous, seed);
+}
+
+function wrapCanvasText(text, maxWidth) {
+  const words = String(text).split(" ");
+  const lines = [];
+  let line = "";
+  words.forEach((word) => {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+  if (line) lines.push(line);
+  return lines.slice(0, 3);
+}
+
+function drawVillagerBubble(villager) {
+  const bubble = villagerBubbles[getVillagerKey(villager)];
+  if (!bubble) return;
+  if (state.time >= bubble.endsAt) {
+    delete villagerBubbles[getVillagerKey(villager)];
+    return;
+  }
+  const progress = (state.time - bubble.startedAt) / bubble.duration;
+  const fadeIn = Math.min(1, progress / 0.18);
+  const fadeOut = Math.min(1, (bubble.endsAt - state.time) / 0.45);
+  const alpha = Math.max(0, Math.min(fadeIn, fadeOut));
+  const y = world.ground - 158 - Math.sin(Math.min(1, progress) * Math.PI) * 5;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = "800 12px Nunito";
+  ctx.textAlign = "center";
+  const maxWidth = Math.min(176, Math.max(118, window.innerWidth * 0.42));
+  const lines = wrapCanvasText(bubble.text, maxWidth - 22);
+  const width = Math.min(maxWidth, Math.max(72, ...lines.map((line) => ctx.measureText(line).width + 24)));
+  const height = 22 + lines.length * 15;
+  roundedRect(villager.x - width / 2, y - height, width, height, 8);
+  ctx.fillStyle = "rgba(247, 243, 223, 0.94)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(20, 34, 33, 0.18)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(villager.x - 8, y);
+  ctx.lineTo(villager.x + 7, y);
+  ctx.lineTo(villager.x - 2, y + 9);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(247, 243, 223, 0.94)";
+  ctx.fill();
+  ctx.fillStyle = "#20312f";
+  lines.forEach((line, index) => ctx.fillText(line, villager.x, y - height + 18 + index * 15));
+  ctx.restore();
+}
+
+function updateVillagerAwareness(dt, input = 0) {
+  if (!running || isModalOpen()) return;
+  const seenKeys = new Set();
+  getVisibleVillageResidents().forEach((villager) => {
+    const key = getVillagerKey(villager);
+    seenKeys.add(key);
+    const memory = getVillagerMemory(villager);
+    const proximity = villagerProximity[key] || {
+      near: false,
+      nearSince: 0,
+      idleSince: state.time,
+      lastRunReactionAt: -Infinity,
+      lastWaitReactionAt: -Infinity,
+      lastDayNight: isNightTime() ? "night" : "day",
+      hopCount: 0,
+      hopWindowStartedAt: 0
+    };
+    const dist = Math.abs(state.player.x - villager.x);
+    const near = dist < 330;
+    const close = dist < 145;
+    const veryClose = dist < 105;
+    if (near && !proximity.near) {
+      proximity.near = true;
+      proximity.nearSince = state.time;
+      proximity.idleSince = state.time;
+      if (Math.random() < 0.58) showVillagerBubble(villager, getContextualBubbleLine(villager, "arrival"), { cooldown: 18 });
+    }
+    if (!near && proximity.near) {
+      proximity.near = false;
+      memory.lastSeenAt = state.time;
+    }
+    if (near) {
+      memory.lastSeenAt = state.time;
+      if (Math.abs(state.player.vx) > 145 && close && state.time - proximity.lastRunReactionAt > 18 && Math.random() < dt * 0.55) {
+        proximity.lastRunReactionAt = state.time;
+        showVillagerBubble(villager, getContextualBubbleLine(villager, "running"), { cooldown: 14 });
+      }
+      if (Math.abs(state.player.vx) < 4 && Math.abs(input) < 0.15 && veryClose) {
+        if (state.time - proximity.idleSince > 8.5 && state.time - proximity.lastWaitReactionAt > 28 && Math.random() < dt * 0.35) {
+          proximity.lastWaitReactionAt = state.time;
+          showVillagerBubble(villager, getContextualBubbleLine(villager, "waiting"), { cooldown: 18 });
+        }
+      } else {
+        proximity.idleSince = state.time;
+      }
+      if (state.companion.unlocked && !memory.companionNoticed && close && Math.random() < dt * 0.18) {
+        memory.companionNoticed = true;
+        memory.relation += 0.25;
+        showVillagerBubble(villager, getContextualBubbleLine(villager, "companion"), { cooldown: 22, force: true });
+      }
+      if (state.recentDiscoveryNotice && memory.noticedDiscoveryId !== state.recentDiscoveryNotice.id && state.time - state.recentDiscoveryNotice.at < 45 && close && Math.random() < dt * 0.24) {
+        memory.noticedDiscoveryId = state.recentDiscoveryNotice.id;
+        memory.relation += 0.2;
+        showVillagerBubble(villager, getContextualBubbleLine(villager, "discovery"), { cooldown: 20 });
+      }
+      if (memory.completedQuestNoticed < state.completedQuests && state.pendingQuestReward && close && Math.random() < dt * 0.3) {
+        memory.completedQuestNoticed = state.completedQuests;
+        memory.relation += 0.35;
+        showVillagerBubble(villager, getContextualBubbleLine(villager, "quest"), { cooldown: 24, force: true });
+      }
+      if (memory.lastWeather && memory.lastWeather !== state.weather && close && Math.random() < 0.45) {
+        showVillagerBubble(villager, getContextualBubbleLine(villager, "weather"), { cooldown: 20 });
+      }
+      memory.lastWeather = state.weather;
+      const dayNight = isNightTime() ? "night" : "day";
+      if (proximity.lastDayNight !== dayNight && close && Math.random() < 0.35) {
+        proximity.lastDayNight = dayNight;
+        showVillagerBubble(villager, getContextualBubbleLine(villager, dayNight), { cooldown: 22 });
+      }
+      if (state.time >= (memory.nextBubbleAt || 0) && Math.random() < dt * 0.055) {
+        showVillagerBubble(villager, getContextualBubbleLine(villager), { cooldown: 20 + hashNumber(state.time + villager.x) * 28 });
+      }
+    }
+    villagerProximity[key] = proximity;
+  });
+  Object.keys(villagerProximity).forEach((key) => {
+    if (!seenKeys.has(key)) delete villagerProximity[key];
+  });
+}
+
+function triggerPlayerHop() {
+  if (!running || isModalOpen()) return;
+  state.player.action = "hop";
+  state.player.actionUntil = state.time + 0.42;
+  getVisibleVillageResidents().forEach((villager) => {
+    const dist = Math.abs(state.player.x - villager.x);
+    if (dist > 170) return;
+    const key = getVillagerKey(villager);
+    const proximity = villagerProximity[key] || { near: true, nearSince: state.time, idleSince: state.time, lastRunReactionAt: -Infinity, lastWaitReactionAt: -Infinity, hopCount: 0, hopWindowStartedAt: state.time };
+    if (state.time - (proximity.hopWindowStartedAt || 0) > 4) {
+      proximity.hopWindowStartedAt = state.time;
+      proximity.hopCount = 0;
+    }
+    proximity.hopCount += 1;
+    if (proximity.hopCount >= 3) {
+      proximity.hopCount = 0;
+      showVillagerBubble(villager, "Tu essaies de reveiller les cailloux ?", { cooldown: 18, force: true });
+      getVillagerMemory(villager).relation += 0.1;
+    }
+    villagerProximity[key] = proximity;
+  });
 }
 
 function isExpandedWorld(x = state.player.x) {
@@ -901,6 +1247,7 @@ function getProceduralVillages() {
       items.push({
         x: world.firstRouteEnd + chapterIndex * world.chapterSize + 520,
         name: `Village ${Math.floor(chapterIndex / 2) + 1}`,
+        chapterIndex,
         villager: villagers[chapterIndex % villagers.length]
       });
     }
@@ -1292,8 +1639,10 @@ function drawWorldObjects() {
       roundedRect(houseX - 5, y - 20, 10, 20, 3);
       ctx.fill();
     }
-    drawVillager(village.x + 410, village.villager);
-    if (interactionTarget?.kind === "villager" && Math.abs(interactionTarget.entry.x - (village.x + 410)) < 2) drawPrompt(village.x + 410, y - 102, "E Parler");
+    const resident = getResidentForVillage(village);
+    drawVillager(resident.x, resident);
+    drawVillagerBubble(resident);
+    if (interactionTarget?.kind === "villager" && Math.abs(interactionTarget.entry.x - resident.x) < 2) drawPrompt(resident.x, y - 102, "E Parler");
   });
 
   const companionGiver = getCompanionGiver();
@@ -2060,9 +2409,11 @@ function drawPrompt(x, y, text) {
 function drawPlayer() {
   const p = state.player;
   const appearance = getPlayerAppearance();
+  const hopTimeLeft = p.action === "hop" ? Math.max(0, p.actionUntil - state.time) : 0;
+  const hopOffset = hopTimeLeft > 0 ? Math.sin((1 - hopTimeLeft / 0.42) * Math.PI) * 16 : 0;
   drawCharacter({
     x: p.x,
-    y: p.y,
+    y: p.y - hopOffset,
     face: p.face,
     velocity: p.vx,
     body: appearance.body,
@@ -2071,7 +2422,7 @@ function drawPlayer() {
     accessory: appearance.accessory,
     label: state.playerProfile.nickname,
     seated: p.rest > 0.2,
-    action: p.actionUntil > state.time ? p.action : ""
+    action: p.actionUntil > state.time && p.action !== "hop" ? p.action : ""
   });
 }
 
@@ -2335,13 +2686,7 @@ function getInteractionTarget() {
   const companionGiver = getCompanionGiver();
   if (companionGiver && inRange(companionGiver, interactionRanges.companion)) return { kind: "companion", entry: companionGiver };
 
-  const village = getProceduralVillages()
-    .map((entry) => ({
-      ...entry.villager,
-      x: entry.x + 410,
-      villageId: makeId("village", Math.round(entry.x / world.chapterSize)),
-      need: villagerNeeds[Math.round(entry.x / world.chapterSize) % villagerNeeds.length]
-    }))
+  const village = getVisibleVillageResidents()
     .filter((entry) => inRange(entry, interactionRanges.villager))
     .sort(byAim)[0];
   if (village) return { kind: "villager", entry: village };
@@ -2399,6 +2744,7 @@ function update(dt) {
     announceWeather();
     advanceQuest("weather", 1);
   }
+  updateVillagerAwareness(dt, input);
   updateCompanion(dt);
   updateQuestHint(dt);
   updateWorldDiscoveries();
@@ -3101,6 +3447,13 @@ function collectDiscovery(item, quiet = false) {
   }
   state.discoveries.push(item.id);
   state.inventory[baseId] = (state.inventory[baseId] || 0) + 1;
+  if (!quiet) {
+    state.recentDiscoveryNotice = {
+      id: item.id,
+      label: item.label,
+      at: state.time
+    };
+  }
   if (firstTime) {
     state.discoveryDates[baseId] = new Date().toISOString();
     rememberJournalEvent(`J'ai trouve ${item.label.toLowerCase()} pour la premiere fois.`);
@@ -3147,12 +3500,113 @@ function closeDiscoveryPopup() {
   pendingDiscoveryPopup = null;
 }
 
+function setVillagerDialogMode(mode = "help") {
+  ui.villagerChoices.hidden = mode !== "choices";
+  ui.villagerActions.hidden = mode === "choices";
+}
+
+function getVillagerMemoryLine(villager, memory) {
+  if (memory.visits <= 1) return "Bonjour... je ne crois pas t'avoir deja vu ici.";
+  if (memory.relation >= 4 || memory.visits >= 6) return "Je me demandais quand tu reviendrais.";
+  if (memory.visits >= 3) return "Ah, c'est toi !";
+  return "On s'est deja croises, non ?";
+}
+
+function getVillagerRequestLine(villager, alreadyHelped) {
+  if (alreadyHelped) return "Le village se souvient encore de ton aide.";
+  const requests = [
+    `J'aurais peut-etre quelque chose a te demander... Il faudrait ${villager.need.need}.`,
+    "J'aurais peut-etre quelque chose a te demander... mais seulement si tu as encore un peu de route en toi.",
+    "Tu tombes bien. Un petit souci tourne autour du village depuis ce matin.",
+    "Je gardais cette demande pour quelqu'un qui sait marcher sans tout brusquer."
+  ];
+  return requests[Math.round(villager.x / 97) % requests.length];
+}
+
+function getVillagerConversation(villager, memory, alreadyHelped, previousLastSeen = memory.lastSeenAt) {
+  if (alreadyHelped && memory.visits < 3) return null;
+  const personality = getVillagerPersonality(villager);
+  const seed = state.time + villager.x + memory.visits * 29 + memory.relation * 7;
+  if (memory.quickTalks >= 2) {
+    return {
+      prompt: "Tu reviens vite. Quelque chose te travaille ?",
+      choices: [
+        { id: "honest", text: "Je voulais verifier.", reply: "Alors verifie doucement. Les choses importantes se cachent quand on les presse.", relation: 0.35 },
+        { id: "tease", text: "J'aime bien t'embeter.", reply: "Je l'avais presque devine. Presque.", relation: 0.15 },
+        { id: "quiet", text: "Je ne sais pas trop.", reply: "C'est une reponse valable. Le chemin sert aussi a ca.", relation: 0.3 }
+      ]
+    };
+  }
+  if (state.companion.unlocked && !memory.choices.companionTalk && hashNumber(seed) > 0.35) {
+    return {
+      prompt: "Ton compagnon te suit avec beaucoup de confiance. Vous vous etes trouves comment ?",
+      choices: [
+        { id: "companionTalk", text: "Sur le chemin.", reply: "Le chemin presente parfois les bonnes personnes sans faire de discours.", relation: 0.45 },
+        { id: "companionTalk", text: "Il m'a choisi.", reply: "Alors il a bon gout. Ou beaucoup d'instinct.", relation: 0.5 }
+      ]
+    };
+  }
+  if (state.time - previousLastSeen > 70 || memory.visits >= 3) {
+    return {
+      prompt: "Ca faisait longtemps. Tu etais ou ?",
+      choices: [
+        { id: "explored", text: "J'explorais.", reply: "Je m'en doutais. Tu as l'air de quelqu'un qui revient avec des bouts de paysage dans les poches.", relation: 0.45 },
+        { id: "missed", text: "Tu m'as manque aussi.", reply: "Oh. Alors je vais faire semblant de ne pas etre touche.", relation: 0.65 },
+        { id: "everywhere", text: "Un peu partout.", reply: "C'est souvent la meilleure adresse.", relation: 0.4 }
+      ]
+    };
+  }
+  if (hashNumber(seed) > 0.58) {
+    return {
+      prompt: personality.mood === "drole" ? "Dis-moi, tu collectionnes les silences ou les histoires ?" : "Tu marches beaucoup. Qu'est-ce que tu cherches vraiment ?",
+      choices: [
+        { id: "stories", text: "Des histoires.", reply: "Alors garde celle-ci: un village reconnait toujours ceux qui reviennent.", relation: 0.45 },
+        { id: "calm", text: "Un endroit calme.", reply: "Tu es assez proche. Pas exactement arrive, mais proche.", relation: 0.35 }
+      ]
+    };
+  }
+  return null;
+}
+
+function renderVillagerChoices(conversation) {
+  ui.villagerChoices.innerHTML = conversation.choices.map((choice, index) => `
+    <button class="dialog-choice-button" type="button" data-choice-index="${index}">
+      ${choice.text}
+    </button>
+  `).join("");
+  setVillagerDialogMode("choices");
+}
+
+function handleVillagerChoice(index) {
+  if (!pendingVillagerConversation) return;
+  const { villager, conversation, alreadyHelped, baseLine } = pendingVillagerConversation;
+  const choice = conversation.choices[index];
+  if (!choice) return;
+  const memory = getVillagerMemory(villager);
+  rememberVillagerChoice(villager, choice.id);
+  memory.relation += Number.isFinite(choice.relation) ? choice.relation : 0.25;
+  ui.villagerText.textContent = `${choice.reply} ${alreadyHelped ? "On peut rester la-dessus pour aujourd'hui." : baseLine}`.trim();
+  ui.giveItemButton.disabled = alreadyHelped;
+  ui.giveItemButton.style.opacity = alreadyHelped ? "0.55" : "1";
+  setVillagerDialogMode("help");
+  saveGame();
+}
+
 function openVillagerHelp(villager) {
   setPlayerAction("talk", 1.4);
   const alreadyHelped = state.helpedVillagers.includes(villager.villageId);
-  const relationKey = villager.role;
-  state.villagerRelations[relationKey] = (state.villagerRelations[relationKey] || 0) + 1;
+  const relationKey = getVillagerKey(villager);
+  const memory = getVillagerMemory(villager);
+  const previousLastSeen = memory.lastSeenAt;
+  memory.quickTalks = state.time - memory.lastTalkAt < 14 ? memory.quickTalks + 1 : 0;
+  memory.visits += 1;
+  memory.relation += 0.25;
+  memory.lastTalkAt = state.time;
+  memory.lastSeenAt = state.time;
+  state.villagerRelations[relationKey] = memory.visits;
+  state.villagerRelations[villager.role] = Math.max(state.villagerRelations[villager.role] || 0, memory.visits);
   state.villagerLastMet[relationKey] = new Date().toISOString();
+  state.villagerLastMet[villager.role] = new Date().toISOString();
   noteWalkProgress("villager", villager.role.toLowerCase());
   rememberJournalEvent(`J'ai rencontre ${villager.role.toLowerCase()} pres du village.`);
   if (!state.visitedVillages.includes(villager.villageId)) {
@@ -3163,21 +3617,21 @@ function openVillagerHelp(villager) {
       return;
     }
   }
-  const meetings = state.villagerRelations[relationKey];
-  const relationLine = getVillagerRelationLine(villager, meetings);
+  const meetings = memory.visits;
+  const relationLine = getVillagerRelationLine(villager, meetings, memory);
+  const requestLine = getVillagerRequestLine(villager, alreadyHelped);
+  const conversation = Math.random() < 0.48 ? getVillagerConversation(villager, memory, alreadyHelped, previousLastSeen) : null;
   ui.villagerTitle.textContent = villager.role;
   ui.giveItemButton.disabled = alreadyHelped;
   ui.giveItemButton.style.opacity = alreadyHelped ? "0.55" : "1";
-  if (alreadyHelped) {
-    ui.villagerText.textContent = `${relationLine} Il te remercie encore. Le village se souvient de ton aide.`;
+  pendingVillagerConversation = null;
+  if (conversation) {
+    ui.villagerText.textContent = `${getVillagerMemoryLine(villager, memory)} ${conversation.prompt}`;
+    pendingVillagerConversation = { villager, conversation, alreadyHelped, baseLine: requestLine };
+    renderVillagerChoices(conversation);
   } else {
-    const requests = [
-      "Il demande de l'aide pour retrouver un sentier disparu.",
-      "Elle aimerait que quelqu'un ecoute une vieille legende jusqu'au bout.",
-      "Il signale une zone ou la meteo change sans prevenir.",
-      "Elle cherche un voyageur pour verifier que les lanternes brillent encore."
-    ];
-    ui.villagerText.textContent = `${relationLine} ${requests[Math.round(villager.x / 97) % requests.length]}`.trim();
+    ui.villagerText.textContent = `${relationLine} ${requestLine}`.trim();
+    setVillagerDialogMode("help");
   }
   pendingVillagerHelp = villager;
   updateAchievements();
@@ -3185,8 +3639,9 @@ function openVillagerHelp(villager) {
   openDialog(ui.villagerDialog);
 }
 
-function getVillagerRelationLine(villager, meetings) {
-  if (meetings >= 5) return `${villager.line} Il t'appelle par ton nom et partage un secret qu'il gardait pour les voyageurs patients.`;
+function getVillagerRelationLine(villager, meetings, memory = getVillagerMemory(villager)) {
+  if (memory.relation >= 5) return `${villager.line} Il t'appelle par ton nom et garde une place pour toi dans ses histoires.`;
+  if (meetings >= 5) return `${villager.line} Il partage un secret qu'il gardait pour les voyageurs patients.`;
   if (meetings >= 3) return `${villager.line} Il te reconnait aussitot et parle avec plus de confiance.`;
   if (meetings >= 2) return `${villager.line} Il sourit: vous vous etes deja croises sur le chemin.`;
   return villager.line;
@@ -3201,9 +3656,16 @@ function givePendingItem() {
     return;
   }
   state.helpedVillagers.push(pendingVillagerHelp.villageId);
+  const memory = getVillagerMemory(pendingVillagerHelp);
+  memory.helpCount += 1;
+  memory.relation += 1.1;
+  memory.gifts.push({ need: pendingVillagerHelp.need?.itemId || "", at: new Date().toISOString() });
   advanceQuest("helpVillager", 1);
   showMessage(`${pendingVillagerHelp.role} te remercie. Le monde devient un peu plus vivant.`);
+  const thankedVillager = pendingVillagerHelp;
   closeDialog(ui.villagerDialog);
+  showVillagerBubble(thankedVillager, "Merci. Vraiment.", { cooldown: 24, force: true });
+  pendingVillagerConversation = null;
   pendingVillagerHelp = null;
   playSoftPing();
   updateAchievements();
@@ -3214,6 +3676,7 @@ function refusePendingHelp() {
   if (!pendingVillagerHelp) return;
   const name = pendingVillagerHelp.role;
   closeDialog(ui.villagerDialog);
+  pendingVillagerConversation = null;
   pendingVillagerHelp = null;
   showMessage(`${name} hoche la tete et reprend son histoire plus doucement.`);
 }
@@ -3599,6 +4062,7 @@ function resetGame() {
   state.helpedVillagers = [];
   state.villagerRelations = {};
   state.villagerLastMet = {};
+  state.villagerMemory = {};
   state.discoveredPlaces = [];
   state.visitedVillages = [];
   state.journalEvents = [];
@@ -3620,6 +4084,7 @@ function resetGame() {
   state.activeSecretWorld = null;
   state.lastSecretWorldId = "";
   state.lastSecretEdgeMessageAt = 0;
+  state.recentDiscoveryNotice = null;
   state.companion = getEmptyCompanionState();
   state.companionGiverX = 0;
   state.time = 0;
@@ -3628,6 +4093,9 @@ function resetGame() {
   state.weather = "clear";
   state.cinematicPlayed = false;
   state.player.rest = 0;
+  Object.keys(villagerBubbles).forEach((key) => delete villagerBubbles[key]);
+  Object.keys(villagerProximity).forEach((key) => delete villagerProximity[key]);
+  pendingVillagerConversation = null;
   lastAutosaveAt = -Infinity;
   localStorage.removeItem(saveKey);
 }
@@ -3644,6 +4112,7 @@ function saveGame() {
     helpedVillagers: state.helpedVillagers,
     villagerRelations: state.villagerRelations,
     villagerLastMet: state.villagerLastMet,
+    villagerMemory: state.villagerMemory,
     discoveredPlaces: state.discoveredPlaces,
     visitedVillages: state.visitedVillages,
     journalEvents: state.journalEvents,
@@ -3664,6 +4133,7 @@ function saveGame() {
     secretCycleIndex: state.secretCycleIndex,
     activeSecretWorld: state.activeSecretWorld,
     lastSecretWorldId: state.lastSecretWorldId,
+    recentDiscoveryNotice: state.recentDiscoveryNotice,
     companion: state.companion,
     companionGiverX: state.companionGiverX,
     startedAtLeastOnce: state.startedAtLeastOnce,
@@ -3695,6 +4165,9 @@ function loadGame() {
     state.helpedVillagers = Array.isArray(payload.helpedVillagers) ? payload.helpedVillagers : [];
     state.villagerRelations = payload.villagerRelations && typeof payload.villagerRelations === "object" ? payload.villagerRelations : {};
     state.villagerLastMet = payload.villagerLastMet && typeof payload.villagerLastMet === "object" ? payload.villagerLastMet : {};
+    state.villagerMemory = payload.villagerMemory && typeof payload.villagerMemory === "object"
+      ? Object.fromEntries(Object.entries(payload.villagerMemory).map(([key, value]) => [key, normalizeVillagerMemory(value)]))
+      : {};
     state.discoveredPlaces = Array.isArray(payload.discoveredPlaces) ? payload.discoveredPlaces : [];
     state.visitedVillages = Array.isArray(payload.visitedVillages) ? payload.visitedVillages : [];
     state.journalEvents = Array.isArray(payload.journalEvents) ? payload.journalEvents : [];
@@ -3716,6 +4189,7 @@ function loadGame() {
     state.activeSecretWorld = payload.activeSecretWorld && typeof payload.activeSecretWorld === "object" ? payload.activeSecretWorld : null;
     state.lastSecretWorldId = typeof payload.lastSecretWorldId === "string" ? payload.lastSecretWorldId : "";
     state.lastSecretEdgeMessageAt = 0;
+    state.recentDiscoveryNotice = payload.recentDiscoveryNotice && typeof payload.recentDiscoveryNotice === "object" ? payload.recentDiscoveryNotice : null;
     if (state.activeSecretWorld) {
       const secretWorld = getSecretWorldConfig(state.activeSecretWorld.worldId);
       state.activeSecretWorld.worldId = secretWorld.id;
@@ -4594,6 +5068,8 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "e" || event.key === "E" || event.key === " ") {
     event.preventDefault();
     if (running) interact();
+  } else if (event.key === "ArrowUp" || event.key === "w" || event.key === "W" || event.key === "z" || event.key === "Z") {
+    triggerPlayerHop();
   }
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key));
@@ -4667,6 +5143,11 @@ ui.cancelAppearanceButton.addEventListener("click", cancelAppearanceChanges);
 ui.customizeDialog.addEventListener("close", cancelAppearanceChanges);
 ui.giveItemButton.addEventListener("click", givePendingItem);
 ui.refuseHelpButton.addEventListener("click", refusePendingHelp);
+ui.villagerChoices.addEventListener("click", (event) => {
+  const button = event.target.closest(".dialog-choice-button");
+  if (!button) return;
+  handleVillagerChoice(Number(button.dataset.choiceIndex));
+});
 ui.claimQuestRewardButton.addEventListener("click", claimQuestReward);
 ui.welcomeCompanionButton.addEventListener("click", () => showMessage(`${state.companion.name} marche maintenant avec toi.`));
 ui.missionTracker.addEventListener("click", () => {
@@ -4689,6 +5170,10 @@ ui.journalList.addEventListener("keydown", (event) => {
 });
 ui.infoButton.addEventListener("click", () => openDialog(ui.infoDialog));
 ui.discoveryDialog.addEventListener("close", closeDiscoveryPopup);
+ui.villagerDialog.addEventListener("close", () => {
+  pendingVillagerConversation = null;
+  setVillagerDialogMode("help");
+});
 ui.optionsButton.addEventListener("click", () => openDialog(ui.optionsDialog));
 ui.fullscreenButton.addEventListener("click", toggleFullscreen);
 ui.muteButton.addEventListener("click", () => {
