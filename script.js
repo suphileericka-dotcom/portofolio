@@ -69,7 +69,7 @@ const musicScheduleLookaheadSeconds = 4;
 const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
-const joystick = { active: false, id: null, x: 0, y: 0 };
+const joystick = { active: false, id: null, x: 0, y: 0, mode: "walk", jumpArmed: true, lastZone: "walk" };
 const discoveryRespawnMinSeconds = 15;
 const discoveryRespawnMaxSeconds = 45;
 const letterRespawnDelaySeconds = 35;
@@ -2690,7 +2690,11 @@ function clearMovementIntent() {
   joystick.active = false;
   joystick.x = 0;
   joystick.y = 0;
+  joystick.mode = "walk";
+  joystick.jumpArmed = true;
+  joystick.lastZone = "walk";
   ui.padKnob.style.transform = "translate(-50%, -50%)";
+  updateMobilePadActionState("walk");
   state.player.vx = 0;
 }
 
@@ -2701,7 +2705,11 @@ function resetTouchControls() {
   joystick.id = null;
   joystick.x = 0;
   joystick.y = 0;
+  joystick.mode = "walk";
+  joystick.jumpArmed = true;
+  joystick.lastZone = "walk";
   ui.padKnob.style.transform = "translate(-50%, -50%)";
+  updateMobilePadActionState("walk");
 }
 
 function stopJoystick() {
@@ -2709,7 +2717,46 @@ function stopJoystick() {
   joystick.id = null;
   joystick.x = 0;
   joystick.y = 0;
+  joystick.mode = "walk";
+  joystick.jumpArmed = true;
+  joystick.lastZone = "walk";
   ui.padKnob.style.transform = "translate(-50%, -50%)";
+  updateMobilePadActionState("walk");
+}
+
+function updateMobilePadActionState(zone = "walk") {
+  ui.mobilePad.classList.toggle("is-walk", zone === "walk");
+  ui.mobilePad.classList.toggle("is-run", zone === "run");
+  ui.mobilePad.classList.toggle("is-jump", zone === "jump");
+}
+
+function setJoystickZone(zone) {
+  if (joystick.lastZone === zone) return;
+  joystick.lastZone = zone;
+  updateMobilePadActionState(zone);
+  if (navigator.vibrate && (zone === "run" || zone === "jump")) navigator.vibrate(zone === "jump" ? 18 : 10);
+}
+
+function updateJoystickFromPointer(event) {
+  const rect = ui.mobilePad.getBoundingClientRect();
+  const dx = event.clientX - rect.left - rect.width / 2;
+  const dy = event.clientY - rect.top - rect.height / 2;
+  const length = Math.hypot(dx, dy) || 1;
+  const max = rect.width * 0.34;
+  const clamped = Math.min(max, length);
+  const radial = clamped / max;
+  joystick.x = (dx / length) * radial;
+  joystick.y = (dy / length) * radial;
+  const jumpZone = radial > 0.72 && dy < -max * 0.55;
+  joystick.mode = !jumpZone && radial > 0.76 ? "run" : "walk";
+  const zone = jumpZone ? "jump" : joystick.mode;
+  setJoystickZone(zone);
+  if (jumpZone && joystick.jumpArmed) {
+    triggerPlayerHop();
+    joystick.jumpArmed = false;
+  }
+  if (!jumpZone && radial < 0.66) joystick.jumpArmed = true;
+  ui.padKnob.style.transform = `translate(calc(-50% + ${joystick.x * max}px), calc(-50% + ${joystick.y * max}px))`;
 }
 
 function getInteractionTarget() {
@@ -2940,7 +2987,7 @@ function isRunInput(input = 0) {
     keys.has("Shift")
     || keys.has("R")
     || keys.has("r")
-    || (joystick.active && Math.abs(input) > 0.82)
+    || (joystick.active && joystick.mode === "run")
   );
 }
 
@@ -5368,20 +5415,14 @@ canvas.addEventListener("pointerleave", () => {
 ui.mobilePad.addEventListener("pointerdown", (event) => {
   joystick.active = true;
   joystick.id = event.pointerId;
+  joystick.jumpArmed = true;
   ui.mobilePad.setPointerCapture(event.pointerId);
+  updateJoystickFromPointer(event);
 });
 
 ui.mobilePad.addEventListener("pointermove", (event) => {
   if (!joystick.active || event.pointerId !== joystick.id) return;
-  const rect = ui.mobilePad.getBoundingClientRect();
-  const dx = event.clientX - rect.left - rect.width / 2;
-  const dy = event.clientY - rect.top - rect.height / 2;
-  const length = Math.hypot(dx, dy) || 1;
-  const max = rect.width * 0.34;
-  const clamped = Math.min(max, length);
-  joystick.x = (dx / length) * (clamped / max);
-  joystick.y = (dy / length) * (clamped / max);
-  ui.padKnob.style.transform = `translate(calc(-50% + ${joystick.x * max}px), calc(-50% + ${joystick.y * max}px))`;
+  updateJoystickFromPointer(event);
 });
 
 ui.mobilePad.addEventListener("pointerup", stopJoystick);

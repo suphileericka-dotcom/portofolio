@@ -452,8 +452,69 @@ h2 {
   touch-action: none;
 }
 
+.mobile-pad::before,
+.mobile-pad::after {
+  content: "";
+  position: absolute;
+  inset: 1.05rem;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.mobile-pad::before {
+  border: 1px solid rgba(247, 243, 223, 0.1);
+}
+
+.mobile-pad::after {
+  inset: 0.42rem;
+  border: 1px dashed rgba(240, 189, 108, 0.12);
+}
+
+.pad-action {
+  position: absolute;
+  z-index: 1;
+  width: 1.65rem;
+  height: 1.65rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: rgba(247, 243, 223, 0.68);
+  background: rgba(20, 34, 33, 0.28);
+  font-size: 0.95rem;
+  line-height: 1;
+  transform: translate(-50%, -50%) scale(1);
+  transition: transform 0.18s ease, color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  pointer-events: none;
+}
+
+.pad-action-walk {
+  left: 50%;
+  top: 50%;
+  opacity: 0.52;
+}
+
+.pad-action-run {
+  left: 78%;
+  top: 50%;
+}
+
+.pad-action-jump {
+  left: 50%;
+  top: 20%;
+}
+
+.mobile-pad.is-walk .pad-action-walk,
+.mobile-pad.is-run .pad-action-run,
+.mobile-pad.is-jump .pad-action-jump {
+  color: #fff3bc;
+  background: rgba(240, 189, 108, 0.24);
+  box-shadow: 0 0 18px rgba(240, 189, 108, 0.28);
+  transform: translate(-50%, -50%) scale(1.16);
+}
+
 .pad-knob {
   position: absolute;
+  z-index: 2;
   top: 50%;
   left: 50%;
   width: 2.4rem;
