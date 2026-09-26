@@ -1136,6 +1136,11 @@ h2 {
   color: var(--ink);
 }
 
+.companion-toggle-button {
+  width: fit-content;
+  margin-top: 0.45rem;
+}
+
 .travel-map {
   min-height: 14rem;
   display: grid;

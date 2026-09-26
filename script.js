@@ -73,6 +73,8 @@ const joystick = { active: false, id: null, x: 0, y: 0 };
 const discoveryRespawnMinSeconds = 15;
 const discoveryRespawnMaxSeconds = 45;
 const letterRespawnDelaySeconds = 35;
+const playerWalkSpeed = 185;
+const playerRunMultiplier = 1.42;
 const maxVisibleDiscoveries = 4;
 const minDiscoverySpacing = 400;
 const minDiscoveryVillagerDistance = 230;
@@ -265,9 +267,11 @@ let secretTransitionToken = 0;
 let pendingVillagerConversation = null;
 const villagerBubbles = {};
 const villagerProximity = {};
+const fallingTreeItems = [];
+const shootingStars = [];
 
 const state = {
-  player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0, action: "", actionUntil: 0 },
+  player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0, action: "", actionUntil: 0, runBlend: 0 },
   camera: { x: 0, y: 0, zoom: 1 },
   time: 0,
   chapter: 1,
@@ -304,8 +308,9 @@ const state = {
   lastSecretWorldId: "",
   lastSecretEdgeMessageAt: 0,
   recentDiscoveryNotice: null,
-  companion: { unlocked: false, offered: false, species: "", name: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0 },
+  companion: { unlocked: false, offered: false, species: "", name: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0, present: true, x: 300, y: 0, pace: 0, transitionUntil: 0 },
   companionGiverX: 0,
+  microEvents: { nextTreeDropAt: 18, nextRollingAt: 42, nextShootingStarAt: 70 },
   startedAtLeastOnce: false,
   playerProfile: { id: "", nickname: "Voyageur", appearance: { skin: "warm", hair: "dark", outfit: "berry", accessory: "bag" } },
   options: { music: 0.38, nature: 0.46, effects: 0.5, muted: false, audioVersion: 7 }
@@ -480,6 +485,17 @@ const seasonalEventItems = [
   { id: "winter-crystal", label: "Cristal d'hiver", rarity: "Legendaire", place: "Montagne", season: "Hiver", text: "Un cristal froid qui garde la lumiere sans jamais fondre.", use: "Debloque les passages de neige et compte pour les grandes collections." }
 ];
 
+const microEventCatalogItems = [
+  { id: "tree-micro-1", label: "Feuille particuliere", rarity: "Commun", place: "Foret", text: "Une feuille tombee au bon moment, plus brillante que les autres.", use: "Garde la trace des arbres qui repondent au passage du joueur.", visualType: "leaf" },
+  { id: "tree-micro-2", label: "Graine ronde", rarity: "Commun", place: "Foret", text: "Une graine lisse qui rebondit doucement avant de s'immobiliser.", use: "Complete les petites trouvailles venues des arbres.", visualType: "cone" },
+  { id: "tree-micro-3", label: "Petit fruit doux", rarity: "Commun", place: "Village", text: "Un fruit discret tombe d'une branche basse et parfume le chemin.", use: "Rappelle les micro-evenements des villages calmes.", visualType: "flower" },
+  { id: "tree-micro-4", label: "Brindille claire", rarity: "Rare", place: "Foret", text: "Une brindille pale, presque polie par le vent.", use: "Sert aux souvenirs d'exploration lente.", visualType: "leaf" },
+  { id: "rolling-micro-1", label: "Gland poli", rarity: "Commun", place: "Foret", text: "Il a roule assez loin pour meriter d'etre rattrape.", use: "Marque les petites poursuites calmes du chemin.", visualType: "cone" },
+  { id: "rolling-micro-2", label: "Noisette roulante", rarity: "Commun", place: "Village", text: "Une noisette vive qui finit toujours par ralentir.", use: "Complete les objets mobiles de l'encyclopedie.", visualType: "cone" },
+  { id: "rolling-micro-3", label: "Galet leger", rarity: "Commun", place: "Riviere", text: "Un galet qui roule moins vite que les pas presses.", use: "Lie la course douce aux trouvailles du sol.", visualType: "stone" },
+  { id: "rolling-micro-4", label: "Graine de chemin", rarity: "Rare", place: "Clairiere", text: "Elle roule comme si elle connaissait deja la pente.", use: "Une trouvaille rare des micro-evenements.", visualType: "cone" }
+];
+
 const generatedCatalogItems = extraItemNames.map((label, index) => {
   const rarity = index >= 90 ? "Legendaire" : index % 5 === 1 ? "Rare" : "Commun";
   const places = ["Foret", "Village", "Riviere", "Montagne", "Clairiere"];
@@ -501,7 +517,7 @@ const generatedCatalogItems = extraItemNames.map((label, index) => {
   };
 });
 
-const itemCatalog = discoveries.concat(generatedCatalogItems, seasonalEventItems);
+const itemCatalog = discoveries.concat(generatedCatalogItems, seasonalEventItems, microEventCatalogItems);
 
 const lanterns = [
   { id: "lantern-1", x: 1180 },
@@ -1700,6 +1716,10 @@ function drawWorldObjects() {
     if (interactionTarget?.kind === "item" && interactionTarget.entry.id === item.id) drawPrompt(item.x, y - 42, "E Ramasser");
   });
 
+  fallingTreeItems.forEach((drop, index) => {
+    drawCollectibleIcon(drop.item, index + 20, drop.x, drop.y);
+  });
+
   getProceduralLetters().forEach((letter, index) => {
     const y = world.ground - 26 + Math.sin(state.time * 1.8 + index) * 4;
     drawLetterIcon(letter.x, y);
@@ -1745,15 +1765,18 @@ function drawSecretLocation(secret) {
 }
 
 function drawCompanion() {
-  if (!state.companion.unlocked) return;
+  if (!state.companion.unlocked || !state.companion.present) return;
   const p = state.player;
-  const moving = Math.abs(p.vx) > 12;
+  const moving = Math.abs(state.companion.pace || 0) > 18;
   const sleeping = p.rest > 0.2;
-  const x = p.x - p.face * 82 + Math.sin(state.time * 2.4) * (moving ? 7 : 2);
-  const y = world.ground - 18 + (moving ? Math.sin(state.time * 8) * 3 : 0);
+  const x = Number.isFinite(state.companion.x) ? state.companion.x : p.x - p.face * 82;
+  const y = world.ground - 18 + (moving ? Math.sin(state.time * 8.5) * 3 : 0);
+  const face = Math.sign(p.x - x) || p.face;
+  const fade = state.companion.transitionUntil > state.time ? Math.min(1, Math.max(0.25, 1 - (state.companion.transitionUntil - state.time) / 1.2)) : 1;
   ctx.save();
+  ctx.globalAlpha = fade;
   ctx.translate(x, y);
-  ctx.scale(p.face, 1);
+  ctx.scale(face, 1);
   drawCompanionAnimal(state.companion, moving, sleeping);
   ctx.restore();
 }
@@ -2614,8 +2637,36 @@ function draw() {
   drawGround(colors);
   drawWorldObjects();
   ctx.restore();
+  drawShootingStars();
   drawOverlay();
   drawWeather();
+}
+
+function drawShootingStars() {
+  if (!shootingStars.length) return;
+  ctx.save();
+  shootingStars.forEach((star) => {
+    const t = Math.max(0, Math.min(1, (state.time - star.startedAt) / star.duration));
+    const alpha = Math.sin(t * Math.PI);
+    const x = star.x + t * star.length;
+    const y = star.y + t * star.length * 0.28;
+    const tail = star.length * 0.38;
+    const gradient = ctx.createLinearGradient(x - tail, y - tail * 0.28, x, y);
+    gradient.addColorStop(0, "rgba(247, 243, 223, 0)");
+    gradient.addColorStop(1, `rgba(247, 243, 223, ${0.72 * alpha})`);
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x - tail, y - tail * 0.28);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.fillStyle = `rgba(255, 224, 122, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
 }
 
 function isModalOpen() {
@@ -2720,9 +2771,9 @@ function update(dt) {
   input = Math.max(-1, Math.min(1, input));
 
   const weather = getWeatherForChapter();
-  const protectedFromWeather = getWeatherProtection(weather.id);
-  const weatherSlowdown = !protectedFromWeather && (weather.id === "rain" || weather.id === "snow") ? 0.82 : 1;
-  const maxSpeed = (p.rest > 0.15 ? 55 : 185) * weatherSlowdown;
+  const runTarget = isRunInput(input) && Math.abs(input) > 0.12 && p.rest <= 0.15 ? 1 : 0;
+  p.runBlend += (runTarget - p.runBlend) * Math.min(1, dt * 3.8);
+  const maxSpeed = getPlayerTargetSpeed(weather);
   const target = input * maxSpeed;
   p.vx += (target - p.vx) * Math.min(1, dt * 5.5);
   const beforeMoveX = p.x;
@@ -2747,7 +2798,8 @@ function update(dt) {
   updateVillagerAwareness(dt, input);
   updateCompanion(dt);
   updateQuestHint(dt);
-  updateWorldDiscoveries();
+  updateWorldDiscoveries(dt);
+  updateMicroEvents(dt);
   updateSecretWorld(dt, input, beforeMoveX);
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
@@ -2871,6 +2923,25 @@ function getWeatherProtection(weatherId = state.weather) {
     return hasCollectedBaseItem("cone") || hasCollectedBaseItem("mushroom");
   }
   return false;
+}
+
+function getWeatherSpeedFactor(weather = getWeatherForChapter()) {
+  const protectedFromWeather = getWeatherProtection(weather.id);
+  return !protectedFromWeather && (weather.id === "rain" || weather.id === "snow") ? 0.82 : 1;
+}
+
+function getPlayerTargetSpeed(weather = getWeatherForChapter()) {
+  const calmSpeed = state.player.rest > 0.15 ? 55 : playerWalkSpeed;
+  return calmSpeed * getWeatherSpeedFactor(weather) * (1 + state.player.runBlend * (playerRunMultiplier - 1));
+}
+
+function isRunInput(input = 0) {
+  return Boolean(
+    keys.has("Shift")
+    || keys.has("R")
+    || keys.has("r")
+    || (joystick.active && Math.abs(input) > 0.82)
+  );
 }
 
 function hasCollectedDiscovery(item) {
@@ -3020,7 +3091,9 @@ function updateAchievements() {
 }
 
 function updateCompanion(dt) {
-  if (!state.companion.unlocked || state.time < state.companion.nextHelpAt) return;
+  if (!state.companion.unlocked) return;
+  updateCompanionMovement(dt);
+  if (state.time < state.companion.nextHelpAt) return;
   state.companion.nextHelpAt = state.time + 55 + hashNumber(state.time + state.player.x) * 45;
   if (state.activeQuest || state.pendingQuestReward) return;
   const common = itemCatalog.filter((item) => item.rarity === "Commun");
@@ -3031,6 +3104,47 @@ function updateCompanion(dt) {
     showMessage(`Ton compagnon a trouve ${item.label.toLowerCase()} pres du chemin.`);
     saveGame();
   }
+}
+
+function updateCompanionMovement(dt) {
+  const companion = state.companion;
+  if (!companion.present) return;
+  if (!Number.isFinite(companion.x)) companion.x = state.player.x - state.player.face * 86;
+  const preferredSide = state.player.face || 1;
+  const targetX = state.player.x - preferredSide * 86;
+  const dx = targetX - companion.x;
+  const distance = Math.abs(dx);
+  if (distance > 920 || isInSecretWorld()) {
+    companion.x = state.player.x - preferredSide * 78;
+    companion.y = world.ground;
+    companion.pace = 0;
+    companion.transitionUntil = state.time + 0.8;
+    return;
+  }
+  const wantsRun = state.player.runBlend > 0.28 || distance > 155;
+  const targetPace = wantsRun ? 1 : 0;
+  companion.pace += (targetPace - (companion.pace || 0)) * Math.min(1, dt * 2.8);
+  const walkCatch = playerWalkSpeed * 0.72;
+  const runCatch = playerWalkSpeed * playerRunMultiplier * 1.12;
+  const catchSpeed = walkCatch + companion.pace * (runCatch - walkCatch);
+  const step = Math.sign(dx) * Math.min(distance, catchSpeed * dt);
+  companion.x += step;
+  companion.y = world.ground;
+}
+
+function toggleCompanionPresence() {
+  if (!state.companion.unlocked) return;
+  state.companion.present = !state.companion.present;
+  state.companion.transitionUntil = state.time + 1.2;
+  if (state.companion.present) {
+    state.companion.x = state.player.x - state.player.face * 90;
+    state.companion.y = world.ground;
+    showMessage(`${state.companion.name} revient pres de toi.`);
+  } else {
+    showMessage(`${state.companion.name} se blottit discretement avec toi.`);
+  }
+  saveGame();
+  buildJournal();
 }
 
 function offerCompanion(giver) {
@@ -3050,7 +3164,12 @@ function offerCompanion(giver) {
     metAt: new Date().toISOString(),
     walks: 0,
     finds: 0,
-    nextHelpAt: state.time + 55
+    nextHelpAt: state.time + 55,
+    present: true,
+    x: state.player.x - state.player.face * 88,
+    y: world.ground,
+    pace: 0,
+    transitionUntil: state.time + 1.2
   };
   rememberJournalEvent(`${giver.role.toLowerCase()} m'a confie ${picked.name}, un ${picked.species.toLowerCase()}.`);
   openCompanionPopup();
@@ -3255,8 +3374,11 @@ function updateQuestHint() {
   showMessageFor(getQuestSearchHint(state.activeQuest), 7200);
 }
 
-function updateWorldDiscoveries() {
+function updateWorldDiscoveries(dt = 1 / 60) {
   Object.values(state.worldDiscoveries).forEach((item) => {
+    if (item.rolling && !item.collected) {
+      updateRollingDiscovery(item, dt);
+    }
     if (item.missionItem && (!state.activeQuest || item.zoneKey !== `mission-${state.activeQuest.id}`)) {
       delete state.worldDiscoveries[item.id];
       return;
@@ -3269,6 +3391,138 @@ function updateWorldDiscoveries() {
       delete state.discoveryRespawns[item.id];
     }
   });
+}
+
+function getMicroEventsState() {
+  state.microEvents = state.microEvents && typeof state.microEvents === "object"
+    ? state.microEvents
+    : { nextTreeDropAt: state.time + 20, nextRollingAt: state.time + 48, nextShootingStarAt: state.time + 80 };
+  if (!Number.isFinite(state.microEvents.nextTreeDropAt)) state.microEvents.nextTreeDropAt = state.time + 20;
+  if (!Number.isFinite(state.microEvents.nextRollingAt)) state.microEvents.nextRollingAt = state.time + 48;
+  if (!Number.isFinite(state.microEvents.nextShootingStarAt)) state.microEvents.nextShootingStarAt = state.time + 80;
+  return state.microEvents;
+}
+
+function getMicroEventItemPool(kind = "tree") {
+  const season = getSeason();
+  const weather = getWeatherForChapter().id;
+  const seasonal = seasonalEventItems.find((item) => item.season === season && (weather === "rain" || isNightTime()));
+  const prefix = kind === "tree" ? "tree-micro" : "rolling-micro";
+  const pool = microEventCatalogItems.filter((item) => item.id.startsWith(prefix));
+  if (seasonal) pool.push(seasonal);
+  return pool;
+}
+
+function createMicroDiscovery(base, x, extra = {}) {
+  const unique = Math.floor(state.time * 10 + hashNumber(x + state.time) * 10000);
+  return {
+    ...base,
+    id: makeId(base.id, unique),
+    x: clampToPlayableWorldX(x),
+    place: getPlaceType(x),
+    visualType: getItemVisualType(base),
+    zoneKey: `micro-${getChapter(x)}`,
+    createdAt: state.time,
+    ...extra
+  };
+}
+
+function updateRollingDiscovery(item, dt = 1 / 60) {
+  const blocked = getInteractionObstacleXs(item).some((blocker) => Math.abs(item.x - blocker.x) < blocker.distance * 0.72);
+  if (blocked || state.time > (item.rollUntil || 0)) {
+    item.rolling = false;
+    item.vx = 0;
+    return;
+  }
+  item.x = clampToPlayableWorldX(item.x + (item.vx || 0) * dt);
+  item.vx *= 0.992;
+  if (Math.abs(item.vx) < 18) item.rolling = false;
+}
+
+function updateMicroEvents(dt) {
+  if (!running || isModalOpen() || isInSecretWorld()) return;
+  const micro = getMicroEventsState();
+  updateFallingTreeItems(dt);
+  updateShootingStars(dt);
+  if (state.time >= micro.nextTreeDropAt) maybeStartTreeDrop(micro);
+  if (state.time >= micro.nextRollingAt) maybeStartRollingItem(micro);
+  if (state.time >= micro.nextShootingStarAt) maybeStartShootingStar(micro);
+}
+
+function maybeStartTreeDrop(micro) {
+  micro.nextTreeDropAt = state.time + 36 + hashNumber(state.time + state.player.x) * 58;
+  if (Math.random() > 0.34) return;
+  const side = hashNumber(state.time) > 0.5 ? 1 : -1;
+  const x = clampToPlayableWorldX(state.player.x + side * (95 + hashNumber(state.player.x) * 120));
+  const pool = getMicroEventItemPool("tree");
+  const base = pool[Math.floor(hashNumber(x + state.time) * pool.length) % pool.length];
+  fallingTreeItems.push({
+    item: createMicroDiscovery(base, x, { fromTree: true }),
+    x,
+    y: world.ground - 210,
+    vy: 0,
+    bounce: 0
+  });
+}
+
+function maybeStartRollingItem(micro) {
+  micro.nextRollingAt = state.time + 55 + hashNumber(state.time + 13) * 70;
+  if (Math.random() > 0.28) return;
+  const direction = state.player.face || 1;
+  const runSpeed = playerWalkSpeed * playerRunMultiplier * getWeatherSpeedFactor();
+  const pool = getMicroEventItemPool("rolling");
+  const base = pool[Math.floor(hashNumber(state.player.x + state.time * 3) * pool.length) % pool.length];
+  const startX = clampToPlayableWorldX(state.player.x + direction * 105);
+  const item = createMicroDiscovery(base, startX, {
+    rolling: true,
+    vx: direction * runSpeed * (0.75 + hashNumber(state.time) * 0.1),
+    rollUntil: state.time + 4.8,
+    hiddenUntil: state.time + 0.2
+  });
+  state.worldDiscoveries[item.id] = item;
+  showMessageFor("Quelque chose roule doucement sur le chemin.", 2600);
+}
+
+function maybeStartShootingStar(micro) {
+  micro.nextShootingStarAt = state.time + 80 + hashNumber(state.time + 41) * 130;
+  const weather = getWeatherForChapter().id;
+  if (!isNightTime() || (weather !== "clear" && weather !== "wind") || Math.random() > 0.42) return;
+  shootingStars.push({
+    startedAt: state.time,
+    duration: 1.3 + hashNumber(state.time) * 0.5,
+    x: window.innerWidth * (0.2 + hashNumber(state.player.x) * 0.55),
+    y: window.innerHeight * (0.12 + hashNumber(state.time + 4) * 0.22),
+    length: 95 + hashNumber(state.time + 8) * 70
+  });
+  playSoftPing();
+}
+
+function updateFallingTreeItems(dt) {
+  for (let index = fallingTreeItems.length - 1; index >= 0; index -= 1) {
+    const drop = fallingTreeItems[index];
+    drop.vy += 420 * dt;
+    drop.y += drop.vy * dt;
+    const groundY = world.ground - 24;
+    if (drop.y >= groundY) {
+      if (drop.bounce < 1) {
+        drop.y = groundY;
+        drop.vy = -110;
+        drop.bounce += 1;
+      } else {
+        drop.item.x = drop.x;
+        drop.item.createdAt = state.time;
+        state.worldDiscoveries[drop.item.id] = placeDiscoverySafely(drop.item, fallingTreeItems.length + index);
+        fallingTreeItems.splice(index, 1);
+        showMessageFor("Un petit objet vient de tomber d'un arbre.", 2400);
+      }
+    }
+  }
+}
+
+function updateShootingStars() {
+  for (let index = shootingStars.length - 1; index >= 0; index -= 1) {
+    if (state.time - shootingStars[index].startedAt > shootingStars[index].duration) shootingStars.splice(index, 1);
+  }
 }
 
 function completeQuest() {
@@ -3837,6 +4091,8 @@ function renderCompanionJournal() {
         <p>Personnalite : ${companion.personality}</p>
         <p>${companion.description}</p>
         <p>Promenades ensemble : ${companion.walks || (state.currentWalk ? 1 : 0)}</p>
+        <p>Presence : ${companion.present === false ? "rappele pres de toi" : "sur le chemin"}</p>
+        <button class="secondary-button companion-toggle-button" type="button" data-companion-toggle="1">${companion.present === false ? "Faire venir" : "Rappeler"}</button>
       </div>
     </article>
   `;
@@ -3895,7 +4151,7 @@ function initWalkMemory() {
 }
 
 function getEmptyCompanionState() {
-  return { unlocked: false, offered: false, species: "", name: "", color: "", accent: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0 };
+  return { unlocked: false, offered: false, species: "", name: "", color: "", accent: "", description: "", personality: "", giver: "", metAt: "", walks: 0, finds: 0, nextHelpAt: 0, present: true, x: 300, y: 0, pace: 0, transitionUntil: 0 };
 }
 
 function normalizeCompanionState(raw) {
@@ -3908,7 +4164,12 @@ function normalizeCompanionState(raw) {
     offered: Boolean(raw.offered || raw.unlocked),
     walks: Number.isFinite(raw.walks) ? raw.walks : 0,
     finds: Number.isFinite(raw.finds) ? raw.finds : 0,
-    nextHelpAt: Number.isFinite(raw.nextHelpAt) ? raw.nextHelpAt : 0
+    nextHelpAt: Number.isFinite(raw.nextHelpAt) ? raw.nextHelpAt : 0,
+    present: raw.present !== false,
+    x: Number.isFinite(raw.x) ? raw.x : state.player.x - 82,
+    y: Number.isFinite(raw.y) ? raw.y : world.ground,
+    pace: Number.isFinite(raw.pace) ? raw.pace : 0,
+    transitionUntil: Number.isFinite(raw.transitionUntil) ? raw.transitionUntil : 0
   };
 }
 
@@ -4087,6 +4348,7 @@ function resetGame() {
   state.recentDiscoveryNotice = null;
   state.companion = getEmptyCompanionState();
   state.companionGiverX = 0;
+  state.microEvents = { nextTreeDropAt: 18, nextRollingAt: 42, nextShootingStarAt: 70 };
   state.time = 0;
   state.camera.x = 0;
   state.chapter = 1;
@@ -4095,6 +4357,8 @@ function resetGame() {
   state.player.rest = 0;
   Object.keys(villagerBubbles).forEach((key) => delete villagerBubbles[key]);
   Object.keys(villagerProximity).forEach((key) => delete villagerProximity[key]);
+  fallingTreeItems.length = 0;
+  shootingStars.length = 0;
   pendingVillagerConversation = null;
   lastAutosaveAt = -Infinity;
   localStorage.removeItem(saveKey);
@@ -4136,6 +4400,7 @@ function saveGame() {
     recentDiscoveryNotice: state.recentDiscoveryNotice,
     companion: state.companion,
     companionGiverX: state.companionGiverX,
+    microEvents: state.microEvents,
     startedAtLeastOnce: state.startedAtLeastOnce,
     cinematicPlayed: state.cinematicPlayed,
     playerId: state.playerProfile.id,
@@ -4201,6 +4466,7 @@ function loadGame() {
     }
     state.companion = normalizeCompanionState(payload.companion);
     state.companionGiverX = Number.isFinite(payload.companionGiverX) ? payload.companionGiverX : 0;
+    state.microEvents = payload.microEvents && typeof payload.microEvents === "object" ? payload.microEvents : { nextTreeDropAt: state.time + 18, nextRollingAt: state.time + 42, nextShootingStarAt: state.time + 70 };
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
     state.cinematicPlayed = Boolean(payload.cinematicPlayed) && state.player.x >= world.firstRouteEnd;
     state.chapter = getChapter(state.player.x);
@@ -5158,6 +5424,11 @@ ui.journalButton.addEventListener("click", () => {
   openDialog(ui.journalDialog);
 });
 ui.journalList.addEventListener("click", (event) => {
+  const toggle = event.target.closest("[data-companion-toggle]");
+  if (toggle) {
+    toggleCompanionPresence();
+    return;
+  }
   const card = event.target.closest(".encyclopedia-card[data-item-id]");
   if (card) openEncyclopediaDetail(card.dataset.itemId);
 });
