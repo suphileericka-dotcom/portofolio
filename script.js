@@ -75,16 +75,18 @@ const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
 const joystick = { active: false, id: null, x: 0, y: 0, mode: "walk", jumpArmed: true, lastZone: "walk" };
 const weatherVisual = { rain: 0, targetRain: 0, rainMood: 0 };
-const discoveryRespawnMinSeconds = 15;
-const discoveryRespawnMaxSeconds = 45;
 const letterRespawnDelaySeconds = 35;
 const playerWalkSpeed = 185;
 const playerRunMultiplier = 1.42;
-const maxVisibleDiscoveries = 4;
-const minDiscoverySpacing = 400;
+const discoveryRespawnMinSeconds = 160;
+const discoveryRespawnMaxSeconds = 320;
+const discoveryAverageWalkSeconds = { min: 20, max: 40 };
+const maxVisibleDiscoveries = 2;
+const minDiscoverySpacing = Math.round(playerWalkSpeed * 22);
 const minDiscoveryVillagerDistance = 230;
 const minDiscoveryDoorDistance = 240;
-const minDiscoveryPlayerSpawnDistance = 520;
+const minDiscoveryPlayerSpawnDistance = Math.round(playerWalkSpeed * 12);
+const groundedDiscoveryLifetimeSeconds = 240;
 const interactionRanges = { item: 78, letter: 78, secret: 105, villager: 98, companion: 98, lantern: 86, rest: 98 };
 
 function openDialog(dialog) {
@@ -904,14 +906,7 @@ function getVisibleWorldDiscoveries() {
 
 function ensureVisibleDiscoveryZones() {
   if (!isExpandedWorld()) {
-    ensureDiscoveryZone("start", () => discoveries.map((item, index) => ({
-      ...item,
-      id: normalizeDiscoveryId(item.id),
-      x: item.x,
-      visualType: getItemVisualType(item),
-      zoneKey: "start",
-      createdAt: state.time + index * 0.001
-    })));
+    ensureDiscoveryZone("start", buildStartDiscoveries);
     ensureMissionDiscoveryItems();
     return;
   }
@@ -941,7 +936,46 @@ function placeDiscoverySafely(item, index = 0) {
     sourceItem: placed
   });
   placed.place = placed.place || getPlaceType(placed.x);
+  decorateDiscoveryPlacement(placed, index);
   return placed;
+}
+
+function decorateDiscoveryPlacement(item, index = 0) {
+  const seed = hashNumber((item.id || item.label || "discovery").length * 17 + Math.floor(item.x) + index * 29);
+  if (item.missionItem || item.grounded || item.rolling) {
+    item.groundOffset = 0;
+    item.discoverySpot = "path";
+    return item;
+  }
+  if (seed > 0.78) {
+    item.groundOffset = -18 - hashNumber(item.x + 9) * 10;
+    item.discoverySpot = "behind-grass";
+  } else if (seed > 0.54) {
+    item.groundOffset = 8 + hashNumber(item.x + 13) * 14;
+    item.discoverySpot = "path-edge";
+  } else if (seed < 0.16) {
+    item.groundOffset = -30 - hashNumber(item.x + 21) * 14;
+    item.discoverySpot = "small-jump";
+  } else {
+    item.groundOffset = 0;
+    item.discoverySpot = "visible";
+  }
+  return item;
+}
+
+function buildStartDiscoveries() {
+  const targets = [
+    { base: discoveries.find((item) => item.id === "leaf"), x: 1560 },
+    { base: discoveries.find((item) => item.id === "cone"), x: 6120 }
+  ];
+  return targets.filter((entry) => entry.base).map((entry, index) => ({
+    ...entry.base,
+    id: normalizeDiscoveryId(entry.base.id),
+    x: entry.x,
+    visualType: getItemVisualType(entry.base),
+    zoneKey: "start",
+    createdAt: state.time + index * 0.001
+  }));
 }
 
 function placeXClearOfInteractions(x, options = {}) {
@@ -1023,32 +1057,73 @@ function ensureSecretWorldDiscoveries() {
 function buildChapterDiscoveries(chapterIndex) {
   const chapter = chapterIndex + 4;
   const items = [];
-  const local = generatedCatalogItems[chapterIndex % generatedCatalogItems.length] || discoveries[chapterIndex % discoveries.length];
-  const jitter = 160 + hashNumber(chapter * 3.1) * 520;
-  items.push({
-    id: makeId(local.id, chapter),
-    x: world.firstRouteEnd + chapterIndex * world.chapterSize + jitter,
-    label: local.label,
-    rarity: local.rarity,
-    place: local.place,
-    use: local.use,
-    text: local.text,
-    visualType: getItemVisualType(local),
-    zoneKey: `chapter-${chapterIndex}`,
-    createdAt: state.time
-  });
+  const local = pickChapterDiscoveryItem(chapterIndex);
+  if (local && shouldSpawnOrdinaryChapterDiscovery(chapterIndex)) {
+    const targetSeconds = discoveryAverageWalkSeconds.min + hashNumber(chapter * 3.1) * (discoveryAverageWalkSeconds.max - discoveryAverageWalkSeconds.min);
+    const jitter = 260 + hashNumber(chapter * 7.4) * Math.max(260, playerWalkSpeed * targetSeconds * 0.28);
+    items.push({
+      id: makeId(local.id, chapter),
+      x: world.firstRouteEnd + chapterIndex * world.chapterSize + Math.min(world.chapterSize - 340, jitter),
+      label: local.label,
+      rarity: local.rarity,
+      place: local.place,
+      use: local.use,
+      text: local.text,
+      visualType: getItemVisualType(local),
+      zoneKey: `chapter-${chapterIndex}`,
+      createdAt: state.time
+    });
+  }
   const seasonItem = seasonalEventItems.find((entry) => entry.season === getSeason(chapter));
-  if (seasonItem && chapterIndex % 4 === 2) {
+  if (seasonItem && chapterIndex % 7 === 3 && hashNumber(chapter * 9.3) > 0.44) {
     items.push({
       ...seasonItem,
       id: makeId(seasonItem.id, chapter),
-      x: world.firstRouteEnd + chapterIndex * world.chapterSize + 1320 + hashNumber(chapter * 7.7) * 420,
+      x: world.firstRouteEnd + chapterIndex * world.chapterSize + 1480 + hashNumber(chapter * 7.7) * 460,
       visualType: getItemVisualType(seasonItem),
       zoneKey: `chapter-${chapterIndex}`,
       createdAt: state.time + 0.01
     });
   }
   return items.concat(buildWeatherBonusDiscoveries(chapterIndex));
+}
+
+function shouldSpawnOrdinaryChapterDiscovery(chapterIndex) {
+  if (chapterIndex < 0) return false;
+  const knownCount = state.discoveryDates && typeof state.discoveryDates === "object" ? Object.keys(state.discoveryDates).length : 0;
+  const seed = hashNumber(chapterIndex * 11.7 + knownCount * 0.37);
+  if (chapterIndex % 3 === 0) return true;
+  if (chapterIndex % 3 === 2 && seed > 0.76) return true;
+  return false;
+}
+
+function pickChapterDiscoveryItem(chapterIndex) {
+  const chapter = chapterIndex + 4;
+  const season = getSeason(chapter);
+  const weather = getWeatherForChapter(chapter).id;
+  const night = isNightTime();
+  const recentBases = state.discoveries.slice(-10).map(baseDiscoveryId);
+  const candidates = generatedCatalogItems.concat(discoveries).filter((item) => {
+    const baseId = baseDiscoveryId(item.id);
+    if (recentBases.includes(baseId)) return false;
+    if (item.rarity === "Legendaire" && hashNumber(chapterIndex * 31 + baseId.length) < 0.92) return false;
+    if (item.rarity === "Rare" && hashNumber(chapterIndex * 17 + baseId.length) < 0.58) return false;
+    return true;
+  });
+  const pool = candidates.length ? candidates : generatedCatalogItems;
+  const scored = pool.map((item, index) => {
+    let score = 1 + hashNumber(chapterIndex * 101 + index * 13);
+    if (item.place === getPlaceType(world.firstRouteEnd + chapterIndex * world.chapterSize)) score += 0.9;
+    if (season === "Printemps" && /fleur|feuille|pollen|rose/i.test(item.label)) score += 0.42;
+    if (season === "Hiver" && /cristal|neige|hiver|chaude/i.test(item.label)) score += 0.38;
+    if (weather === "rain" && /pluie|averse|goutte|mousse|champignon/i.test(item.label)) score += 0.55;
+    if (night && /etoile|minuit|lune|luciole/i.test(item.label)) score += 0.62;
+    if (item.rarity === "Rare") score *= 0.44;
+    if (item.rarity === "Legendaire") score *= 0.12;
+    return { item, score };
+  }).sort((a, b) => b.score - a.score);
+  const pickWindow = Math.min(5, scored.length);
+  return scored[Math.floor(hashNumber(chapterIndex * 43 + state.player.x) * pickWindow) % pickWindow]?.item || generatedCatalogItems[chapterIndex % generatedCatalogItems.length];
 }
 
 function ensureMissionDiscoveryItems() {
@@ -1123,7 +1198,9 @@ function ensureActiveQuestSpawnX() {
 }
 
 function buildWeatherBonusDiscoveries(chapterIndex) {
-  const weather = getWeatherForChapter();
+  const chapter = chapterIndex + 4;
+  const weather = getWeatherForChapter(chapter);
+  if (chapterIndex % 6 !== 4 || hashNumber(chapterIndex * 23 + chapter) < 0.58) return [];
   const bonusByWeather = {
     rain: ["mushroom", "stone"],
     wind: ["feather", "leaf"],
@@ -1135,12 +1212,13 @@ function buildWeatherBonusDiscoveries(chapterIndex) {
   const chapterStart = isExpandedWorld()
     ? world.firstRouteEnd + Math.max(0, chapterIndex) * world.chapterSize
     : 0;
-  return ids.map((id, index) => {
+  const pickedId = ids[Math.floor(hashNumber(chapterIndex * 17 + weather.wind) * ids.length) % ids.length];
+  return [pickedId].filter(Boolean).map((id, index) => {
     const item = getMissionCatalogItem(id);
-    const x = chapterStart + 880 + index * 520 + hashNumber(state.chapter * 13 + index) * 160;
+    const x = chapterStart + 1180 + hashNumber(chapter * 13 + index) * 580;
     return {
       ...item,
-      id: makeId(item.id, 7600 + state.chapter * 10 + index),
+      id: makeId(item.id, 7600 + chapter * 10 + index),
       x,
       place: getPlaceType(x),
       visualType: getItemVisualType(item),
@@ -1155,11 +1233,15 @@ function limitVisibleDiscoveries(items) {
   const cameraEnd = state.camera.x + window.innerWidth + 180;
   const visible = items
     .filter((item) => !item.collected && (item.hiddenUntil === undefined || item.hiddenUntil <= state.time) && item.x >= cameraStart && item.x <= cameraEnd)
-    .sort((a, b) => Number(Boolean(b.missionItem)) - Number(Boolean(a.missionItem)) || Math.abs(a.x - state.player.x) - Math.abs(b.x - state.player.x));
+    .sort((a, b) => Number(Boolean(b.missionItem)) - Number(Boolean(a.missionItem))
+      || Number(Boolean(b.grounded || b.rolling)) - Number(Boolean(a.grounded || a.rolling))
+      || Math.abs(a.x - state.player.x) - Math.abs(b.x - state.player.x));
   const picked = [];
   visible.forEach((item) => {
-    if (picked.length >= maxVisibleDiscoveries) return;
-    if (picked.some((other) => Math.abs(other.x - item.x) < minDiscoverySpacing)) return;
+    const priority = item.missionItem || item.grounded || item.rolling;
+    const ordinaryCount = picked.filter((entry) => !entry.missionItem && !entry.grounded && !entry.rolling).length;
+    if (!priority && ordinaryCount >= maxVisibleDiscoveries) return;
+    if (!priority && picked.some((other) => Math.abs(other.x - item.x) < minDiscoverySpacing)) return;
     picked.push(item);
   });
   return picked.sort((a, b) => a.x - b.x);
@@ -1716,7 +1798,8 @@ function drawWorldObjects() {
   getVisibleWorldDiscoveries().forEach((item, index) => {
     const collected = hasCollectedDiscovery(item);
     if (collected) return;
-    const y = world.ground - 20 + Math.sin(state.time * 2 + index) * 5;
+    const bob = item.grounded ? 0 : Math.sin(state.time * 2 + index) * 5;
+    const y = (Number.isFinite(item.y) ? item.y : world.ground - 20) + (item.groundOffset || 0) + bob;
     drawCollectibleIcon(item, index, item.x, y);
     if (interactionTarget?.kind === "item" && interactionTarget.entry.id === item.id) drawPrompt(item.x, y - 42, "E Ramasser");
   });
@@ -3528,6 +3611,10 @@ function updateWorldDiscoveries(dt = 1 / 60) {
     if (item.rolling && !item.collected) {
       updateRollingDiscovery(item, dt);
     }
+    if (item.grounded && !item.collected && Number.isFinite(item.expiresAt) && state.time >= item.expiresAt && Math.abs(item.x - state.player.x) > window.innerWidth * 2.2) {
+      delete state.worldDiscoveries[item.id];
+      return;
+    }
     if (item.missionItem && (!state.activeQuest || item.zoneKey !== `mission-${state.activeQuest.id}`)) {
       delete state.worldDiscoveries[item.id];
       return;
@@ -3580,12 +3667,18 @@ function updateRollingDiscovery(item, dt = 1 / 60) {
   const blocked = getInteractionObstacleXs(item).some((blocker) => Math.abs(item.x - blocker.x) < blocker.distance * 0.72);
   if (blocked || state.time > (item.rollUntil || 0)) {
     item.rolling = false;
+    item.grounded = true;
+    item.expiresAt = state.time + groundedDiscoveryLifetimeSeconds + hashNumber(item.x + state.time) * 120;
     item.vx = 0;
     return;
   }
   item.x = clampToPlayableWorldX(item.x + (item.vx || 0) * dt);
   item.vx *= 0.992;
-  if (Math.abs(item.vx) < 18) item.rolling = false;
+  if (Math.abs(item.vx) < 18) {
+    item.rolling = false;
+    item.grounded = true;
+    item.expiresAt = state.time + groundedDiscoveryLifetimeSeconds + hashNumber(item.x + state.time) * 120;
+  }
 }
 
 function updateMicroEvents(dt) {
@@ -3660,7 +3753,13 @@ function updateFallingTreeItems(dt) {
       } else {
         drop.item.x = drop.x;
         drop.item.createdAt = state.time;
-        state.worldDiscoveries[drop.item.id] = placeDiscoverySafely(drop.item, fallingTreeItems.length + index);
+        drop.item.y = groundY;
+        drop.item.grounded = true;
+        drop.item.rolling = false;
+        drop.item.groundOffset = 0;
+        drop.item.place = getPlaceType(drop.x);
+        drop.item.expiresAt = state.time + groundedDiscoveryLifetimeSeconds + hashNumber(drop.x + state.time) * 120;
+        state.worldDiscoveries[drop.item.id] = drop.item;
         fallingTreeItems.splice(index, 1);
         showMessageFor("Un petit objet vient de tomber d'un arbre.", 2400);
       }
