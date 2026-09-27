@@ -326,7 +326,8 @@ const state = {
   nextSecretAt: secretPortalIntervals[0],
   secretCycleIndex: 1,
   activeSecretPortal: null,
-  itemEffects: { scoutUntil: 0, scoutTargetId: "", strideUntil: 0 },
+  itemEffects: { scoutUntil: 0, scoutTargetId: "", strideUntil: 0, glowUntil: 0, compassUntil: 0, compassTargetX: 0, compassLabel: "" },
+  equipment: { lanternOn: false },
   activeSecretWorld: null,
   lastSecretWorldId: "",
   lastSecretEdgeMessageAt: 0,
@@ -452,14 +453,14 @@ const companionSpecies = [
 ];
 
 const villagerNeeds = [
-  { itemId: "leaf", itemLabel: "Feuille nervuree", need: "recoudre une carte dechiree par le vent", use: "sert a reparer les cartes fragiles, ouvrir des raccourcis et se proteger de la pluie" },
-  { itemId: "stone", itemLabel: "Pierre polie", need: "caler la porte d'une maison qui tremble", use: "sert a stabiliser des mecanismes, des portes et des ponts anciens" },
-  { itemId: "feather", itemLabel: "Plume claire", need: "terminer une lettre qui ne voulait pas partir", use: "sert a ecrire des messages et apaiser certains habitants" },
-  { itemId: "moss", itemLabel: "Statue moussue", need: "se souvenir du nom d'une vieille place", use: "sert de memoire vivante pour reveiller des lieux oublies" },
-  { itemId: "shell", itemLabel: "Coquille de riviere", need: "appeler l'eau jusqu'au puits", use: "sert a comprendre les rivieres, les puits, les passages humides et la pluie" },
-  { itemId: "cone", itemLabel: "Pomme de pin bleue", need: "rallumer un four trop froid", use: "sert a produire une chaleur douce contre la neige et le froid" },
-  { itemId: "mushroom", itemLabel: "Champignon lueur", need: "guider un enfant dans la nuit", use: "sert de lampe calme contre la brume, la nuit et la neige" },
-  { itemId: "star", itemLabel: "Eclat d'etoile", need: "retrouver le chemin du matin", use: "sert a activer les grands passages et garder une lumiere dans la brume" }
+  { itemId: "leaf", itemLabel: "Feuille nervuree", amount: 3, need: "recoudre une carte dechiree par le vent" },
+  { itemId: "stone", itemLabel: "Pierre polie", amount: 3, need: "caler la porte d'une maison qui tremble" },
+  { itemId: "feather", itemLabel: "Plume claire", amount: 2, need: "terminer une lettre qui ne voulait pas partir" },
+  { itemId: "moss", itemLabel: "Statue moussue", amount: 1, need: "se souvenir du nom d'une vieille place" },
+  { itemId: "shell", itemLabel: "Coquille de riviere", amount: 2, need: "reparer le seau du vieux puits" },
+  { itemId: "cone", itemLabel: "Pomme de pin bleue", amount: 3, need: "rallumer un four trop froid" },
+  { itemId: "mushroom", itemLabel: "Champignon lueur", amount: 2, need: "guider un enfant dans la nuit" },
+  { itemId: "star", itemLabel: "Etoile tombee", amount: 1, need: "retrouver le chemin du matin" }
 ];
 
 const discoveries = [
@@ -2753,7 +2754,8 @@ function drawOverlay() {
   const night = isInSecretWorld()
     ? getSecretWorldConfig().night
     : Math.max(0, Math.min(1, (state.player.x - 5200) / 2800));
-  const hasLight = hasCollectedBaseItem("mushroom") || hasCollectedBaseItem("star");
+  const activeGlow = state.itemEffects?.glowUntil > state.time;
+  const hasLight = activeGlow || state.equipment?.lanternOn || hasCollectedBaseItem("mushroom") || hasCollectedBaseItem("star");
   const darkness = 0.08 + night * (hasLight ? 0.13 : 0.2);
   ctx.fillStyle = `rgba(10, 16, 30, ${darkness})`;
   ctx.fillRect(0, 0, w, h);
@@ -2761,15 +2763,17 @@ function drawOverlay() {
     const px = state.player.x - state.camera.x;
     const py = state.player.y - 54;
     ctx.save();
-    const glow = ctx.createRadialGradient(px, py, 18, px, py, hasLight ? 190 : 135);
-    glow.addColorStop(0, hasLight ? "rgba(255, 229, 151, 0.26)" : "rgba(247, 243, 223, 0.16)");
+    const glowRadius = activeGlow ? 245 : state.equipment?.lanternOn ? 210 : hasLight ? 190 : 135;
+    const glow = ctx.createRadialGradient(px, py, 18, px, py, glowRadius);
+    glow.addColorStop(0, activeGlow ? "rgba(255, 229, 151, 0.42)" : hasLight ? "rgba(255, 229, 151, 0.26)" : "rgba(247, 243, 223, 0.16)");
     glow.addColorStop(1, "rgba(247, 243, 223, 0)");
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(px, py, hasLight ? 190 : 135, 0, Math.PI * 2);
+    ctx.arc(px, py, glowRadius, 0, Math.PI * 2);
     ctx.fill();
       ctx.restore();
   }
+  if (state.itemEffects?.compassUntil > state.time) drawCompassHint();
   drawSecretWorldHud();
   if (state.player.rest > 0) {
     ctx.save();
@@ -2778,6 +2782,25 @@ function drawOverlay() {
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
   }
+}
+
+function drawCompassHint() {
+  const direction = Math.sign(state.itemEffects.compassTargetX - state.player.x) || state.player.face || 1;
+  const x = window.innerWidth * 0.5;
+  const y = 92;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "rgba(20, 34, 33, 0.76)";
+  roundedRect(-98, -23, 196, 46, 8);
+  ctx.fill();
+  ctx.fillStyle = "#f0bd6c";
+  ctx.font = "900 14px Nunito";
+  ctx.textAlign = "center";
+  ctx.fillText(direction > 0 ? "→" : "←", 0, -2);
+  ctx.fillStyle = "#f7f3df";
+  ctx.font = "800 11px Nunito";
+  ctx.fillText(state.itemEffects.compassLabel || "repere connu", 0, 14);
+  ctx.restore();
 }
 
 function drawSecretWorldHud() {
@@ -3175,10 +3198,10 @@ function getWeatherProtection(weatherId = state.weather) {
     return hasCollectedBaseItem("leaf") || hasCollectedBaseItem("shell");
   }
   if (weatherId === "mist") {
-    return hasCollectedBaseItem("mushroom") || hasCollectedBaseItem("star");
+    return state.itemEffects?.glowUntil > state.time || state.equipment?.lanternOn;
   }
   if (weatherId === "snow") {
-    return hasCollectedBaseItem("cone") || hasCollectedBaseItem("mushroom");
+    return state.itemEffects?.glowUntil > state.time || state.equipment?.lanternOn;
   }
   return false;
 }
@@ -3219,17 +3242,20 @@ function getItemUse(itemId) {
   if (baseId === portalInvokerItemId) return "Consommable rare : invoque un portail vers un monde temporaire, sans modifier le cycle naturel.";
   if (baseId === companionChangerItemId) return "Consommable rare : permet de choisir l'animal qui t'accompagne.";
   const item = getCatalogItem(itemId);
+  const label = (item?.label || "").toLowerCase();
+  if (label.includes("boussole")) return "Consommable : indique pendant un moment la direction d'un lieu deja connu ou de l'objectif actif.";
+  if (label.includes("lanterne")) return "Equipement permanent : allume ou eteint une petite lueur autour de toi.";
   const typeUses = {
     leaf: "Exploration : consomme une feuille pour reperer une trouvaille proche.",
-    stone: "Mission : materiau fiable pour les demandes du village et les anciens passages.",
-    shell: "Ambiance : garde la trace de la riviere et sert aux missions des zones humides.",
+    stone: "Materiau de mission : les habitants peuvent en demander pour reparer le village.",
+    shell: "Objet de mission et de collection lie aux zones humides.",
     cone: "Mouvement : consomme une graine ou une pomme de pin pour un leger elan temporaire.",
-    mushroom: "Exploration : eclaire les zones calmes, humides ou nocturnes.",
-    flower: "Echange : une attention simple pour les habitants et les missions de clairiere.",
-    paper: "Mission : sert aux lettres, cartes et demandes des habitants.",
-    tool: "Exploration : objet rare utile aux passages et aux grandes collections.",
-    rare: "Exploration : ressource precieuse a garder pour les moments importants.",
-    charm: "Echange : petit objet de voyage utile aux habitants et au Carnet."
+    mushroom: "Exploration : consomme un champignon pour produire une douce lueur temporaire.",
+    flower: "Cadeau : offre-la a l'habitant pres de toi pour renforcer doucement votre relation.",
+    paper: "Objet de collection. Certaines missions peuvent demander des objets de cette famille.",
+    tool: "Objet de collection, sauf boussole ou lanterne qui possedent une action propre.",
+    rare: "Objet de collection rare. Son interet depend de sa fiche individuelle.",
+    charm: "Objet de collection du Carnet."
   };
   const typeUse = typeUses[getItemVisualType(item || { id: baseId })];
   if (typeUse) return typeUse;
@@ -3250,12 +3276,26 @@ function getAvailableItemQuantity(itemId) {
 
 function getItemAction(itemId) {
   const baseId = baseDiscoveryId(itemId);
+  const item = getCatalogItem(baseId);
+  const label = (item?.label || "").toLowerCase();
   if (baseId === portalInvokerItemId) return { label: "Utiliser", kind: "portal" };
   if (baseId === companionChangerItemId && state.companion.unlocked) return { label: "Utiliser", kind: "companion" };
-  const type = getItemVisualType(baseId);
+  if (label.includes("boussole")) return { label: "Utiliser", kind: "compass" };
+  if (label.includes("lanterne")) return { label: state.equipment.lanternOn ? "Eteindre" : "Allumer", kind: "lantern" };
+  const type = getItemVisualType(item || baseId);
   if (type === "leaf") return { label: "Reperer", kind: "scout" };
   if (type === "cone") return { label: "Prendre elan", kind: "stride" };
+  if (type === "mushroom") return { label: "Allumer une lueur", kind: "glow" };
+  if (type === "flower" || /fruit|baie|pomme/.test(label)) return { label: "Offrir", kind: "gift" };
   return null;
+}
+
+function getItemUsageStatus(itemId) {
+  const action = getItemAction(itemId);
+  if (!action) return "Collection ou mission";
+  if (action.kind === "lantern") return "Equipement permanent";
+  if (action.kind === "gift") return "Consommable a offrir";
+  return "Consommable";
 }
 
 function consumeItem(itemId) {
@@ -3321,6 +3361,104 @@ function useStrideItem(itemId) {
   closeDialog(ui.encyclopediaDetailDialog);
   closeDialog(ui.journalDialog);
   showMessage("Tes pas sont un peu plus legers pendant un moment.");
+  itemUseInProgress = false;
+}
+
+function useGlowItem(itemId) {
+  if (itemUseInProgress || getAvailableItemQuantity(itemId) < 1) return;
+  itemUseInProgress = true;
+  state.itemEffects.glowUntil = state.time + 100;
+  if (!consumeItem(itemId)) {
+    state.itemEffects.glowUntil = 0;
+    itemUseInProgress = false;
+    return;
+  }
+  closeDialog(ui.encyclopediaDetailDialog);
+  closeDialog(ui.journalDialog);
+  showMessage("Une lueur douce t'accompagne pendant un moment.");
+  itemUseInProgress = false;
+}
+
+function getCompassTarget() {
+  if (state.activeQuest?.itemId) {
+    const targetX = state.activeQuest.missionSlots?.[state.activeQuest.progress] || state.activeQuest.spawnX;
+    if (Number.isFinite(targetX)) return { x: targetX, label: "objectif de mission" };
+  }
+  const residents = getVisibleVillageResidents();
+  const known = residents.find((resident) => state.villagerRelations[getVillagerKey(resident)] || state.villagerRelations[resident.role]);
+  if (known) return { x: known.x, label: known.villageName || "village connu" };
+  const knownVillageKey = Object.keys(state.villagerRelations).find((key) => /^village-\d+$/.test(key));
+  if (knownVillageKey) {
+    const chapter = Number(knownVillageKey.split("-")[1]);
+    return { x: chapter * world.chapterSize, label: "village connu" };
+  }
+  const village = getProceduralVillages()[0];
+  return village ? { x: village.x, label: village.name } : null;
+}
+
+function useCompassItem(itemId) {
+  if (itemUseInProgress || getAvailableItemQuantity(itemId) < 1) return;
+  const target = getCompassTarget();
+  if (!target) {
+    showMessage("La boussole ne trouve encore aucun repere connu.");
+    return;
+  }
+  itemUseInProgress = true;
+  state.itemEffects.compassUntil = state.time + 80;
+  state.itemEffects.compassTargetX = target.x;
+  state.itemEffects.compassLabel = target.label;
+  if (!consumeItem(itemId)) {
+    state.itemEffects.compassUntil = 0;
+    itemUseInProgress = false;
+    return;
+  }
+  closeDialog(ui.encyclopediaDetailDialog);
+  closeDialog(ui.journalDialog);
+  showMessage(`La boussole indique ${target.label}.`);
+  itemUseInProgress = false;
+}
+
+function toggleLanternEquipment() {
+  state.equipment.lanternOn = !state.equipment.lanternOn;
+  saveGame();
+  showMessage(state.equipment.lanternOn ? "Lanterne allumee." : "Lanterne eteinte.");
+  openEncyclopediaDetail(ui.encyclopediaDetailTitle.dataset.itemId);
+}
+
+function getGiftTarget() {
+  return getVisibleVillageResidents()
+    .filter((villager) => Math.abs(villager.x - state.player.x) < interactionRanges.villager)
+    .sort((a, b) => Math.abs(a.x - state.player.x) - Math.abs(b.x - state.player.x))[0] || null;
+}
+
+function offerGiftItem(itemId) {
+  if (itemUseInProgress || getAvailableItemQuantity(itemId) < 1) return;
+  const villager = getGiftTarget();
+  if (!villager) {
+    showMessage("Approche-toi d'un habitant pour offrir ce cadeau.");
+    return;
+  }
+  itemUseInProgress = true;
+  if (!consumeItem(itemId)) {
+    itemUseInProgress = false;
+    return;
+  }
+  const memory = getVillagerMemory(villager);
+  memory.relation += 0.45;
+  memory.gifts.push({ itemId: baseDiscoveryId(itemId), amount: 1, at: new Date().toISOString() });
+  const replies = {
+    reserve: ["Merci. Je vais la garder pres de l'eau.", "C'est gentil. Je ne m'y attendais pas."],
+    chaleureuse: ["Oh, merci. Cette attention me touche.", "Tu es adorable de penser a moi."],
+    attentif: ["Merci. Je saurai en faire bon usage.", "C'est un beau geste."],
+    energique: ["Pour moi ? Trop bien, merci !", "Je vais la montrer a tout le village !"],
+    reveur: ["Merci. Elle trouvera sa place dans ma chanson.", "Quelle jolie attention."],
+    drole: ["Je confirme : c'est un excellent cadeau.", "Tu viens de gagner un point dans mon inventaire imaginaire."],
+    curieux: ["Merci. Je me demande d'ou elle vient.", "Je vais la noter dans mes petites observations."]
+  };
+  closeDialog(ui.encyclopediaDetailDialog);
+  closeDialog(ui.journalDialog);
+  showVillagerBubble(villager, pickLine(replies[getVillagerPersonality(villager).mood] || replies.reserve, state.time + villager.x), { cooldown: 18, force: true });
+  saveGame();
   itemUseInProgress = false;
 }
 
@@ -4192,11 +4330,13 @@ function getVillagerMemoryLine(villager, memory) {
 
 function getVillagerRequestLine(villager, alreadyHelped) {
   if (alreadyHelped) return "Le village se souvient encore de ton aide.";
+  const amount = villager.need.amount || 1;
+  const label = villager.need.itemLabel || "objet";
   const requests = [
-    `J'aurais besoin d'un petit service. Il faudrait ${villager.need.need}.`,
-    `Tu tombes bien. J'aurais besoin de ${villager.need.need}.`,
-    `J'ai une demande simple : il me faudrait ${villager.need.need}.`,
-    "J'aurais quelque chose a te demander. Regarde l'enveloppe quand tu seras pret."
+    `J'aurais besoin de ${amount} ${label.toLowerCase()} pour ${villager.need.need}.`,
+    `Tu tombes bien. Il me faudrait ${amount} ${label.toLowerCase()} pour ${villager.need.need}.`,
+    `J'ai une demande simple : ${amount} ${label.toLowerCase()} pour ${villager.need.need}.`,
+    `Pour ${villager.need.need}, il me faut ${amount} ${label.toLowerCase()}.`
   ];
   return requests[Math.round(villager.x / 97) % requests.length];
 }
@@ -4333,8 +4473,11 @@ function handleVillagerChoice(index) {
   rememberVillagerChoice(villager, choice.id);
   memory.relation += Number.isFinite(choice.relation) ? choice.relation : 0.25;
   ui.villagerText.textContent = `${choice.reply} ${alreadyHelped ? "On peut rester la-dessus pour aujourd'hui." : baseLine}`.trim();
-  ui.giveItemButton.disabled = alreadyHelped;
-  ui.giveItemButton.style.opacity = alreadyHelped ? "0.55" : "1";
+  const required = villager.need?.amount || 1;
+  const available = state.inventory[villager.need?.itemId] || 0;
+  ui.giveItemButton.disabled = alreadyHelped || available < required;
+  ui.giveItemButton.style.opacity = ui.giveItemButton.disabled ? "0.55" : "1";
+  ui.giveItemButton.textContent = alreadyHelped ? "Aide apportee" : `Donner (${available}/${required})`;
   setVillagerDialogMode("help");
   saveGame();
 }
@@ -4369,8 +4512,11 @@ function openVillagerHelp(villager) {
   const requestLine = getVillagerRequestLine(villager, alreadyHelped);
   const conversation = Math.random() < 0.48 ? getVillagerConversation(villager, memory, alreadyHelped, previousLastSeen) : null;
   ui.villagerTitle.textContent = villager.role;
-  ui.giveItemButton.disabled = alreadyHelped;
-  ui.giveItemButton.style.opacity = alreadyHelped ? "0.55" : "1";
+  const available = state.inventory[villager.need.itemId] || 0;
+  const required = villager.need.amount || 1;
+  ui.giveItemButton.disabled = alreadyHelped || available < required;
+  ui.giveItemButton.style.opacity = ui.giveItemButton.disabled ? "0.55" : "1";
+  ui.giveItemButton.textContent = alreadyHelped ? "Aide apportee" : `Donner (${available}/${required})`;
   pendingVillagerConversation = null;
   if (conversation) {
     rememberVillagerConversation(villager, conversation.id);
@@ -4402,11 +4548,19 @@ function givePendingItem() {
     pendingVillagerHelp = null;
     return;
   }
+  const itemId = pendingVillagerHelp.need?.itemId;
+  const required = pendingVillagerHelp.need?.amount || 1;
+  const available = state.inventory[itemId] || 0;
+  if (!itemId || available < required) {
+    showMessage(`Il t'en manque ${Math.max(1, required - available)}.`);
+    return;
+  }
+  state.inventory[itemId] -= required;
   state.helpedVillagers.push(pendingVillagerHelp.villageId);
   const memory = getVillagerMemory(pendingVillagerHelp);
   memory.helpCount += 1;
   memory.relation += 1.1;
-  memory.gifts.push({ need: pendingVillagerHelp.need?.itemId || "", at: new Date().toISOString() });
+  memory.gifts.push({ need: itemId, amount: required, at: new Date().toISOString() });
   advanceQuest("helpVillager", 1);
   const thankedVillager = pendingVillagerHelp;
   closeDialog(ui.villagerDialog);
@@ -4547,6 +4701,7 @@ function openEncyclopediaDetail(itemId) {
     <p>${item.text}</p>
     <p><strong>Utilite</strong> ${getItemUse(item.id)}</p>
     <p><strong>Possede</strong> ${state.inventory[item.id] || 0}${reserved ? ` (${reserved} reserve pour la mission)` : ""}</p>
+    <p><strong>Type</strong> ${getItemUsageStatus(item.id)}</p>
     <p><strong>Lieu</strong> ${item.place || "Chemin"}</p>
     <p><strong>Conditions d'apparition</strong> ${getItemConditionHint(item)}</p>
     <p><strong>Rarete</strong> ${getRarityStars(item.rarity)} - ${item.rarity || "Commun"}</p>
@@ -4842,7 +4997,8 @@ function resetGame() {
   state.nextSecretAt = secretPortalIntervals[0];
   state.secretCycleIndex = 1;
   state.activeSecretPortal = null;
-  state.itemEffects = { scoutUntil: 0, scoutTargetId: "", strideUntil: 0 };
+  state.itemEffects = { scoutUntil: 0, scoutTargetId: "", strideUntil: 0, glowUntil: 0, compassUntil: 0, compassTargetX: 0, compassLabel: "" };
+  state.equipment = { lanternOn: false };
   state.activeSecretWorld = null;
   state.lastSecretWorldId = "";
   state.lastSecretEdgeMessageAt = 0;
@@ -4902,6 +5058,7 @@ function saveGame() {
     secretPortalScheduleVersion,
     activeSecretPortal: state.activeSecretPortal,
     itemEffects: state.itemEffects,
+    equipment: state.equipment,
     activeSecretWorld: state.activeSecretWorld,
     lastSecretWorldId: state.lastSecretWorldId,
     recentDiscoveryNotice: state.recentDiscoveryNotice,
@@ -4969,8 +5126,17 @@ function loadGame() {
       ? payload.activeSecretPortal
       : null;
     state.itemEffects = payload.itemEffects && typeof payload.itemEffects === "object"
-      ? { scoutUntil: Number(payload.itemEffects.scoutUntil) || 0, scoutTargetId: typeof payload.itemEffects.scoutTargetId === "string" ? payload.itemEffects.scoutTargetId : "", strideUntil: Number(payload.itemEffects.strideUntil) || 0 }
-      : { scoutUntil: 0, scoutTargetId: "", strideUntil: 0 };
+      ? {
+        scoutUntil: Number(payload.itemEffects.scoutUntil) || 0,
+        scoutTargetId: typeof payload.itemEffects.scoutTargetId === "string" ? payload.itemEffects.scoutTargetId : "",
+        strideUntil: Number(payload.itemEffects.strideUntil) || 0,
+        glowUntil: Number(payload.itemEffects.glowUntil) || 0,
+        compassUntil: Number(payload.itemEffects.compassUntil) || 0,
+        compassTargetX: Number(payload.itemEffects.compassTargetX) || 0,
+        compassLabel: typeof payload.itemEffects.compassLabel === "string" ? payload.itemEffects.compassLabel : ""
+      }
+      : { scoutUntil: 0, scoutTargetId: "", strideUntil: 0, glowUntil: 0, compassUntil: 0, compassTargetX: 0, compassLabel: "" };
+    state.equipment = payload.equipment && typeof payload.equipment === "object" ? { lanternOn: Boolean(payload.equipment.lanternOn) } : { lanternOn: false };
     state.activeSecretWorld = payload.activeSecretWorld && typeof payload.activeSecretWorld === "object" ? payload.activeSecretWorld : null;
     state.lastSecretWorldId = typeof payload.lastSecretWorldId === "string" ? payload.lastSecretWorldId : "";
     state.lastSecretEdgeMessageAt = 0;
@@ -6014,6 +6180,10 @@ ui.encyclopediaDetailBody.addEventListener("click", (event) => {
   if (action.dataset.itemAction === "companion") openCompanionSelector();
   if (action.dataset.itemAction === "scout") useScoutItem(ui.encyclopediaDetailTitle.dataset.itemId);
   if (action.dataset.itemAction === "stride") useStrideItem(ui.encyclopediaDetailTitle.dataset.itemId);
+  if (action.dataset.itemAction === "glow") useGlowItem(ui.encyclopediaDetailTitle.dataset.itemId);
+  if (action.dataset.itemAction === "compass") useCompassItem(ui.encyclopediaDetailTitle.dataset.itemId);
+  if (action.dataset.itemAction === "lantern") toggleLanternEquipment();
+  if (action.dataset.itemAction === "gift") offerGiftItem(ui.encyclopediaDetailTitle.dataset.itemId);
 });
 ui.companionSelectGrid.addEventListener("click", (event) => {
   const option = event.target.closest("[data-companion-species]");
