@@ -123,9 +123,9 @@ const secretWorldItemSpacing = 760;
 const secretWorldDurationSeconds = 60;
 const secretPortalIntervals = [15 * 60, 7 * 60, 20 * 60];
 const secretPortalScheduleVersion = 1;
-const friendlyChallengeDurationSeconds = 12;
-const friendlyChallengeDistance = 2000;
-const friendlyChallengeCooldownSeconds = 240;
+const friendlyChallengeDurationSeconds = 16;
+const friendlyChallengeDistance = 1200;
+const friendlyChallengeCooldownSeconds = 120;
 const portalInvokerItemId = "star";
 const companionChangerItemId = "feather";
 const secretWorlds = [
@@ -1404,7 +1404,7 @@ function getViewportSize() {
 
 function resize() {
   const size = getViewportSize();
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = Math.min(window.devicePixelRatio || 1, window.matchMedia("(pointer: coarse)").matches ? 1.5 : 2);
   document.documentElement.style.setProperty("--app-height", `${size.height}px`);
   canvas.width = Math.floor(size.width * dpr);
   canvas.height = Math.floor(size.height * dpr);
@@ -1752,7 +1752,11 @@ function drawGround(colors) {
 function drawWorldObjects() {
   ctx.save();
   ctx.translate(-state.camera.x, 0);
-  const interactionTarget = getInteractionTarget();
+  // Reuse the same visible entries for drawing and interaction: a long session
+  // can otherwise rebuild the full discovery list twice every frame.
+  const visibleDiscoveries = getVisibleWorldDiscoveries();
+  const visibleResidents = getVisibleVillageResidents();
+  const interactionTarget = getInteractionTarget(visibleDiscoveries, visibleResidents);
 
   drawCoverForeground();
 
@@ -1834,7 +1838,7 @@ function drawWorldObjects() {
     if (!lit && interactionTarget?.kind === "lantern" && interactionTarget.entry.id === lantern.id) drawPrompt(lantern.x, y - 58, "E allumer");
   });
 
-  getVisibleWorldDiscoveries().forEach((item, index) => {
+  visibleDiscoveries.forEach((item, index) => {
     const collected = hasCollectedDiscovery(item);
     if (collected) return;
     const bob = item.grounded ? 0 : Math.sin(state.time * 2 + index) * 5;
@@ -3189,7 +3193,7 @@ function togglePadModeMenu() {
   updateMobilePadModeState();
 }
 
-function getInteractionTarget() {
+function getInteractionTarget(visibleDiscoveries = getVisibleWorldDiscoveries(), visibleResidents = getVisibleVillageResidents()) {
   const p = state.player;
   const inRange = (entry, range) => Math.abs(entry.x - p.x) < range;
   const byAim = (a, b) => {
@@ -3200,7 +3204,7 @@ function getInteractionTarget() {
     return Number(bFront) - Number(aFront) || Math.abs(da) - Math.abs(db);
   };
 
-  const item = getVisibleWorldDiscoveries()
+  const item = visibleDiscoveries
     .filter((entry) => !hasCollectedDiscovery(entry) && inRange(entry, interactionRanges.item))
     .sort(byAim)[0];
   if (item) return { kind: "item", entry: item };
@@ -3214,7 +3218,7 @@ function getInteractionTarget() {
   const companionGiver = getCompanionGiver();
   if (companionGiver && inRange(companionGiver, interactionRanges.companion)) return { kind: "companion", entry: companionGiver };
 
-  const village = getVisibleVillageResidents()
+  const village = visibleResidents
     .filter((entry) => inRange(entry, interactionRanges.villager))
     .sort(byAim)[0];
   if (village) return { kind: "villager", entry: village };
@@ -4182,7 +4186,7 @@ function finishFriendlyChallenge(won) {
   const challenge = state.friendlyChallenge;
   if (!challenge) return;
   state.friendlyChallenge = null;
-  state.friendlyChallengeCooldowns[challenge.villageId] = state.time + friendlyChallengeCooldownSeconds;
+  state.friendlyChallengeCooldowns[challenge.villageId] = state.time + (won ? friendlyChallengeCooldownSeconds : 12);
   const villager = challenge.villager;
   if (won) {
     const reward = getFriendlyChallengeReward(challenge);
@@ -4617,7 +4621,7 @@ function setVillagerDialogMode(mode = "help") {
 }
 
 function canStartFriendlyChallenge(villager) {
-  if (!villager || isInSecretWorld() || state.activeQuest || state.pendingQuestReward || state.friendlyChallenge) return false;
+  if (!villager || isInSecretWorld() || state.pendingQuestReward || state.friendlyChallenge) return false;
   return state.time >= (state.friendlyChallengeCooldowns[villager.villageId] || 0);
 }
 
