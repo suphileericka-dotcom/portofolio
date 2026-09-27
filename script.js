@@ -289,6 +289,7 @@ const villagerBubbles = {};
 const villagerProximity = {};
 const fallingTreeItems = [];
 const shootingStars = [];
+const discoveryBursts = [];
 
 const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0, action: "", actionUntil: 0, runBlend: 0 },
@@ -373,6 +374,18 @@ const villagers = [
   { role: "Botaniste", line: "Il y a toujours quelque chose a observer dans les herbes, meme pres des maisons." },
   { role: "Vieux sage", line: "Prends le temps de regarder autour de toi. Le village n'est jamais tout a fait le meme." }
 ];
+
+const villageThemes = [
+  { roof: "#547f91", wall: "#d2dcb9", trim: "#f2db8c", accent: "#78bdd0", motif: "river" },
+  { roof: "#aa6d55", wall: "#ead4ac", trim: "#f0b96e", accent: "#d97d62", motif: "flower" },
+  { roof: "#526d4a", wall: "#c9d1a2", trim: "#dfc86d", accent: "#8dad65", motif: "leaf" },
+  { roof: "#756287", wall: "#d6c3dc", trim: "#f1d68a", accent: "#ad94cf", motif: "star" }
+];
+
+function getVillageTheme(village) {
+  const index = Math.abs(Number(village.chapterIndex) || 0) / 2;
+  return villageThemes[Math.floor(index) % villageThemes.length];
+}
 
 const villagerPersonalities = {
   Pecheur: {
@@ -1739,20 +1752,22 @@ function drawWorldObjects() {
 
   getProceduralVillages().forEach((village) => {
     const y = world.ground - 18;
+    const theme = getVillageTheme(village);
+    drawVillageSignpost(village, theme);
     for (let i = 0; i < 4; i += 1) {
       const houseX = village.x + i * 86;
       const houseH = 48 + (i % 2) * 18;
-      ctx.fillStyle = i % 2 ? "#d6bf78" : "#e2cd88";
+      ctx.fillStyle = i % 2 ? blendHex(theme.wall, "#f7f3df", 0.12) : theme.wall;
       roundedRect(houseX - 32, y - houseH, 64, houseH, 5);
       ctx.fill();
-      ctx.fillStyle = "#9c5638";
+      ctx.fillStyle = theme.roof;
       ctx.beginPath();
       ctx.moveTo(houseX - 40, y - houseH);
       ctx.lineTo(houseX, y - houseH - 34);
       ctx.lineTo(houseX + 40, y - houseH);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = "rgba(255, 226, 112, 0.82)";
+      ctx.fillStyle = theme.trim;
       roundedRect(houseX - 10, y - houseH + 18, 20, 18, 4);
       ctx.fill();
       ctx.fillStyle = "#7d5a35";
@@ -1760,6 +1775,7 @@ function drawWorldObjects() {
       ctx.fill();
     }
     const resident = getResidentForVillage(village);
+    drawVillageMotif(village, theme);
     drawVillager(resident.x, resident);
     drawVillagerBubble(resident);
     if (interactionTarget?.kind === "villager" && Math.abs(interactionTarget.entry.x - resident.x) < 2) drawPrompt(resident.x, y - 102, "E Parler");
@@ -1817,6 +1833,7 @@ function drawWorldObjects() {
     if (collected) return;
     const bob = item.grounded ? 0 : Math.sin(state.time * 2 + index) * 5;
     const y = (Number.isFinite(item.y) ? item.y : world.ground - 20) + (item.groundOffset || 0) + bob;
+    if (item.missionItem) drawMissionDiscoveryMarker(item.x, y);
     drawCollectibleIcon(item, index, item.x, y);
     if (state.itemEffects?.scoutTargetId === item.id && state.time < state.itemEffects.scoutUntil) {
       ctx.save();
@@ -1834,6 +1851,8 @@ function drawWorldObjects() {
     drawCollectibleIcon(drop.item, index + 20, drop.x, drop.y);
   });
 
+  drawDiscoveryBursts();
+
   getProceduralLetters().forEach((letter, index) => {
     const y = world.ground - 26 + Math.sin(state.time * 1.8 + index) * 4;
     drawLetterIcon(letter.x, y);
@@ -1849,6 +1868,111 @@ function drawWorldObjects() {
   drawCompanion();
   drawPlayer();
   ctx.restore();
+}
+
+function drawVillageSignpost(village, theme) {
+  const x = village.x - 72;
+  const y = world.ground - 18;
+  const visited = state.visitedVillages.includes(getVillageIdFromX(village.x));
+  ctx.save();
+  ctx.strokeStyle = "#62442d";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(x, y + 14);
+  ctx.lineTo(x, y - 56);
+  ctx.stroke();
+  ctx.fillStyle = visited ? blendHex(theme.wall, "#ffffff", 0.2) : theme.wall;
+  roundedRect(x - 8, y - 66, 74, 25, 5);
+  ctx.fill();
+  ctx.strokeStyle = theme.roof;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#26352e";
+  ctx.font = "800 10px Nunito";
+  ctx.textAlign = "left";
+  ctx.fillText(village.name, x + 2, y - 50);
+  ctx.fillStyle = theme.accent;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 78);
+  ctx.lineTo(x + 18, y - 71);
+  ctx.lineTo(x, y - 64);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawVillageMotif(village, theme) {
+  const x = village.x + 308;
+  const y = world.ground - 8;
+  ctx.save();
+  ctx.fillStyle = theme.accent;
+  if (theme.motif === "river") {
+    ctx.strokeStyle = theme.accent;
+    ctx.lineWidth = 2;
+    for (let index = 0; index < 3; index += 1) {
+      ctx.globalAlpha = 0.42 + index * 0.12;
+      ctx.beginPath();
+      ctx.arc(x + index * 16, y - 14 - Math.sin(state.time * 2 + index) * 2, 7 + index * 2, Math.PI * 0.1, Math.PI * 0.9);
+      ctx.stroke();
+    }
+  } else if (theme.motif === "flower") {
+    for (let index = 0; index < 4; index += 1) {
+      ctx.beginPath();
+      ctx.arc(x + index * 12, y - 12 - (index % 2) * 7, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (theme.motif === "leaf") {
+    for (let index = 0; index < 3; index += 1) {
+      ctx.save();
+      ctx.translate(x + index * 15, y - 15 - index * 4);
+      ctx.rotate(-0.5 + index * 0.3);
+      drawEllipse(0, 0, 9, 4, theme.accent);
+      ctx.restore();
+    }
+  } else {
+    for (let index = 0; index < 3; index += 1) {
+      const sx = x + index * 15;
+      const sy = y - 15 - (index % 2) * 8;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 3 + Math.sin(state.time * 2 + index) * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawMissionDiscoveryMarker(x, y) {
+  const pulse = 0.5 + Math.sin(state.time * 4) * 0.12;
+  ctx.save();
+  ctx.strokeStyle = `rgba(255, 230, 132, ${pulse})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y - 8, 30 + Math.sin(state.time * 3) * 3, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255, 230, 132, 0.78)";
+  ctx.beginPath();
+  ctx.moveTo(x, y - 54);
+  ctx.lineTo(x - 5, y - 44);
+  ctx.lineTo(x + 5, y - 44);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawDiscoveryBursts() {
+  discoveryBursts.forEach((particle) => {
+    const progress = Math.max(0, Math.min(1, (state.time - particle.startedAt) / particle.duration));
+    const alpha = (1 - progress) * particle.alpha;
+    const x = particle.x + particle.vx * progress;
+    const y = particle.y + particle.vy * progress + progress * progress * 16;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = particle.color;
+    ctx.beginPath();
+    ctx.arc(x, y, particle.size * (1 - progress * 0.38), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
 }
 
 function drawSecretLocation(secret) {
@@ -2966,19 +3090,12 @@ function updateJoystickFromPointer(event) {
   const radial = clamped / max;
   joystick.x = (dx / length) * radial;
   joystick.y = (dy / length) * radial;
-  const jumpZone = radial > 0.72 && dy < -max * 0.55;
-  const zone = jumpZone ? "jump" : "move";
-  setJoystickZone(zone);
-  if (jumpZone && joystick.jumpArmed) {
-    triggerPlayerHop();
-    joystick.jumpArmed = false;
-  }
-  if (!jumpZone && radial < 0.66) joystick.jumpArmed = true;
+  setJoystickZone("move");
   ui.padKnob.style.transform = `translate(calc(-50% + ${joystick.x * max}px), calc(-50% + ${joystick.y * max}px))`;
 }
 
 function setJoystickMoveMode(mode) {
-  setMoveMode(mode);
+  setMoveMode(mode, true);
   ui.mobilePad.classList.remove("is-mode-menu-open");
   ui.padModeMenu.setAttribute("aria-hidden", "true");
   updateMobilePadActionState(joystick.lastZone);
@@ -3094,6 +3211,7 @@ function update(dt) {
   updateMobilePadCompanionState();
   updateQuestHint(dt);
   updateWorldDiscoveries(dt);
+  updateDiscoveryBursts();
   updateMicroEvents(dt);
   updateSecretWorld(dt, input, beforeMoveX);
   updateSecretPortal();
@@ -3115,8 +3233,7 @@ function interact() {
   const p = state.player;
   const target = getInteractionTarget();
   if (target?.kind === "item") {
-    const showedPopup = collectDiscovery(target.entry);
-    if (!showedPopup) playSoftPing();
+    collectDiscovery(target.entry);
     saveGame();
     return;
   }
@@ -3946,6 +4063,35 @@ function updateWorldDiscoveries(dt = 1 / 60) {
   });
 }
 
+function updateDiscoveryBursts() {
+  for (let index = discoveryBursts.length - 1; index >= 0; index -= 1) {
+    const particle = discoveryBursts[index];
+    if (state.time - particle.startedAt >= particle.duration) discoveryBursts.splice(index, 1);
+  }
+}
+
+function spawnDiscoveryBurst(item) {
+  const rarity = item.rarity || "Commun";
+  const color = rarity === "Legendaire" ? "#f6cf36" : rarity === "Rare" ? "#b9a1e3" : "#f7e5a5";
+  const count = rarity === "Commun" ? 7 : 12;
+  for (let index = 0; index < count; index += 1) {
+    const angle = (Math.PI * 2 * index) / count + hashNumber(item.x + index * 13) * 0.36;
+    const distance = 24 + hashNumber(item.x + index * 41) * 34;
+    discoveryBursts.push({
+      x: item.x,
+      y: Number.isFinite(item.y) ? item.y : world.ground - 24,
+      vx: Math.cos(angle) * distance,
+      vy: Math.sin(angle) * distance - 24,
+      size: 2 + hashNumber(item.x + index * 71) * 2.3,
+      alpha: rarity === "Commun" ? 0.65 : 0.9,
+      color,
+      startedAt: state.time,
+      duration: 0.48 + hashNumber(item.x + index * 23) * 0.28
+    });
+  }
+  if (discoveryBursts.length > 80) discoveryBursts.splice(0, discoveryBursts.length - 80);
+}
+
 function getMicroEventsState() {
   state.microEvents = state.microEvents && typeof state.microEvents === "object"
     ? state.microEvents
@@ -4259,6 +4405,10 @@ function collectDiscovery(item, quiet = false) {
   const baseId = baseDiscoveryId(item.id);
   const firstTime = !hasCollectedBaseItem(baseId);
   if (!quiet) setPlayerAction((item.rarity === "Legendaire" || item.rarity === "Rare") ? "rare" : "pickup", 1.2);
+  if (!quiet) {
+    spawnDiscoveryBurst(item);
+    playDiscoveryChime(item.rarity);
+  }
   if (!quiet) {
     const respawnAt = state.time + getDiscoveryRespawnDelay();
     if (!item.missionItem) state.discoveryRespawns[item.id] = respawnAt;
@@ -6003,6 +6153,30 @@ function playSoftPing() {
   oscillator.stop(now + 0.38);
 }
 
+function playDiscoveryChime(rarity = "Commun") {
+  if (!audio || isAudioMuted() || state.options.effects <= 0) return;
+  const now = audio.context.currentTime;
+  const notes = rarity === "Legendaire"
+    ? [523.25, 659.25, 783.99]
+    : rarity === "Rare"
+      ? [440, 554.37]
+      : [392];
+  notes.forEach((frequency, index) => {
+    const oscillator = audio.context.createOscillator();
+    const gain = audio.context.createGain();
+    const start = now + index * 0.055;
+    oscillator.type = rarity === "Commun" ? "sine" : "triangle";
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime((rarity === "Commun" ? 0.026 : 0.038) * state.options.effects, start + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28 + index * 0.04);
+    oscillator.connect(gain);
+    gain.connect(audio.effects);
+    oscillator.start(start);
+    oscillator.stop(start + 0.34 + index * 0.04);
+  });
+}
+
 window.addEventListener("resize", resizeGame);
 window.addEventListener("orientationchange", () => {
   setTimeout(resizeGame, 200);
@@ -6127,6 +6301,7 @@ ui.padCompanionButton.addEventListener("click", () => {
   }
   toggleCompanionPresence();
   updateMobilePadCompanionState();
+  showMessage(state.companion.present === false ? "Compagnon rappele" : "Compagnon a vos cotes");
   if (navigator.vibrate) navigator.vibrate(12);
 });
 
