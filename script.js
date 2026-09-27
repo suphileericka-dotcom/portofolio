@@ -1871,7 +1871,7 @@ function drawWorldObjects() {
 }
 
 function drawVillageSignpost(village, theme) {
-  const x = village.x - 72;
+  const x = village.x - 170;
   const y = world.ground - 18;
   const visited = state.visitedVillages.includes(getVillageIdFromX(village.x));
   ctx.save();
@@ -3362,13 +3362,17 @@ function getCatalogItem(itemId) {
 function getItemUse(itemId) {
   const baseId = baseDiscoveryId(itemId);
   if (baseId === portalInvokerItemId) return "Consommable rare : invoque un portail vers un monde temporaire, sans modifier le cycle naturel.";
-  if (baseId === companionChangerItemId) return "Consommable rare : permet de choisir l'animal qui t'accompagne.";
+  if (baseId === companionChangerItemId) {
+    return state.companion.unlocked
+      ? "Consommable rare : permet de choisir un autre animal pour t'accompagner."
+      : "Consommable rare : permet de choisir ton premier compagnon.";
+  }
   const item = getCatalogItem(itemId);
   const label = (item?.label || "").toLowerCase();
   if (label.includes("boussole")) return "Consommable : indique pendant un moment la direction d'un lieu deja connu ou de l'objectif actif.";
   if (label.includes("lanterne")) return "Equipement permanent : allume ou eteint une petite lueur autour de toi.";
   const typeUses = {
-    leaf: "Exploration : consomme une feuille pour reperer une trouvaille proche.",
+    leaf: "Exploration : consomme une feuille et entoure pendant 75 secondes une trouvaille proche.",
     stone: "Materiau de mission : les habitants peuvent en demander pour reparer le village.",
     shell: "Objet de mission et de collection lie aux zones humides.",
     cone: "Mouvement : consomme une graine ou une pomme de pin pour un leger elan temporaire.",
@@ -3401,7 +3405,7 @@ function getItemAction(itemId) {
   const item = getCatalogItem(baseId);
   const label = (item?.label || "").toLowerCase();
   if (baseId === portalInvokerItemId) return { label: "Utiliser", kind: "portal" };
-  if (baseId === companionChangerItemId && state.companion.unlocked) return { label: "Utiliser", kind: "companion" };
+  if (baseId === companionChangerItemId) return { label: state.companion.unlocked ? "Changer" : "Choisir", kind: "companion" };
   if (label.includes("boussole")) return { label: "Utiliser", kind: "compass" };
   if (label.includes("lanterne")) return { label: state.equipment.lanternOn ? "Eteindre" : "Allumer", kind: "lantern" };
   const type = getItemVisualType(item || baseId);
@@ -3580,12 +3584,13 @@ function offerGiftItem(itemId) {
   closeDialog(ui.encyclopediaDetailDialog);
   closeDialog(ui.journalDialog);
   showVillagerBubble(villager, pickLine(replies[getVillagerPersonality(villager).mood] || replies.reserve, state.time + villager.x), { cooldown: 18, force: true });
+  showMessage(`Cadeau offert a ${villager.role}. Votre relation grandit.`);
   saveGame();
   itemUseInProgress = false;
 }
 
 function openCompanionSelector() {
-  if (itemUseInProgress || !state.companion.unlocked || getAvailableItemQuantity(companionChangerItemId) < 1) return;
+  if (itemUseInProgress || getAvailableItemQuantity(companionChangerItemId) < 1) return;
   pendingCompanionSpecies = "";
   ui.companionConfirmActions.hidden = true;
   ui.companionSelectGrid.innerHTML = companionSpecies.map((companion) => `
@@ -3616,8 +3621,25 @@ function confirmCompanionChange() {
   const picked = companionSpecies.find((entry) => entry.species === pendingCompanionSpecies);
   if (!picked || !consumeItem(companionChangerItemId)) return;
   itemUseInProgress = true;
-  const wasPresent = state.companion.present !== false;
-  state.companion = { ...state.companion, ...picked, present: wasPresent, x: state.player.x - state.player.face * 90, y: world.ground, pace: 0, transitionUntil: state.time + 1.2 };
+  const choosingFirstCompanion = !state.companion.unlocked;
+  const wasPresent = choosingFirstCompanion || state.companion.present !== false;
+  state.companion = {
+    ...state.companion,
+    ...picked,
+    unlocked: true,
+    offered: true,
+    giver: choosingFirstCompanion ? "Une plume trouvee" : state.companion.giver,
+    metAt: choosingFirstCompanion ? new Date().toISOString() : state.companion.metAt,
+    walks: choosingFirstCompanion ? 0 : state.companion.walks,
+    finds: choosingFirstCompanion ? 0 : state.companion.finds,
+    nextHelpAt: state.time + 55,
+    present: wasPresent,
+    x: state.player.x - state.player.face * 90,
+    y: world.ground,
+    pace: 0,
+    transitionUntil: state.time + 1.2
+  };
+  if (choosingFirstCompanion) rememberJournalEvent(`Une plume m'a permis de choisir ${picked.name}, un ${picked.species.toLowerCase()}.`);
   pendingCompanionSpecies = "";
   closeDialog(ui.companionSelectDialog);
   closeDialog(ui.encyclopediaDetailDialog);
