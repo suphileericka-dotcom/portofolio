@@ -1543,13 +1543,133 @@ h2 {
   width: 2.4rem;
   padding: 0;
   border-radius: 50%;
+  color: #fff3bc;
+  border-color: rgba(240, 189, 108, 0.42);
 }
 
-.info-list {
-  margin: 0;
-  padding-left: 1.2rem;
+.info-button:active {
+  transform: scale(0.92);
+}
+
+.info-dialog {
+  width: min(38rem, calc(100vw - 1.4rem));
+}
+
+.info-dialog .close-button {
+  width: 2.35rem;
+  padding: 0;
+  font-size: 1.35rem;
+}
+
+.guide-intro {
+  display: grid;
+  grid-template-columns: 3.4rem 1fr;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.85rem;
+  border: 1px solid rgba(240, 189, 108, 0.3);
+  border-radius: 0.5rem;
+  background: rgba(240, 189, 108, 0.1);
+}
+
+.guide-icon {
+  width: 3.4rem;
+  height: 3.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(103, 180, 200, 0.2);
+  font-size: 1.55rem;
+}
+
+.guide-intro strong,
+.guide-section h3,
+.guide-control-list dt {
+  color: var(--sun);
+}
+
+.guide-intro p,
+.guide-section p,
+.guide-control-list dd {
+  margin: 0.3rem 0 0;
   color: var(--muted);
-  line-height: 1.65;
+  line-height: 1.5;
+}
+
+.guide-section {
+  margin-top: 0.75rem;
+  padding: 0.8rem;
+  border-bottom: 1px solid rgba(247, 243, 223, 0.1);
+}
+
+.guide-section h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.guide-controls {
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: rgba(247, 243, 223, 0.05);
+}
+
+.guide-pad {
+  position: relative;
+  width: 7rem;
+  height: 7rem;
+  margin: 1.1rem auto 0.9rem;
+  border: 1px solid rgba(247, 243, 223, 0.18);
+  border-radius: 50%;
+  background: rgba(247, 243, 223, 0.08);
+}
+
+.guide-pad::before {
+  content: "";
+  position: absolute;
+  inset: 1rem;
+  border: 1px solid rgba(247, 243, 223, 0.12);
+  border-radius: 50%;
+}
+
+.guide-pad-jump,
+.guide-pad-mode,
+.guide-pad-companion,
+.guide-pad-knob {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.guide-pad-jump,
+.guide-pad-mode,
+.guide-pad-companion {
+  width: 2rem;
+  height: 2rem;
+  color: #fff3bc;
+  border: 1px solid rgba(240, 189, 108, 0.38);
+  background: rgba(20, 34, 33, 0.62);
+  font-size: 0.9rem;
+}
+
+.guide-pad-jump { top: -0.8rem; left: calc(50% - 1rem); }
+.guide-pad-mode { left: -0.8rem; top: calc(50% - 1rem); }
+.guide-pad-companion { right: -0.8rem; top: calc(50% - 1rem); }
+.guide-pad-knob { top: calc(50% - 1.15rem); left: calc(50% - 1.15rem); width: 2.3rem; height: 2.3rem; background: rgba(240, 189, 108, 0.9); }
+
+.guide-control-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.guide-control-list div {
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(247, 243, 223, 0.08);
+}
+
+.guide-control-list dt { font-weight: 900; }
+.guide-control-list dd { margin-left: 0; font-size: 0.9rem; }
 }
 
 .wide-button {

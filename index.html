@@ -225,20 +225,40 @@
       </form>
     </dialog>
 
-    <dialog id="infoDialog" class="panel-dialog compact-dialog">
+    <dialog id="infoDialog" class="panel-dialog compact-dialog info-dialog">
       <form method="dialog">
         <header class="panel-header">
-          <h2>Bienvenue dans le jeu</h2>
-          <button class="close-button" value="close" type="submit">Fermer</button>
+          <h2>Guide du Bosquet</h2>
+          <button class="close-button" value="close" type="submit" aria-label="Fermer le guide">&times;</button>
         </header>
-        <ul class="info-list">
-          <li>Explorer la nature.</li>
-          <li>Decouvrir des objets rares.</li>
-          <li>Rencontrer des habitants.</li>
-          <li>Completer des missions.</li>
-          <li>Collectionner toutes les decouvertes.</li>
-          <li>Les sauvegardes sont automatiques.</li>
-        </ul>
+        <section class="guide-intro">
+          <span class="guide-icon">&#127807;</span>
+          <div><strong>Bosquet Lent</strong><p>Un jeu d'exploration 2D calme et contemplatif. Parcours les villages, rencontre leurs habitants et observe ton environnement.</p></div>
+        </section>
+        <section class="guide-section">
+          <h3>&#127918; Comment jouer</h3>
+          <p>Explore librement le Bosquet. Certaines choses sont visibles tout de suite, d'autres demandent de regarder attentivement autour de toi. Rien ne presse.</p>
+          <p>Parle a l'habitant de chaque village, accomplis les missions recues et reviens parfois dans les endroits connus : le Bosquet peut changer.</p>
+        </section>
+        <section class="guide-section guide-controls">
+          <h3>&#127918; Commandes mobiles</h3>
+          <div class="guide-pad" aria-label="Joystick avec saut en haut, marche course a gauche et compagnon a droite">
+            <span class="guide-pad-jump">&#10548;</span>
+            <span class="guide-pad-mode">&#128694;</span>
+            <span class="guide-pad-companion">&#128062;</span>
+            <span class="guide-pad-knob"></span>
+          </div>
+          <dl class="guide-control-list">
+            <div><dt>&#9673; Deplacement</dt><dd>Maintiens et fais glisser la boule dans la direction souhaitee. Les diagonales sont possibles.</dd></div>
+            <div><dt>&#128694; / &#127939; Marche et course</dt><dd>Touche l'icone a gauche pour choisir un mode. La course reste douce et le choix reste actif.</dd></div>
+            <div><dt>&#10548; Saut</dt><dd>Touche l'icone du haut pour franchir certains petits obstacles.</dd></div>
+            <div><dt>&#128062; Compagnon</dt><dd>Touche l'icone de droite pour le rappeler ou le faire revenir.</dd></div>
+          </dl>
+        </section>
+        <section class="guide-section"><h3>&#127960; Villages</h3><p>Chaque village possede son habitant. Prends le temps de discuter : certaines conversations sont simples, d'autres menent naturellement a une vraie mission.</p></section>
+        <section class="guide-section"><h3>&#128062; Compagnon</h3><p>Ton compagnon marche pres de toi et te rejoint lorsque tu cours. Tu preferes explorer seul ? Rappelle-le avec la patte, puis fais-le revenir quand tu veux.</p></section>
+        <section class="guide-section"><h3>&#128269; Exploration</h3><p>Tout n'est pas place au milieu du chemin. Un passage discret, un element du decor ou un chemin secondaire peut meriter un detour. Le Carnet garde la trace de tes trouvailles.</p></section>
+        <section class="guide-section"><h3>&#127783; Monde et meteo</h3><p>Le Bosquet evolue avec le temps, la meteo et les saisons. La pluie, la nuit ou une nouvelle visite peuvent changer l'ambiance et les possibilites de decouverte.</p></section>
       </form>
     </dialog>
 
