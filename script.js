@@ -45,6 +45,7 @@ const ui = {
   villagerChoices: document.getElementById("villagerChoices"),
   villagerActions: document.getElementById("villagerActions"),
   giveItemButton: document.getElementById("giveItemButton"),
+  challengeButton: document.getElementById("challengeButton"),
   refuseHelpButton: document.getElementById("refuseHelpButton"),
   questDialog: document.getElementById("questDialog"),
   questDialogBody: document.getElementById("questDialogBody"),
@@ -122,6 +123,9 @@ const secretWorldItemSpacing = 760;
 const secretWorldDurationSeconds = 60;
 const secretPortalIntervals = [15 * 60, 7 * 60, 20 * 60];
 const secretPortalScheduleVersion = 1;
+const friendlyChallengeDurationSeconds = 12;
+const friendlyChallengeDistance = 2000;
+const friendlyChallengeCooldownSeconds = 240;
 const portalInvokerItemId = "star";
 const companionChangerItemId = "feather";
 const secretWorlds = [
@@ -327,6 +331,8 @@ const state = {
   nextSecretAt: secretPortalIntervals[0],
   secretCycleIndex: 1,
   activeSecretPortal: null,
+  friendlyChallenge: null,
+  friendlyChallengeCooldowns: {},
   itemEffects: { scoutUntil: 0, scoutTargetId: "", strideUntil: 0, glowUntil: 0, compassUntil: 0, compassTargetX: 0, compassLabel: "" },
   equipment: { lanternOn: false },
   activeSecretWorld: null,
@@ -1299,7 +1305,7 @@ function getProceduralSecretLocations() {
 
 function getProceduralLetters() {
   if (isInSecretWorld()) return [];
-  if (state.activeQuest || state.pendingQuestReward || state.time < state.nextLetterAt) return [];
+  if (state.activeQuest || state.pendingQuestReward || state.friendlyChallenge || state.time < state.nextLetterAt) return [];
   if (!isExpandedWorld()) {
     return [{ id: "ancient-letter-start", x: 1240 }];
   }
@@ -1864,6 +1870,7 @@ function drawWorldObjects() {
     if (interactionTarget?.kind === "secret" && interactionTarget.entry.id === secret.id) drawPrompt(secret.x, world.ground - 138, "E explorer");
   });
 
+  drawFriendlyChallengeGoal();
   drawRiver();
   drawCompanion();
   drawPlayer();
@@ -1973,6 +1980,43 @@ function drawDiscoveryBursts() {
     ctx.fill();
     ctx.restore();
   });
+}
+
+function drawFriendlyChallengeGoal() {
+  const challenge = state.friendlyChallenge;
+  if (!challenge || isInSecretWorld()) return;
+  const x = challenge.targetX;
+  const y = world.ground - 18;
+  const pulse = 0.55 + Math.sin(state.time * 4) * 0.14;
+  ctx.save();
+  const glow = ctx.createRadialGradient(x, y - 56, 10, x, y - 56, 128);
+  glow.addColorStop(0, `rgba(255, 224, 122, ${pulse * 0.42})`);
+  glow.addColorStop(1, "rgba(255, 224, 122, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(x, y - 56, 128, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#60442c";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(x, y + 14);
+  ctx.lineTo(x, y - 76);
+  ctx.stroke();
+  ctx.fillStyle = "#f0bd6c";
+  ctx.beginPath();
+  ctx.moveTo(x, y - 78);
+  ctx.lineTo(x + 34, y - 66);
+  ctx.lineTo(x, y - 54);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "rgba(20, 34, 33, 0.78)";
+  roundedRect(x - 45, y - 118, 90, 25, 7);
+  ctx.fill();
+  ctx.fillStyle = "#f7f3df";
+  ctx.font = "800 11px Nunito";
+  ctx.textAlign = "center";
+  ctx.fillText("Arrivee", x, y - 101);
+  ctx.restore();
 }
 
 function drawSecretLocation(secret) {
@@ -2900,6 +2944,7 @@ function drawOverlay() {
   }
   if (state.itemEffects?.compassUntil > state.time) drawCompassHint();
   drawSecretWorldHud();
+  drawFriendlyChallengeHud();
   if (state.player.rest > 0) {
     ctx.save();
     ctx.globalAlpha = state.player.rest * 0.24;
@@ -2907,6 +2952,28 @@ function drawOverlay() {
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
   }
+}
+
+function drawFriendlyChallengeHud() {
+  const challenge = state.friendlyChallenge;
+  if (!challenge || isInSecretWorld()) return;
+  const remaining = Math.max(0, Math.ceil(challenge.remaining));
+  const distance = Math.max(0, Math.round(Math.abs(challenge.targetX - state.player.x) / 10));
+  const x = window.innerWidth * 0.5;
+  const y = 34;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "rgba(20, 34, 33, 0.8)";
+  roundedRect(-112, -17, 224, 34, 8);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(240, 189, 108, 0.4)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = "#f0bd6c";
+  ctx.font = "900 12px Nunito";
+  ctx.textAlign = "center";
+  ctx.fillText(`Defi amical  ${remaining}s  ${distance}m`, 0, 4);
+  ctx.restore();
 }
 
 function drawCompassHint() {
@@ -3212,6 +3279,7 @@ function update(dt) {
   updateQuestHint(dt);
   updateWorldDiscoveries(dt);
   updateDiscoveryBursts();
+  updateFriendlyChallenge(dt);
   updateMicroEvents(dt);
   updateSecretWorld(dt, input, beforeMoveX);
   updateSecretPortal();
@@ -4092,6 +4160,50 @@ function updateDiscoveryBursts() {
   }
 }
 
+function getFriendlyChallengeReward(challenge) {
+  const rareItems = itemCatalog.filter((item) => item.rarity === "Rare" || item.rarity === "Legendaire");
+  const fallback = itemCatalog.filter((item) => item.rarity !== "Legendaire");
+  const pool = rareItems.length ? rareItems : fallback;
+  return pool[Math.floor(hashNumber(challenge.targetX + challenge.startedAt * 13) * pool.length) % pool.length];
+}
+
+function updateFriendlyChallenge(dt) {
+  const challenge = state.friendlyChallenge;
+  if (!challenge || isInSecretWorld()) return;
+  challenge.remaining = Math.max(0, challenge.remaining - dt);
+  if (Math.abs(state.player.x - challenge.targetX) <= 58) {
+    finishFriendlyChallenge(true);
+    return;
+  }
+  if (challenge.remaining <= 0) finishFriendlyChallenge(false);
+}
+
+function finishFriendlyChallenge(won) {
+  const challenge = state.friendlyChallenge;
+  if (!challenge) return;
+  state.friendlyChallenge = null;
+  state.friendlyChallengeCooldowns[challenge.villageId] = state.time + friendlyChallengeCooldownSeconds;
+  const villager = challenge.villager;
+  if (won) {
+    const reward = getFriendlyChallengeReward(challenge);
+    const memory = getVillagerMemory(villager);
+    memory.relation += 0.85;
+    if (reward) {
+      collectDiscovery({ ...reward, id: makeId(reward.id, Math.floor(state.time * 10) + challenge.targetX), place: getPlaceType(challenge.targetX) }, true);
+      showMessage(`Defi reussi. ${reward.label} rejoint ton Carnet.`);
+      rememberJournalEvent(`J'ai releve le defi amical de ${villager.role.toLowerCase()} et gagne ${reward.label.toLowerCase()}.`);
+    } else {
+      showMessage("Defi reussi. L'habitant est impressionne.");
+    }
+    showVillagerBubble(villager, "Bien joue. Tu connais vraiment le chemin.", { cooldown: 24, force: true });
+    playSoftPing();
+  } else {
+    showMessage("Le defi s'arrete ici. Tu pourras reessayer plus tard.");
+    showVillagerBubble(villager, "Ce n'est pas une course contre le temps. On recommencera.", { cooldown: 18, force: true });
+  }
+  saveGame();
+}
+
 function spawnDiscoveryBurst(item) {
   const rarity = item.rarity || "Commun";
   const color = rarity === "Legendaire" ? "#f6cf36" : rarity === "Rare" ? "#b9a1e3" : "#f7e5a5";
@@ -4504,6 +4616,46 @@ function setVillagerDialogMode(mode = "help") {
   }
 }
 
+function canStartFriendlyChallenge(villager) {
+  if (!villager || isInSecretWorld() || state.activeQuest || state.pendingQuestReward || state.friendlyChallenge) return false;
+  return state.time >= (state.friendlyChallengeCooldowns[villager.villageId] || 0);
+}
+
+function updateVillagerChallengeButton(villager) {
+  const available = canStartFriendlyChallenge(villager);
+  ui.challengeButton.hidden = !available;
+  ui.challengeButton.disabled = !available;
+}
+
+function startFriendlyChallenge() {
+  const villager = pendingVillagerHelp;
+  if (!canStartFriendlyChallenge(villager)) {
+    showMessage(state.friendlyChallenge ? "Un defi est deja en cours." : "Ce defi sera disponible un peu plus tard.");
+    return;
+  }
+  const direction = state.player.face || 1;
+  const targetX = clampToPlayableWorldX(state.player.x + direction * friendlyChallengeDistance);
+  if (Math.abs(targetX - state.player.x) < friendlyChallengeDistance * 0.55) {
+    showMessage("Le chemin est trop court ici. Essaie depuis un autre village.");
+    return;
+  }
+  state.friendlyChallenge = {
+    villageId: villager.villageId,
+    villager,
+    targetX,
+    remaining: friendlyChallengeDurationSeconds,
+    startedAt: state.time
+  };
+  closeDialog(ui.villagerDialog);
+  pendingVillagerConversation = null;
+  pendingVillagerHelp = null;
+  setPlayerAction("run", 0.8);
+  showMessage(`Defi amical : rejoins la borne en ${friendlyChallengeDurationSeconds} secondes.`);
+  showVillagerBubble(villager, "Je t'attends a la borne !", { cooldown: 20, force: true });
+  playSoftPing();
+  saveGame();
+}
+
 function getVillagerMemoryLine(villager, memory) {
   if (memory.visits <= 1) return "Bonjour... je ne crois pas t'avoir deja vu ici.";
   if (memory.relation >= 4 || memory.visits >= 6) return "Je me demandais quand tu reviendrais.";
@@ -4661,6 +4813,7 @@ function handleVillagerChoice(index) {
   ui.giveItemButton.disabled = alreadyHelped || available < required;
   ui.giveItemButton.style.opacity = ui.giveItemButton.disabled ? "0.55" : "1";
   ui.giveItemButton.textContent = alreadyHelped ? "Aide apportee" : `Donner (${available}/${required})`;
+  updateVillagerChallengeButton(villager);
   pendingVillagerConversation = null;
   setVillagerDialogMode("help");
   saveGame();
@@ -4712,6 +4865,7 @@ function openVillagerHelp(villager) {
     setVillagerDialogMode("help");
   }
   pendingVillagerHelp = villager;
+  updateVillagerChallengeButton(villager);
   updateAchievements();
   saveGame();
   openDialog(ui.villagerDialog);
@@ -5181,6 +5335,8 @@ function resetGame() {
   state.nextSecretAt = secretPortalIntervals[0];
   state.secretCycleIndex = 1;
   state.activeSecretPortal = null;
+  state.friendlyChallenge = null;
+  state.friendlyChallengeCooldowns = {};
   state.itemEffects = { scoutUntil: 0, scoutTargetId: "", strideUntil: 0, glowUntil: 0, compassUntil: 0, compassTargetX: 0, compassLabel: "" };
   state.equipment = { lanternOn: false };
   state.activeSecretWorld = null;
@@ -5241,6 +5397,8 @@ function saveGame() {
     secretCycleIndex: state.secretCycleIndex,
     secretPortalScheduleVersion,
     activeSecretPortal: state.activeSecretPortal,
+    friendlyChallenge: state.friendlyChallenge,
+    friendlyChallengeCooldowns: state.friendlyChallengeCooldowns,
     itemEffects: state.itemEffects,
     equipment: state.equipment,
     activeSecretWorld: state.activeSecretWorld,
@@ -5310,6 +5468,17 @@ function loadGame() {
     state.activeSecretPortal = payload.activeSecretPortal && typeof payload.activeSecretPortal === "object"
       && Number.isFinite(payload.activeSecretPortal.x)
       ? payload.activeSecretPortal
+      : null;
+    state.friendlyChallengeCooldowns = payload.friendlyChallengeCooldowns && typeof payload.friendlyChallengeCooldowns === "object"
+      ? Object.fromEntries(Object.entries(payload.friendlyChallengeCooldowns).filter(([, value]) => Number.isFinite(value) && value >= state.time))
+      : {};
+    state.friendlyChallenge = payload.friendlyChallenge && typeof payload.friendlyChallenge === "object"
+      && typeof payload.friendlyChallenge.villageId === "string"
+      && Number.isFinite(payload.friendlyChallenge.targetX)
+      && Number.isFinite(payload.friendlyChallenge.remaining)
+      && payload.friendlyChallenge.remaining > 0
+      && payload.friendlyChallenge.villager && typeof payload.friendlyChallenge.villager === "object"
+      ? payload.friendlyChallenge
       : null;
     state.itemEffects = payload.itemEffects && typeof payload.itemEffects === "object"
       ? {
@@ -6356,6 +6525,7 @@ ui.applyAppearanceButton.addEventListener("click", applyAppearanceChanges);
 ui.cancelAppearanceButton.addEventListener("click", cancelAppearanceChanges);
 ui.customizeDialog.addEventListener("close", cancelAppearanceChanges);
 ui.giveItemButton.addEventListener("click", givePendingItem);
+ui.challengeButton.addEventListener("click", startFriendlyChallenge);
 ui.refuseHelpButton.addEventListener("click", refusePendingHelp);
 ui.villagerChoices.addEventListener("click", (event) => {
   const button = event.target.closest(".dialog-choice-button");
