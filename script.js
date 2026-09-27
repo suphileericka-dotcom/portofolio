@@ -3082,19 +3082,18 @@ function interact() {
   }
   if (target?.kind === "lantern") {
     state.lanterns.push(target.entry.id);
-    showMessage("La lanterne s'allume. Le sentier respire un peu plus chaud.");
+    showMessage("Lanterne allumee.");
     playSoftPing();
     saveGame();
     return;
   }
   if (target?.kind === "rest") {
     p.rest = 1;
-    showMessage(`Tu t'assois un instant sur le ${target.entry.label}. Tout ralentit.`);
+    showMessage("Repos. La marche ralentit.");
     saveGame();
     return;
   }
 
-  showMessage("Marche doucement. Les petits secrets brillent quand tu t'approches.");
 }
 
 function loop(now) {
@@ -3119,19 +3118,6 @@ function showMessageFor(text, duration = 3400) {
 function announceWeather() {
   const weather = getWeatherForChapter();
   if (weather.id === "clear") return;
-  const protectedFromWeather = getWeatherProtection(weather.id);
-  const lines = protectedFromWeather ? {
-    rain: "Pluie fine: tes trouvailles te protegent, la route reste lisible.",
-    mist: "Brume: ta lumiere perce le voile, tu peux continuer sans te perdre.",
-    wind: "Grand vent: les herbes se couchent et les lanternes hesitent.",
-    snow: "Neige lente: tu gardes assez de chaleur pour avancer."
-  } : {
-    rain: "Pluie fine: sans protection, le pas devient plus lourd.",
-    mist: "Brume: pendant quelques instants, le village devient plus difficile a lire.",
-    wind: "Grand vent: les herbes se couchent et les lanternes hesitent.",
-    snow: "Neige lente: le froid ralentit la marche."
-  };
-  showMessageFor(lines[weather.id] || weather.label, 25000);
   rememberJournalEvent(`${weather.label}: le paysage a change de rythme pendant la promenade.`);
 }
 
@@ -3320,7 +3306,7 @@ function updateAchievements() {
   achievements.forEach((achievement) => {
     if (achievement.ok && !state.achievements.includes(achievement.id)) {
       state.achievements.push(achievement.id);
-      showMessage(`Succes debloque: ${achievement.label}.`);
+      showMessage(`Succes : ${achievement.label}`);
     }
   });
 }
@@ -3336,7 +3322,7 @@ function updateCompanion(dt) {
   if (item) {
     collectDiscovery({ ...item, id: makeId(item.id, state.chapter + state.companion.finds + 80) }, true);
     state.companion.finds += 1;
-    showMessage(`Ton compagnon a trouve ${item.label.toLowerCase()} pres du chemin.`);
+    showMessage(`Compagnon : ${item.label}`);
     saveGame();
   }
 }
@@ -3374,9 +3360,6 @@ function toggleCompanionPresence() {
   if (state.companion.present) {
     state.companion.x = state.player.x - state.player.face * 90;
     state.companion.y = world.ground;
-    showMessage(`${state.companion.name} revient pres de toi.`);
-  } else {
-    showMessage(`${state.companion.name} se blottit discretement avec toi.`);
   }
   saveGame();
   buildJournal();
@@ -3457,7 +3440,6 @@ function enterSecretWorld(secret) {
   state.camera.x = secretWorldOffset;
   ensureSecretWorldDiscoveries();
   showSecretTransition(`${secretWorld.entry}\nRetour dans 01:00.`);
-  showMessageFor(`${secretWorld.entry} Retour dans 01:00.`, 5200);
   updateAchievements();
   playSoftPing();
 }
@@ -3596,7 +3578,6 @@ function advanceQuest(type, amount = 1) {
   state.activeQuest.progress = Math.min(state.activeQuest.target, state.activeQuest.progress + amount);
   state.questLastProgressAt = state.time;
   if (state.activeQuest.itemId) state.activeQuest.nextMissionRevealAt = state.time + getMissionRevealDelay();
-  showMessage(`Mission: ${state.activeQuest.objective} ${state.activeQuest.progress} / ${state.activeQuest.target}`);
   if (state.activeQuest.progress >= state.activeQuest.target) {
     completedMissionNotice = { ...state.activeQuest };
     showMissionTracker("complete", completedMissionNotice);
@@ -3608,10 +3589,11 @@ function advanceQuest(type, amount = 1) {
 
 function updateQuestHint() {
   if (!state.activeQuest || state.pendingQuestReward) return;
-  if (state.time - state.questLastProgressAt < 32) return;
-  if (state.time - state.lastQuestHintAt < 28) return;
+  if (state.time - state.questLastProgressAt < 60) return;
+  if (state.time - state.lastQuestHintAt < 90) return;
   state.lastQuestHintAt = state.time;
-  showMessageFor(getQuestSearchHint(state.activeQuest), 7200);
+  const hint = getQuestSearchHint(state.activeQuest);
+  if (hint) showMessageFor(hint, 3600);
 }
 
 function updateWorldDiscoveries(dt = 1 / 60) {
@@ -3730,7 +3712,6 @@ function maybeStartRollingItem(micro) {
     hiddenUntil: state.time + 0.2
   });
   state.worldDiscoveries[item.id] = item;
-  showMessageFor("Quelque chose roule doucement sur le chemin.", 2600);
 }
 
 function maybeStartShootingStar(micro) {
@@ -3769,7 +3750,6 @@ function updateFallingTreeItems(dt) {
         drop.item.expiresAt = state.time + groundedDiscoveryLifetimeSeconds + hashNumber(drop.x + state.time) * 120;
         state.worldDiscoveries[drop.item.id] = drop.item;
         fallingTreeItems.splice(index, 1);
-        showMessageFor("Un petit objet vient de tomber d'un arbre.", 2400);
       }
     }
   }
@@ -3850,7 +3830,7 @@ function claimQuestReward() {
   state.nextLetterAt = state.time + letterRespawnDelaySeconds;
   updateMissionTracker();
   saveGame();
-  showMessage("Recompense validee. Une nouvelle enveloppe pourra apparaitre plus tard.");
+  showMessage("Recompense recue.");
 }
 
 function updateMissionTracker() {
@@ -3916,25 +3896,14 @@ function getQuestHint(quest) {
 }
 
 function getQuestSearchHint(quest) {
-  if (!quest || !quest.itemId) return getQuestHint(quest);
+  if (!quest || !quest.itemId) return "";
   ensureMissionDiscoveryItems();
   const target = Object.values(state.worldDiscoveries)
     .filter((item) => item.missionItem && item.zoneKey === `mission-${quest.id}` && !item.collected)
     .sort((a, b) => Math.abs(a.x - state.player.x) - Math.abs(b.x - state.player.x))[0];
-  if (!target) return getQuestHint(quest);
+  if (!target) return "";
   const direction = target.x >= state.player.x ? "vers l'est" : "vers l'ouest";
-  const distance = Math.abs(target.x - state.player.x);
-  const type = getItemVisualType(target);
-  const objectLines = {
-    mushroom: "Tu as l'impression qu'un champignon pousse quelque part",
-    shell: "Le bruit de l'eau semble cacher un coquillage",
-    leaf: "Une feuille nervuree doit attendre sur le chemin",
-    stone: "Une pierre ancienne semble reposer plus loin",
-    flower: "Une fleur sauvage attire doucement ton regard"
-  };
-  const intro = objectLines[type] || "Quelque chose utile pour ta mission t'attend";
-  const range = distance > 1200 ? "loin" : "pas tres loin";
-  return `${intro} ${range}, ${direction}.`;
+  return `Mission : ${target.label || "objet demande"} ${direction}.`;
 }
 
 function isFlowerDiscovery(item) {
@@ -3993,8 +3962,6 @@ function collectDiscovery(item, quiet = false) {
     openDiscoveryPopup(item);
     updateAchievements();
     return true;
-  } else if (!quiet) {
-    showMessage(`${item.label}: ${item.text}`);
   }
   updateAchievements();
   return false;
@@ -4172,7 +4139,6 @@ function getVillagerRelationLine(villager, meetings, memory = getVillagerMemory(
 function givePendingItem() {
   if (!pendingVillagerHelp) return;
   if (state.helpedVillagers.includes(pendingVillagerHelp.villageId)) {
-    showMessage("Cet habitant a deja recu de l'aide dans cette partie.");
     closeDialog(ui.villagerDialog);
     pendingVillagerHelp = null;
     return;
@@ -4183,7 +4149,6 @@ function givePendingItem() {
   memory.relation += 1.1;
   memory.gifts.push({ need: pendingVillagerHelp.need?.itemId || "", at: new Date().toISOString() });
   advanceQuest("helpVillager", 1);
-  showMessage(`${pendingVillagerHelp.role} te remercie. Le monde devient un peu plus vivant.`);
   const thankedVillager = pendingVillagerHelp;
   closeDialog(ui.villagerDialog);
   showVillagerBubble(thankedVillager, "Merci. Vraiment.", { cooldown: 24, force: true });
@@ -4196,11 +4161,9 @@ function givePendingItem() {
 
 function refusePendingHelp() {
   if (!pendingVillagerHelp) return;
-  const name = pendingVillagerHelp.role;
   closeDialog(ui.villagerDialog);
   pendingVillagerConversation = null;
   pendingVillagerHelp = null;
-  showMessage(`${name} hoche la tete et reprend son histoire plus doucement.`);
 }
 
 function playRouteEndCinematic() {
@@ -4224,7 +4187,6 @@ function playRouteEndCinematic() {
       clearInterval(timer);
       ui.cinematic.classList.remove("is-visible");
       running = true;
-      showMessage("Le monde s'ouvre. Les villages arrivent plus loin sur la route.");
       return;
     }
     ui.cinematicText.textContent = frames[index];
@@ -4548,6 +4510,7 @@ function getVillagerPortrait(index) {
 async function startGame(reset = false) {
   if (startingGame || running) return;
   startingGame = true;
+  const firstStart = !state.startedAtLeastOnce;
   savePlayerProfile();
   if (reset) resetGame();
   state.startedAtLeastOnce = true;
@@ -4563,8 +4526,8 @@ async function startGame(reset = false) {
   updateMissionTracker();
   if (state.pendingQuestReward) {
     openQuestCompletePopup(state.pendingQuestReward);
-  } else {
-    showMessage("Fleches, ZQSD ou joystick pour marcher. Espace, E ou tap pres du joueur pour interagir.");
+  } else if (firstStart) {
+    showMessage("Fleches, ZQSD ou joystick pour marcher. Espace ou E pour interagir.");
   }
   saveGame();
 }
@@ -4580,7 +4543,6 @@ function pauseGame() {
   ui.continueButton.style.opacity = "1";
   ui.startScreen.classList.remove("is-hidden");
   if (audio) updateAudio();
-  showMessage("Partie en pause. Continue quand tu veux.");
 }
 
 function resetGame() {
@@ -5395,7 +5357,7 @@ async function toggleFullscreen() {
     }
   }
   console.info("[fullscreen] API Fullscreen indisponible ou refusee. Sur iPhone Safari, installe la PWA via Ajouter a l'ecran d'accueil pour supprimer la barre du navigateur.");
-  showMessageFor("Ce navigateur garde parfois ses barres. La PWA donne le vrai plein ecran.", 4200);
+  showMessageFor("Installe la PWA pour le plein ecran.", 3200);
   updateFullscreenButton();
 }
 
@@ -5712,7 +5674,6 @@ ui.questCompleteDialog.addEventListener("close", () => {
   showMissionTracker("complete", completedMissionNotice);
   completedMissionNotice = null;
 });
-ui.welcomeCompanionButton.addEventListener("click", () => showMessage(`${state.companion.name} marche maintenant avec toi.`));
 ui.missionTracker.addEventListener("click", () => {
   if (state.pendingQuestReward && !ui.questCompleteDialog.open) openQuestCompletePopup(state.pendingQuestReward);
 });
