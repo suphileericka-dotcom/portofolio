@@ -115,7 +115,8 @@ const secretWorldWidth = 10000;
 const secretWorldEdgePadding = 120;
 const secretWorldItemSpacing = 760;
 const secretWorldDurationSeconds = 60;
-const secretDoorCooldowns = [7 * 60, 10 * 60, 15 * 60];
+const secretPortalIntervals = [15 * 60, 7 * 60, 20 * 60];
+const secretPortalScheduleVersion = 1;
 const secretWorlds = [
   {
     id: "firefly-garden",
@@ -312,8 +313,9 @@ const state = {
   worldDiscoveries: {},
   discoveryRespawns: {},
   achievements: [],
-  nextSecretAt: 0,
-  secretCycleIndex: 0,
+  nextSecretAt: secretPortalIntervals[0],
+  secretCycleIndex: 1,
+  activeSecretPortal: null,
   activeSecretWorld: null,
   lastSecretWorldId: "",
   lastSecretEdgeMessageAt: 0,
@@ -344,66 +346,61 @@ const weatherTypes = [
 const weatherSchedule = ["clear", "rain", "clear", "mist", "clear", "wind", "clear", "snow", "clear", "clear"];
 
 const villagers = [
-  { role: "Pecheur", line: "Tu cherches quelque chose ? J'ai entendu dire que des champignons lumineux poussent pres de la riviere lorsqu'il pleut." },
-  { role: "Vieille dame", line: "Les vieilles pierres n'oublient jamais les pas gentils. Reviens quand le vent tournera vers l'ouest." },
-  { role: "Garde forestier", line: "Si tu suis le vent vers l'ouest, tu trouveras peut-etre un ancien sentier oublie." },
-  { role: "Enfant", line: "La nuit, les lucioles dessinent parfois des fleches au-dessus des fougeres." },
-  { role: "Musicien", line: "Quand la pluie tombe doucement, les cloches du village sonnent plus loin que d'habitude." },
-  { role: "Marchand", line: "Je ne vends rien aujourd'hui. Je collectionne seulement les histoires que les voyageurs me confient." },
-  { role: "Facteur", line: "Une lettre ancienne apparait parfois la ou personne ne l'attend. Elle choisit son porteur." },
-  { role: "Apiculteur", line: "Les fleurs les plus calmes poussent au printemps, quand les abeilles dansent bas." },
-  { role: "Jardinier", line: "La mousse revient toujours pres des raccourcis que les cartes ont oublies." },
-  { role: "Voyageur", line: "J'ai traverse trois villages sous la brume. Le dernier avait une porte sans mur." },
-  { role: "Randonneur", line: "Les montagnes gardent des cristaux apres la neige, surtout au matin." },
-  { role: "Artiste", line: "Je peins les meteo rares. Elles ne restent jamais assez longtemps." },
-  { role: "Botaniste", line: "Une feuille nervuree peut proteger une carte fragile de la pluie. C'est un tres bon debut." },
-  { role: "Vieux sage", line: "Aide les gens sans attendre de cadeau. Le monde, lui, se souviendra." }
+  { role: "Pecheur", line: "La riviere est calme aujourd'hui. C'est une bonne heure pour marcher." },
+  { role: "Vieille dame", line: "Le village est plus vivant quand on voit passer des visages connus." },
+  { role: "Garde forestier", line: "Je garde un oeil sur les chemins. Ils sont tranquilles pour le moment." },
+  { role: "Enfant", line: "J'ai fait trois fois le tour de la fontaine. Toi, tu vas plus loin que moi." },
+  { role: "Musicien", line: "J'essaie de retenir l'air du village avant qu'il ne change." },
+  { role: "Marchand", line: "Je ne tiens pas de boutique, mais je sais reconnaitre les gens presses." },
+  { role: "Facteur", line: "Je fais une pause entre deux livraisons. Les chemins aussi ont besoin de souffler." },
+  { role: "Apiculteur", line: "Les abeilles travaillent sans faire de bruit. J'aime bien les regarder faire." },
+  { role: "Jardinier", line: "J'ai passe la matinee a remettre deux plantes a leur place. Elles n'etaient pas d'accord." },
+  { role: "Voyageur", line: "Je reste ici quelques jours. C'est rare que je m'arrete assez longtemps pour connaitre un village." },
+  { role: "Randonneur", line: "J'aime les chemins qui prennent leur temps avant de monter." },
+  { role: "Artiste", line: "La lumiere est belle aujourd'hui. J'essaie de ne pas la laisser filer." },
+  { role: "Botaniste", line: "Il y a toujours quelque chose a observer dans les herbes, meme pres des maisons." },
+  { role: "Vieux sage", line: "Prends le temps de regarder autour de toi. Le village n'est jamais tout a fait le meme." }
 ];
 
 const villagerPersonalities = {
   Pecheur: {
     mood: "reserve",
-    greetings: ["La riviere t'a laisse revenir.", "Ah... te revoila.", "Tu marches comme quelqu'un qui cherche encore."],
-    spontaneous: ["L'eau parle bas aujourd'hui.", "Ne cours pas trop pres du quai.", "Il commence a faire froid..."],
+    greetings: ["Bonjour. Je ne t'avais pas encore vu par ici.", "Ah... te revoila.", "Tu connais deja un peu mieux le coin."],
+    spontaneous: ["La riviere est calme aujourd'hui.", "Ne cours pas trop pres du quai.", "Il commence a faire froid..."],
     running: ["Tu vas continuer a courir comme ca longtemps ?", "Doucement. Les poissons entendent les pas."],
     waiting: ["Tu veux me parler ou juste regarder l'horizon ?", "Je peux attendre. La riviere m'a appris."],
-    companion: ["Joli compagnon.", "Il a l'air de connaitre les bons sentiers."],
-    weather: { rain: "Cette pluie n'en finit plus...", mist: "La brume garde les secrets pres de l'eau.", wind: "Le vent ride toute la riviere.", snow: "Meme l'eau semble ralentir." }
+    weather: { rain: "Cette pluie n'en finit plus...", mist: "Avec cette brume, on voit moins loin sur l'eau.", wind: "Le vent ride toute la riviere.", snow: "Meme l'eau semble ralentir." }
   },
   "Vieille dame": {
     mood: "chaleureuse",
     greetings: ["Bonjour... je ne crois pas t'avoir deja vu ici.", "Ah, c'est toi !", "Je me demandais quand tu reviendrais."],
-    spontaneous: ["Prends ton temps, le village respire mieux ainsi.", "Les pierres t'ont reconnu avant moi.", "Tu es encore la ? C'est bien."],
+    spontaneous: ["Prends ton temps, le village respire mieux ainsi.", "Tu as l'air de bien connaitre les environs, maintenant.", "Tu es encore la ? C'est bien."],
     running: ["Tu vas user le chemin avec ces pas-la.", "Le village n'est pas en retard, tu sais."],
     waiting: ["Tu peux rester silencieux. Ce n'est pas vide.", "On dirait que tu as quelque chose sur le coeur."],
-    companion: ["Ton petit ami veille bien sur toi.", "Il a les yeux d'un voyageur sage."],
-    weather: { rain: "La pluie lave les vieilles inquietudes.", mist: "Par brume, les souvenirs parlent plus fort.", wind: "Ce vent annonce souvent une visite.", snow: "La neige rend tout le monde plus doux." }
+    weather: { rain: "La pluie lave les vieilles inquietudes.", mist: "Par brume, le village parait tout proche.", wind: "Ce vent annonce souvent une visite.", snow: "La neige rend tout le monde plus doux." }
   },
   "Garde forestier": {
     mood: "attentif",
     greetings: ["Halte douce. Je t'ai vu arriver.", "Tu connais mieux la route maintenant.", "Tu reviens avec de la poussiere de chemin."],
-    spontaneous: ["Le sentier bouge quand personne ne regarde.", "Je surveille les lanternes.", "Ne quitte pas trop longtemps la route."],
+    spontaneous: ["Je surveille les passages pres du village.", "Les lanternes sont toutes en place.", "La foret est tranquille aujourd'hui."],
     running: ["Pas si vite pres des maisons.", "Garde ton souffle pour la foret."],
-    waiting: ["Tu attends un signe ?", "Si tu cherches une piste, regarde le sol."],
-    companion: ["Bon compagnon de marche.", "Il t'aidera a entendre ce que tu rates."],
+    waiting: ["Tu attends quelqu'un ?", "Si tu veux parler, je suis la."],
     weather: { rain: "Sous la pluie, les traces disparaissent vite.", mist: "Brume basse. Reste pres des lumieres.", wind: "Le vent casse les vieilles branches.", snow: "La neige garde les empreintes." }
   },
   Enfant: {
     mood: "energique",
-    greetings: ["Oh ! Tu es revenu !", "Je t'avais presque vu arriver !", "Tu connais des coins secrets maintenant ?"],
+    greetings: ["Oh ! Tu es revenu !", "Je t'avais presque vu arriver !", "Tu connais deja le village, maintenant ?"],
     spontaneous: ["Tu as trouve quelque chose ?", "Moi aussi je peux courir vite.", "Tu es encore la ? Haha."],
     running: ["Attends-moi !", "Tu fais la course avec le vent ?"],
     waiting: ["Pourquoi tu restes immobile ?", "Tu joues a devenir une statue ?"],
-    companion: ["Il est trop bien ton compagnon !", "Je peux lui dire bonjour ?"],
     weather: { rain: "La pluie fait des tambours sur les toits !", mist: "On dirait que le village a disparu.", wind: "Le vent pousse mes mots partout.", snow: "La neige donne envie de sauter." }
   },
   Musicien: {
     mood: "reveur",
-    greetings: ["Tiens... ton pas revient dans la melodie.", "Je reconnais ton rythme.", "La route t'a garde en mesure."],
-    spontaneous: ["Le silence vient de changer de note.", "Marche doucement, ca sonne mieux.", "Ce village a un refrain discret."],
+    greetings: ["Tiens... te revoila.", "Je reconnais ton rythme.", "La route t'a ramene jusqu'ici."],
+    spontaneous: ["Le village est calme aujourd'hui.", "Marche doucement, ca sonne mieux.", "J'essaie un nouvel air."],
     running: ["Trop vite, tu perds le tempo.", "La route n'est pas une batterie."],
-    waiting: ["Tu ecoutes aussi ?", "Il y a une pause dans l'air."],
-    companion: ["Votre duo marche bien.", "Ton compagnon a un joli rythme."],
+    waiting: ["Tu ecoutes aussi ?", "Je peux jouer plus doucement si tu preferes."],
     weather: { rain: "La pluie joue en trio avec les toits.", mist: "La brume etouffe les notes graves.", wind: "Le vent improvise encore.", snow: "La neige coupe le son du monde." }
   },
   Marchand: {
@@ -412,17 +409,15 @@ const villagerPersonalities = {
     spontaneous: ["Une histoire contre un sourire ?", "Tout a un prix, sauf les bons silences.", "Je collectionne les retours."],
     running: ["Tu fuis une facture imaginaire ?", "A cette vitesse, meme mes histoires perdent leur etiquette."],
     waiting: ["Tu negocies avec ton ombre ?", "Si tu restes la, je vais devoir t'inventorier."],
-    companion: ["Beau compagnon. Valeur sentimentale elevee.", "Celui-la, je ne l'aurais pas vendu non plus."],
-    weather: { rain: "La pluie ruine les etalages inexistants.", mist: "La brume augmente le mystere, pas les prix.", wind: "Le vent emporte mes meilleures excuses.", snow: "La neige vend du calme sans demander." }
+    weather: { rain: "La pluie ruine les etalages inexistants.", mist: "La brume cache mes meilleures grimaces.", wind: "Le vent emporte mes meilleures excuses.", snow: "La neige vend du calme sans demander." }
   },
   Facteur: {
     mood: "curieux",
-    greetings: ["J'ai cru entendre ton nom dans une enveloppe.", "Te revoila entre deux adresses.", "La route t'a livre jusqu'ici."],
-    spontaneous: ["Une lettre choisit toujours son moment.", "J'aurais peut-etre quelque chose a te demander...", "Les messages marchent plus loin que nous."],
+    greetings: ["Te revoila entre deux adresses.", "Bonjour. Tu arrives au bon moment.", "La route t'a ramene jusqu'ici."],
+    spontaneous: ["Je trie le courrier avant que le vent s'en mele.", "Les messages marchent plus loin que nous.", "J'espere que tu as passe une bonne journee."],
     running: ["Si tu vas si vite, les nouvelles arrivent en retard.", "Attends, meme les lettres respirent."],
-    waiting: ["Tu attends du courrier ?", "Rester la, c'est deja envoyer un signe."],
-    companion: ["Il ferait un bon messager.", "Ton compagnon sait garder un secret ?"],
-    weather: { rain: "Les lettres n'aiment pas cette pluie.", mist: "Par brume, les adresses se melangent.", wind: "Le vent distribue tout sans permission.", snow: "La neige retarde les nouvelles." }
+    waiting: ["Tu attends du courrier ?", "Je termine cette pile et je suis a toi."],
+    weather: { rain: "Les lettres n'aiment pas cette pluie.", mist: "Par brume, je relis les adresses deux fois.", wind: "Le vent distribue tout sans permission.", snow: "La neige retarde les nouvelles." }
   }
 };
 
@@ -432,7 +427,6 @@ const defaultVillagerPersonality = {
   spontaneous: ["Le village est calme aujourd'hui.", "On finit par reconnaitre les pas.", "Tu vas rester un moment ?"],
   running: ["Doucement pres du village.", "Le chemin ne partira pas."],
   waiting: ["Tu peux parler quand tu veux.", "Je vois que tu hesites."],
-  companion: ["Joli compagnon.", "Il semble bien t'aimer."],
   weather: { rain: "Cette pluie n'en finit plus...", mist: "La brume rend tout plus proche.", wind: "Le vent a change.", snow: "Il commence a faire froid..." }
 };
 
@@ -455,13 +449,6 @@ const villagerNeeds = [
   { itemId: "cone", itemLabel: "Pomme de pin bleue", need: "rallumer un four trop froid", use: "sert a produire une chaleur douce contre la neige et le froid" },
   { itemId: "mushroom", itemLabel: "Champignon lueur", need: "guider un enfant dans la nuit", use: "sert de lampe calme contre la brume, la nuit et la neige" },
   { itemId: "star", itemLabel: "Eclat d'etoile", need: "retrouver le chemin du matin", use: "sert a activer les grands passages et garder une lumiere dans la brume" }
-];
-
-const riddles = [
-  "Enigme: je disparais quand tu cours, je grandis quand tu t'assois. Qui suis-je ?",
-  "Enigme: trois lanternes savent la route, mais une seule attend ton silence.",
-  "Enigme: le village change de place quand personne ne le regarde.",
-  "Enigme: ce que tu ramasses n'est pas un objet, mais une preuve que tu etais la."
 ];
 
 const discoveries = [
@@ -587,12 +574,13 @@ function normalizeVillagerMemory(raw = {}) {
     quickTalks: Number.isFinite(raw.quickTalks) ? raw.quickTalks : 0,
     choices: raw.choices && typeof raw.choices === "object" ? raw.choices : {},
     gifts: Array.isArray(raw.gifts) ? raw.gifts : [],
+    dialogueHistory: Array.isArray(raw.dialogueHistory) ? raw.dialogueHistory.filter((id) => typeof id === "string").slice(-6) : [],
+    lastConversationAt: Number.isFinite(raw.lastConversationAt) ? raw.lastConversationAt : -Infinity,
     lastSeenAt: Number.isFinite(raw.lastSeenAt) ? raw.lastSeenAt : -Infinity,
     lastTalkAt: Number.isFinite(raw.lastTalkAt) ? raw.lastTalkAt : -Infinity,
     lastBubbleAt: Number.isFinite(raw.lastBubbleAt) ? raw.lastBubbleAt : -Infinity,
     nextBubbleAt: Number.isFinite(raw.nextBubbleAt) ? raw.nextBubbleAt : 0,
     lastWeather: typeof raw.lastWeather === "string" ? raw.lastWeather : "",
-    companionNoticed: Boolean(raw.companionNoticed),
     noticedDiscoveryId: typeof raw.noticedDiscoveryId === "string" ? raw.noticedDiscoveryId : "",
     completedQuestNoticed: Number.isFinite(raw.completedQuestNoticed) ? raw.completedQuestNoticed : 0
   };
@@ -607,6 +595,13 @@ function getVillagerMemory(villager) {
 function rememberVillagerChoice(villager, choiceId) {
   const memory = getVillagerMemory(villager);
   memory.choices[choiceId] = (memory.choices[choiceId] || 0) + 1;
+}
+
+function rememberVillagerConversation(villager, conversationId) {
+  if (!conversationId) return;
+  const memory = getVillagerMemory(villager);
+  memory.dialogueHistory = [...memory.dialogueHistory.filter((id) => id !== conversationId), conversationId].slice(-6);
+  memory.lastConversationAt = state.time;
 }
 
 function getResidentForVillage(village) {
@@ -657,11 +652,10 @@ function getContextualBubbleLine(villager, reason = "idle") {
   }
   if (reason === "running") return pickLine(personality.running, seed);
   if (reason === "waiting") return pickLine(personality.waiting, seed);
-  if (reason === "companion") return pickLine(personality.companion, seed);
-  if (reason === "quest") return "Tu as tenu parole. Le village s'en souviendra.";
+  if (reason === "quest") return "Tu as tenu parole. Merci pour ton aide.";
   if (reason === "discovery" && state.recentDiscoveryNotice?.label) return `Tu as trouve ${state.recentDiscoveryNotice.label.toLowerCase()} ?`;
-  if (reason === "night") return "La nuit change le son des pas.";
-  if (reason === "day") return "Le jour revient doucement.";
+  if (reason === "night") return "Il se fait tard. Le village est plus calme a cette heure-ci.";
+  if (reason === "day") return "Le jour revient doucement sur le village.";
   if (personality.weather && personality.weather[state.weather] && reason === "weather") return personality.weather[state.weather];
   if (!state.activeQuest && !state.pendingQuestReward && state.time >= state.nextLetterAt && hashNumber(seed) > 0.72) return "J'aurais peut-etre quelque chose a te demander...";
   return pickLine(personality.spontaneous, seed);
@@ -767,11 +761,6 @@ function updateVillagerAwareness(dt, input = 0) {
       } else {
         proximity.idleSince = state.time;
       }
-      if (state.companion.unlocked && !memory.companionNoticed && close && Math.random() < dt * 0.18) {
-        memory.companionNoticed = true;
-        memory.relation += 0.25;
-        showVillagerBubble(villager, getContextualBubbleLine(villager, "companion"), { cooldown: 22, force: true });
-      }
       if (state.recentDiscoveryNotice && memory.noticedDiscoveryId !== state.recentDiscoveryNotice.id && state.time - state.recentDiscoveryNotice.at < 45 && close && Math.random() < dt * 0.24) {
         memory.noticedDiscoveryId = state.recentDiscoveryNotice.id;
         memory.relation += 0.2;
@@ -848,6 +837,33 @@ function isInSecretWorld() {
 
 function getSecretWorldConfig(id = state.activeSecretWorld?.worldId) {
   return secretWorlds.find((worldConfig) => worldConfig.id === id) || secretWorlds[0];
+}
+
+function getSecretPortalDelay(index = state.secretCycleIndex) {
+  return secretPortalIntervals[index % secretPortalIntervals.length];
+}
+
+function scheduleNextSecretPortal() {
+  state.nextSecretAt = state.time + getSecretPortalDelay();
+  state.secretCycleIndex = (state.secretCycleIndex + 1) % secretPortalIntervals.length;
+}
+
+function createSecretPortal() {
+  if (state.activeSecretPortal || isInSecretWorld()) return;
+  const direction = state.player.face || 1;
+  const x = clampToPlayableWorldX(state.player.x + direction * 460);
+  state.activeSecretPortal = {
+    id: makeId("portal", Math.floor(state.time * 10)),
+    x,
+    name: "Portail",
+    createdAt: state.time
+  };
+  playSoftPing();
+}
+
+function updateSecretPortal() {
+  if (!running || isInSecretWorld() || state.activeSecretPortal) return;
+  if (state.time >= state.nextSecretAt) createSecretPortal();
 }
 
 function pickSecretWorldConfig() {
@@ -1251,23 +1267,8 @@ function limitVisibleDiscoveries(items) {
 }
 
 function getProceduralSecretLocations() {
-  if (isInSecretWorld() || !isExpandedWorld() || state.completedQuests < 2 || state.time < state.nextSecretAt) return [];
-  const relativeCamera = state.camera.x - world.firstRouteEnd;
-  const start = Math.max(0, Math.floor((relativeCamera - 800) / world.chapterSize));
-  const end = Math.floor((relativeCamera + window.innerWidth + 1200) / world.chapterSize);
-  const names = ["Sentier oublie", "Jardin sous la pluie", "Porte des lucioles", "Belvedere de neige"];
-  const items = [];
-  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
-    if (chapterIndex % 5 === 3) {
-      items.push({
-        id: makeId("secret", chapterIndex + 4),
-        x: world.firstRouteEnd + chapterIndex * world.chapterSize + 1720,
-        name: names[chapterIndex % names.length]
-      });
-      break;
-    }
-  }
-  return items;
+  if (isInSecretWorld() || !state.activeSecretPortal) return [];
+  return [state.activeSecretPortal];
 }
 
 function getProceduralLetters() {
@@ -2987,7 +2988,6 @@ function getInteractionTarget() {
 }
 
 function update(dt) {
-  state.time += dt;
   const p = state.player;
   if (isModalOpen()) {
     clearMovementIntent();
@@ -2997,6 +2997,7 @@ function update(dt) {
     autosave();
     return;
   }
+  state.time += dt;
   let input = 0;
   if (keys.has("ArrowLeft") || keys.has("q") || keys.has("Q") || keys.has("a") || keys.has("A")) input -= 1;
   if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) input += 1;
@@ -3036,6 +3037,7 @@ function update(dt) {
   updateWorldDiscoveries(dt);
   updateMicroEvents(dt);
   updateSecretWorld(dt, input, beforeMoveX);
+  updateSecretPortal();
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
   const targetZoom = p.rest > 0 ? 1.08 : 1;
@@ -3434,6 +3436,7 @@ function enterSecretWorld(secret) {
     stuckSince: 0,
     forceReturnAt: state.time + secretWorldDurationSeconds + 5
   };
+  state.activeSecretPortal = null;
   state.player.x = secretWorldOffset + 260;
   state.player.vx = 0;
   state.player.rest = 0;
@@ -3488,9 +3491,7 @@ function leaveSecretWorld(reason = "auto") {
   });
   state.lastSecretWorldId = secretWorld.worldId || state.lastSecretWorldId;
   state.activeSecretWorld = null;
-  const cooldown = secretDoorCooldowns[state.secretCycleIndex % secretDoorCooldowns.length];
-  state.secretCycleIndex = (state.secretCycleIndex + 1) % secretDoorCooldowns.length;
-  state.nextSecretAt = state.time + cooldown;
+  scheduleNextSecretPortal();
   showSecretTransition(reason === "force"
     ? "Le passage te ramene avant que le chemin ne se bloque."
     : "Tu reviens exactement la ou la porte t'avait trouve.");
@@ -4004,57 +4005,126 @@ function getVillagerMemoryLine(villager, memory) {
 function getVillagerRequestLine(villager, alreadyHelped) {
   if (alreadyHelped) return "Le village se souvient encore de ton aide.";
   const requests = [
-    `J'aurais peut-etre quelque chose a te demander... Il faudrait ${villager.need.need}.`,
-    "J'aurais peut-etre quelque chose a te demander... mais seulement si tu as encore un peu de route en toi.",
-    "Tu tombes bien. Un petit souci tourne autour du village depuis ce matin.",
-    "Je gardais cette demande pour quelqu'un qui sait marcher sans tout brusquer."
+    `J'aurais besoin d'un petit service. Il faudrait ${villager.need.need}.`,
+    `Tu tombes bien. J'aurais besoin de ${villager.need.need}.`,
+    `J'ai une demande simple : il me faudrait ${villager.need.need}.`,
+    "J'aurais quelque chose a te demander. Regarde l'enveloppe quand tu seras pret."
   ];
   return requests[Math.round(villager.x / 97) % requests.length];
+}
+
+function pickFreshConversation(villager, memory, options, seed) {
+  const unseen = options.filter((conversation) => !memory.dialogueHistory.includes(conversation.id));
+  const pool = unseen.length ? unseen : options.filter((conversation) => conversation.id !== memory.dialogueHistory.at(-1));
+  if (!pool.length) return null;
+  return pool[Math.floor(hashNumber(seed) * pool.length) % pool.length];
 }
 
 function getVillagerConversation(villager, memory, alreadyHelped, previousLastSeen = memory.lastSeenAt) {
   if (alreadyHelped && memory.visits < 3) return null;
   const personality = getVillagerPersonality(villager);
   const seed = state.time + villager.x + memory.visits * 29 + memory.relation * 7;
+  const conversations = [];
   if (memory.quickTalks >= 2) {
-    return {
-      prompt: "Tu reviens vite. Quelque chose te travaille ?",
+    conversations.push({
+      id: "quick-return",
+      prompt: "Deja de retour ?",
       choices: [
-        { id: "honest", text: "Je voulais verifier.", reply: "Alors verifie doucement. Les choses importantes se cachent quand on les presse.", relation: 0.35 },
-        { id: "tease", text: "J'aime bien t'embeter.", reply: "Je l'avais presque devine. Presque.", relation: 0.15 },
-        { id: "quiet", text: "Je ne sais pas trop.", reply: "C'est une reponse valable. Le chemin sert aussi a ca.", relation: 0.3 }
+        { id: "quick-hello", text: "Je passais dire bonjour.", reply: "Alors bonjour a toi aussi. C'est une bonne raison.", relation: 0.3 },
+        { id: "quick-chat", text: "J'avais envie de parler.", reply: "Ca me fait plaisir. Les journées sont longues quand personne ne s'arrete.", relation: 0.4 }
       ]
-    };
-  }
-  if (state.companion.unlocked && !memory.choices.companionTalk && hashNumber(seed) > 0.35) {
-    return {
-      prompt: "Ton compagnon te suit avec beaucoup de confiance. Vous vous etes trouves comment ?",
-      choices: [
-        { id: "companionTalk", text: "Sur le chemin.", reply: "Le chemin presente parfois les bonnes personnes sans faire de discours.", relation: 0.45 },
-        { id: "companionTalk", text: "Il m'a choisi.", reply: "Alors il a bon gout. Ou beaucoup d'instinct.", relation: 0.5 }
-      ]
-    };
+    });
   }
   if (state.time - previousLastSeen > 70 || memory.visits >= 3) {
-    return {
-      prompt: "Ca faisait longtemps. Tu etais ou ?",
+    conversations.push({
+      id: "returning",
+      prompt: "Ca faisait un moment. Tu etais ou ?",
       choices: [
-        { id: "explored", text: "J'explorais.", reply: "Je m'en doutais. Tu as l'air de quelqu'un qui revient avec des bouts de paysage dans les poches.", relation: 0.45 },
-        { id: "missed", text: "Tu m'as manque aussi.", reply: "Oh. Alors je vais faire semblant de ne pas etre touche.", relation: 0.65 },
-        { id: "everywhere", text: "Un peu partout.", reply: "C'est souvent la meilleure adresse.", relation: 0.4 }
+        { id: "explored", text: "J'explorais.", reply: "Je m'en doutais. Tu as l'air d'aimer voir ou les routes menent.", relation: 0.45 },
+        { id: "missed", text: "Tu m'as manque aussi.", reply: "Oh. Je vais faire semblant de ne pas etre touche.", relation: 0.65 },
+        { id: "everywhere", text: "Un peu partout.", reply: "Alors tu as surement de quoi raconter.", relation: 0.4 }
       ]
-    };
+    });
   }
-  if (hashNumber(seed) > 0.58) {
-    return {
-      prompt: personality.mood === "drole" ? "Dis-moi, tu collectionnes les silences ou les histoires ?" : "Tu marches beaucoup. Qu'est-ce que tu cherches vraiment ?",
+  if (state.weather === "rain") {
+    conversations.push({
+      id: "rainy-day",
+      prompt: "Tu aimes marcher sous cette pluie ?",
       choices: [
-        { id: "stories", text: "Des histoires.", reply: "Alors garde celle-ci: un village reconnait toujours ceux qui reviennent.", relation: 0.45 },
-        { id: "calm", text: "Un endroit calme.", reply: "Tu es assez proche. Pas exactement arrive, mais proche.", relation: 0.35 }
+        { id: "rain-yes", text: "Oui, ca change le paysage.", reply: "C'est vrai. Les chemins ont un autre visage quand ils brillent.", relation: 0.3 },
+        { id: "rain-no", text: "Pas vraiment.", reply: "Je te comprends. Rien ne presse, tu peux attendre que ca se calme.", relation: 0.25 }
       ]
-    };
+    });
   }
-  return null;
+  const everydayByMood = {
+    reserve: {
+      id: "quiet-river",
+      prompt: "Tu explores encore aujourd'hui ?",
+      choices: [
+        { id: "explore-yes", text: "Oui, un peu.", reply: "Alors profite du calme. La riviere est belle plus loin.", relation: 0.3 },
+        { id: "explore-walk", text: "Je fais juste un tour.", reply: "C'est deja une bonne facon de passer la journee.", relation: 0.25 }
+      ]
+    },
+    chaleureuse: {
+      id: "warm-village",
+      prompt: "Tu as eu le temps de te reposer un peu ?",
+      choices: [
+        { id: "rest-yes", text: "Un peu, oui.", reply: "Tant mieux. Les promenades sont plus belles quand on ne se presse pas.", relation: 0.35 },
+        { id: "rest-later", text: "Pas encore.", reply: "Alors garde une pause pour toi quelque part aujourd'hui.", relation: 0.35 }
+      ]
+    },
+    attentif: {
+      id: "forest-watch",
+      prompt: "La route t'a semble tranquille ?",
+      choices: [
+        { id: "road-quiet", text: "Oui, plutot.", reply: "Parfait. J'aime savoir que les gens peuvent marcher sereinement.", relation: 0.3 },
+        { id: "road-busy", text: "Il y avait du monde.", reply: "Ca arrive. Le village respire mieux quand chacun trouve son rythme.", relation: 0.3 }
+      ]
+    },
+    energique: {
+      id: "child-play",
+      prompt: "Tu crois que tu pourrais faire le tour du village sans t'arreter ?",
+      choices: [
+        { id: "race-yes", text: "Facile.", reply: "Je te crois... mais je ne vais pas essayer de te suivre.", relation: 0.35 },
+        { id: "race-no", text: "Je prefere prendre mon temps.", reply: "D'accord. Moi, j'essaierai quand meme plus tard.", relation: 0.25 }
+      ]
+    },
+    reveur: {
+      id: "music-pause",
+      prompt: "Tu entends les oiseaux, ce matin ?",
+      choices: [
+        { id: "birds-yes", text: "Oui.", reply: "Ils font toujours mieux que moi avant le petit dejeuner.", relation: 0.35 },
+        { id: "birds-no", text: "Pas encore.", reply: "Alors reste un moment. Ils finiront bien par se faire entendre.", relation: 0.3 }
+      ]
+    },
+    drole: {
+      id: "merchant-joke",
+      prompt: "Tu collectionnes les silences ou les histoires ?",
+      choices: [
+        { id: "stories", text: "Des histoires.", reply: "Excellent choix. Les silences prennent trop de place dans les poches.", relation: 0.4 },
+        { id: "calm", text: "Un peu des deux.", reply: "Reponse raisonnable. Je vais la noter dans mon inventaire imaginaire.", relation: 0.35 }
+      ]
+    },
+    curieux: {
+      id: "postman-day",
+      prompt: "Tu viens de loin aujourd'hui ?",
+      choices: [
+        { id: "far-walk", text: "J'ai beaucoup marche.", reply: "Alors tu merites une vraie pause avant de repartir.", relation: 0.35 },
+        { id: "near-walk", text: "Pas tres loin.", reply: "Les petites promenades comptent aussi. Elles font parfois le plus de bien.", relation: 0.3 }
+      ]
+    },
+    calme: {
+      id: "calm-day",
+      prompt: "Tu trouves le village accueillant ?",
+      choices: [
+        { id: "village-yes", text: "Oui, beaucoup.", reply: "Ca me fait plaisir de l'entendre.", relation: 0.35 },
+        { id: "village-learning", text: "Je commence a le connaitre.", reply: "C'est comme ca qu'on s'y attache, doucement.", relation: 0.3 }
+      ]
+    }
+  };
+  if (everydayByMood[personality.mood]) conversations.push(everydayByMood[personality.mood]);
+  if (conversations.length === 0 || hashNumber(seed) < 0.42) return null;
+  return pickFreshConversation(villager, memory, conversations, seed);
 }
 
 function renderVillagerChoices(conversation) {
@@ -4115,6 +4185,7 @@ function openVillagerHelp(villager) {
   ui.giveItemButton.style.opacity = alreadyHelped ? "0.55" : "1";
   pendingVillagerConversation = null;
   if (conversation) {
+    rememberVillagerConversation(villager, conversation.id);
     ui.villagerText.textContent = `${getVillagerMemoryLine(villager, memory)} ${conversation.prompt}`;
     pendingVillagerConversation = { villager, conversation, alreadyHelped, baseLine: requestLine };
     renderVillagerChoices(conversation);
@@ -4129,10 +4200,10 @@ function openVillagerHelp(villager) {
 }
 
 function getVillagerRelationLine(villager, meetings, memory = getVillagerMemory(villager)) {
-  if (memory.relation >= 5) return `${villager.line} Il t'appelle par ton nom et garde une place pour toi dans ses histoires.`;
-  if (meetings >= 5) return `${villager.line} Il partage un secret qu'il gardait pour les voyageurs patients.`;
+  if (memory.relation >= 5) return `${villager.line} Il est toujours content de te voir arriver.`;
+  if (meetings >= 5) return `${villager.line} Vous avez maintenant l'habitude de discuter quand tu passes.`;
   if (meetings >= 3) return `${villager.line} Il te reconnait aussitot et parle avec plus de confiance.`;
-  if (meetings >= 2) return `${villager.line} Il sourit: vous vous etes deja croises sur le chemin.`;
+  if (meetings >= 2) return `${villager.line} Il sourit : vous vous etes deja croises sur le chemin.`;
   return villager.line;
 }
 
@@ -4573,8 +4644,9 @@ function resetGame() {
   state.worldDiscoveries = {};
   state.discoveryRespawns = {};
   state.achievements = [];
-  state.nextSecretAt = 0;
-  state.secretCycleIndex = 0;
+  state.nextSecretAt = secretPortalIntervals[0];
+  state.secretCycleIndex = 1;
+  state.activeSecretPortal = null;
   state.activeSecretWorld = null;
   state.lastSecretWorldId = "";
   state.lastSecretEdgeMessageAt = 0;
@@ -4628,6 +4700,8 @@ function saveGame() {
     achievements: state.achievements,
     nextSecretAt: state.nextSecretAt,
     secretCycleIndex: state.secretCycleIndex,
+    secretPortalScheduleVersion,
+    activeSecretPortal: state.activeSecretPortal,
     activeSecretWorld: state.activeSecretWorld,
     lastSecretWorldId: state.lastSecretWorldId,
     recentDiscoveryNotice: state.recentDiscoveryNotice,
@@ -4682,8 +4756,16 @@ function loadGame() {
     state.worldDiscoveries = payload.worldDiscoveries && typeof payload.worldDiscoveries === "object" ? payload.worldDiscoveries : {};
     state.discoveryRespawns = payload.discoveryRespawns && typeof payload.discoveryRespawns === "object" ? payload.discoveryRespawns : {};
     state.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
-    state.nextSecretAt = Number.isFinite(payload.nextSecretAt) ? payload.nextSecretAt : 0;
-    state.secretCycleIndex = Number.isFinite(payload.secretCycleIndex) ? payload.secretCycleIndex : 0;
+    const hasPortalSchedule = payload.secretPortalScheduleVersion === secretPortalScheduleVersion
+      && Number.isFinite(payload.nextSecretAt) && payload.nextSecretAt > 0;
+    state.nextSecretAt = hasPortalSchedule ? payload.nextSecretAt : state.time + secretPortalIntervals[0];
+    state.secretCycleIndex = hasPortalSchedule && Number.isFinite(payload.secretCycleIndex)
+      ? payload.secretCycleIndex % secretPortalIntervals.length
+      : 1;
+    state.activeSecretPortal = payload.activeSecretPortal && typeof payload.activeSecretPortal === "object"
+      && Number.isFinite(payload.activeSecretPortal.x)
+      ? payload.activeSecretPortal
+      : null;
     state.activeSecretWorld = payload.activeSecretWorld && typeof payload.activeSecretWorld === "object" ? payload.activeSecretWorld : null;
     state.lastSecretWorldId = typeof payload.lastSecretWorldId === "string" ? payload.lastSecretWorldId : "";
     state.lastSecretEdgeMessageAt = 0;
