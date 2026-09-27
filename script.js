@@ -2755,7 +2755,8 @@ function drawOverlay() {
     ? getSecretWorldConfig().night
     : Math.max(0, Math.min(1, (state.player.x - 5200) / 2800));
   const activeGlow = state.itemEffects?.glowUntil > state.time;
-  const hasLight = activeGlow || state.equipment?.lanternOn || hasCollectedBaseItem("mushroom") || hasCollectedBaseItem("star");
+  // Light comes from an active effect or equipped lantern, never from merely discovering an item.
+  const hasLight = activeGlow || state.equipment?.lanternOn;
   const darkness = 0.08 + night * (hasLight ? 0.13 : 0.2);
   ctx.fillStyle = `rgba(10, 16, 30, ${darkness})`;
   ctx.fillRect(0, 0, w, h);
@@ -3193,9 +3194,13 @@ function hasCollectedBaseItem(itemId) {
   return state.discoveries.some((id) => baseDiscoveryId(id) === itemId);
 }
 
+function hasInventoryItem(itemId) {
+  return (state.inventory[baseDiscoveryId(itemId)] || 0) > 0;
+}
+
 function getWeatherProtection(weatherId = state.weather) {
   if (weatherId === "rain") {
-    return hasCollectedBaseItem("leaf") || hasCollectedBaseItem("shell");
+    return hasInventoryItem("leaf") || hasInventoryItem("shell");
   }
   if (weatherId === "mist") {
     return state.itemEffects?.glowUntil > state.time || state.equipment?.lanternOn;
@@ -4474,7 +4479,7 @@ function handleVillagerChoice(index) {
   memory.relation += Number.isFinite(choice.relation) ? choice.relation : 0.25;
   ui.villagerText.textContent = `${choice.reply} ${alreadyHelped ? "On peut rester la-dessus pour aujourd'hui." : baseLine}`.trim();
   const required = villager.need?.amount || 1;
-  const available = state.inventory[villager.need?.itemId] || 0;
+  const available = getAvailableItemQuantity(villager.need?.itemId);
   ui.giveItemButton.disabled = alreadyHelped || available < required;
   ui.giveItemButton.style.opacity = ui.giveItemButton.disabled ? "0.55" : "1";
   ui.giveItemButton.textContent = alreadyHelped ? "Aide apportee" : `Donner (${available}/${required})`;
@@ -4512,7 +4517,7 @@ function openVillagerHelp(villager) {
   const requestLine = getVillagerRequestLine(villager, alreadyHelped);
   const conversation = Math.random() < 0.48 ? getVillagerConversation(villager, memory, alreadyHelped, previousLastSeen) : null;
   ui.villagerTitle.textContent = villager.role;
-  const available = state.inventory[villager.need.itemId] || 0;
+  const available = getAvailableItemQuantity(villager.need.itemId);
   const required = villager.need.amount || 1;
   ui.giveItemButton.disabled = alreadyHelped || available < required;
   ui.giveItemButton.style.opacity = ui.giveItemButton.disabled ? "0.55" : "1";
@@ -4550,7 +4555,7 @@ function givePendingItem() {
   }
   const itemId = pendingVillagerHelp.need?.itemId;
   const required = pendingVillagerHelp.need?.amount || 1;
-  const available = state.inventory[itemId] || 0;
+  const available = getAvailableItemQuantity(itemId);
   if (!itemId || available < required) {
     showMessage(`Il t'en manque ${Math.max(1, required - available)}.`);
     return;
@@ -5084,12 +5089,14 @@ function loadGame() {
   if (!raw) return false;
   try {
     const payload = JSON.parse(raw);
-    state.player.x = payload.x || 380;
+    state.player.x = Number.isFinite(payload.x) ? Math.max(0, payload.x) : 380;
     state.moveMode = payload.moveMode === "run" ? "run" : "walk";
     joystick.mode = state.moveMode;
-    state.time = Number.isFinite(payload.time) ? payload.time : 0;
+    state.time = Number.isFinite(payload.time) ? Math.max(0, payload.time) : 0;
     state.discoveries = Array.isArray(payload.discoveries) ? payload.discoveries.map(normalizeDiscoveryId) : [];
-    state.inventory = payload.inventory && typeof payload.inventory === "object" ? payload.inventory : rebuildInventory(state.discoveries);
+    state.inventory = payload.inventory && typeof payload.inventory === "object"
+      ? normalizeInventory(payload.inventory)
+      : rebuildInventory(state.discoveries);
     state.discoveryDates = payload.discoveryDates && typeof payload.discoveryDates === "object" ? payload.discoveryDates : {};
     state.hiddenDiscoveryPopups = Array.isArray(payload.hiddenDiscoveryPopups) ? payload.hiddenDiscoveryPopups : [];
     state.lanterns = Array.isArray(payload.lanterns) ? payload.lanterns : [];
@@ -5167,6 +5174,17 @@ function rebuildInventory(ids) {
   return ids.reduce((inventory, id) => {
     const baseId = baseDiscoveryId(id);
     inventory[baseId] = (inventory[baseId] || 0) + 1;
+    return inventory;
+  }, {});
+}
+
+function normalizeInventory(rawInventory) {
+  if (!rawInventory || typeof rawInventory !== "object" || Array.isArray(rawInventory)) return {};
+  return Object.entries(rawInventory).reduce((inventory, [itemId, count]) => {
+    const baseId = baseDiscoveryId(itemId);
+    const quantity = Math.floor(Number(count));
+    if (!baseId || !Number.isFinite(quantity) || quantity <= 0) return inventory;
+    inventory[baseId] = (inventory[baseId] || 0) + quantity;
     return inventory;
   }, {});
 }
