@@ -292,6 +292,7 @@ const shootingStars = [];
 
 const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0, action: "", actionUntil: 0, runBlend: 0 },
+  moveMode: "walk",
   camera: { x: 0, y: 0, zoom: 1 },
   time: 0,
   chapter: 1,
@@ -2904,9 +2905,9 @@ function stopJoystick() {
 
 function updateMobilePadModeState() {
   ui.padModeButton.textContent = joystick.mode === "run" ? "🏃" : "🚶";
-  ui.padModeButton.classList.toggle("is-active", joystick.mode === "run");
+  ui.padModeButton.classList.toggle("is-active", state.moveMode === "run");
   ui.padModeMenu.querySelectorAll("[data-move-mode]").forEach((button) => {
-    button.classList.toggle("is-selected", button.dataset.moveMode === joystick.mode);
+    button.classList.toggle("is-selected", button.dataset.moveMode === state.moveMode);
   });
 }
 
@@ -2953,11 +2954,25 @@ function updateJoystickFromPointer(event) {
 }
 
 function setJoystickMoveMode(mode) {
-  joystick.mode = mode === "run" ? "run" : "walk";
+  setMoveMode(mode);
   ui.mobilePad.classList.remove("is-mode-menu-open");
   ui.padModeMenu.setAttribute("aria-hidden", "true");
   updateMobilePadActionState(joystick.lastZone);
   if (navigator.vibrate) navigator.vibrate(10);
+}
+
+function setMoveMode(mode, announce = false) {
+  const nextMode = mode === "run" ? "run" : "walk";
+  if (state.moveMode === nextMode) return;
+  state.moveMode = nextMode;
+  joystick.mode = nextMode;
+  updateMobilePadModeState();
+  saveGame();
+  if (announce) showMessage(nextMode === "run" ? "Course" : "Marche");
+}
+
+function toggleMoveMode() {
+  setMoveMode(state.moveMode === "run" ? "walk" : "run", true);
 }
 
 function togglePadModeMenu() {
@@ -3181,10 +3196,9 @@ function getPlayerTargetSpeed(weather = getWeatherForChapter()) {
 
 function isRunInput(input = 0) {
   return Boolean(
-    keys.has("Shift")
+    state.moveMode === "run"
     || keys.has("R")
     || keys.has("r")
-    || (joystick.active && joystick.mode === "run")
   );
 }
 
@@ -4842,6 +4856,8 @@ function resetGame() {
   state.weather = "clear";
   state.cinematicPlayed = false;
   state.player.rest = 0;
+  state.moveMode = "walk";
+  joystick.mode = "walk";
   Object.keys(villagerBubbles).forEach((key) => delete villagerBubbles[key]);
   Object.keys(villagerProximity).forEach((key) => delete villagerProximity[key]);
   fallingTreeItems.length = 0;
@@ -4854,6 +4870,7 @@ function resetGame() {
 function saveGame() {
   const payload = {
     x: state.player.x,
+    moveMode: state.moveMode,
     time: state.time,
     discoveries: state.discoveries,
     inventory: state.inventory,
@@ -4911,6 +4928,8 @@ function loadGame() {
   try {
     const payload = JSON.parse(raw);
     state.player.x = payload.x || 380;
+    state.moveMode = payload.moveMode === "run" ? "run" : "walk";
+    joystick.mode = state.moveMode;
     state.time = Number.isFinite(payload.time) ? payload.time : 0;
     state.discoveries = Array.isArray(payload.discoveries) ? payload.discoveries.map(normalizeDiscoveryId) : [];
     state.inventory = payload.inventory && typeof payload.inventory === "object" ? payload.inventory : rebuildInventory(state.discoveries);
@@ -5826,10 +5845,30 @@ window.addEventListener("blur", () => {
 });
 document.addEventListener("fullscreenchange", handleFullscreenChange);
 document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+
+function isKeyboardShortcutBlocked(target) {
+  return Boolean(target?.matches?.("input, textarea, select, [contenteditable='true']"));
+}
+
 window.addEventListener("keydown", (event) => {
+  if (isKeyboardShortcutBlocked(event.target)) return;
   if (event.key === "Escape" && running && !isModalOpen()) {
     event.preventDefault();
     pauseGame();
+    return;
+  }
+  if (isModalOpen()) return;
+  if (event.key === "Shift") {
+    event.preventDefault();
+    if (!event.repeat && running) toggleMoveMode();
+    return;
+  }
+  if (event.key === "c" || event.key === "C") {
+    event.preventDefault();
+    if (!event.repeat && running && state.companion.unlocked) {
+      toggleCompanionPresence();
+      showMessage(state.companion.present === false ? "Compagnon rappele" : "Compagnon a vos cotes");
+    }
     return;
   }
   keys.add(event.key);
