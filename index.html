@@ -133,6 +133,21 @@
       </form>
     </dialog>
 
+    <dialog id="companionSelectDialog" class="panel-dialog compact-dialog companion-select-dialog">
+      <form method="dialog">
+        <header class="panel-header">
+          <h2>Choisir un compagnon</h2>
+          <button class="close-button" value="close" type="submit">Annuler</button>
+        </header>
+        <p class="dialog-copy">Choisis le compagnon qui t'accompagnera sur le chemin.</p>
+        <div id="companionSelectGrid" class="companion-select-grid"></div>
+        <div id="companionConfirmActions" class="choice-actions" hidden>
+          <button id="confirmCompanionChangeButton" class="primary-button" type="button">Oui, choisir</button>
+          <button id="cancelCompanionChangeButton" class="secondary-button" type="button">Annuler</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="questDialog" class="panel-dialog compact-dialog mission-dialog">
       <form method="dialog">
         <header class="panel-header">
@@ -149,12 +164,12 @@
     <dialog id="questCompleteDialog" class="panel-dialog compact-dialog mission-dialog">
       <form method="dialog">
         <header class="panel-header">
-          <h2>&#127881; Mission terminee !</h2>
+          <h2>&#10003; Mission accomplie</h2>
           <button class="close-button" value="close" type="submit">Fermer</button>
         </header>
         <div id="questCompleteBody" class="mission-body"></div>
         <div class="choice-actions">
-          <button id="claimQuestRewardButton" class="primary-button" value="close" type="submit">Valider la recompense</button>
+          <button id="claimQuestRewardButton" class="primary-button" value="close" type="submit">Continuer</button>
         </div>
       </form>
     </dialog>

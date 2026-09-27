@@ -1386,6 +1386,88 @@ h2 {
   background: rgba(240, 189, 108, 0.16);
 }
 
+.is-reward-pending .close-button {
+  display: none;
+}
+
+.is-choice-pending .close-button {
+  display: none;
+}
+
+.mission-complete-mark {
+  width: 3.25rem;
+  height: 3.25rem;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 0.65rem;
+  border-radius: 50%;
+  color: #20312f;
+  background: #f0bd6c;
+  box-shadow: 0 0 0 0.45rem rgba(240, 189, 108, 0.13);
+  font-size: 1.7rem;
+  font-weight: 900;
+  animation: reward-arrival 0.46s ease both;
+}
+
+.mission-complete-thanks {
+  text-align: center;
+}
+
+.mission-reward-list-celebration li {
+  animation: reward-arrival 0.42s ease both;
+}
+
+.mission-reward-list-celebration li:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.item-use-actions {
+  margin-top: 0.25rem;
+}
+
+.companion-select-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0.9rem 0;
+}
+
+.companion-select-option {
+  min-height: 7.1rem;
+  display: grid;
+  place-items: center;
+  gap: 0.18rem;
+  padding: 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  color: var(--ink);
+  background: rgba(247, 243, 223, 0.08);
+  font: inherit;
+  cursor: pointer;
+}
+
+.companion-select-option .companion-portrait {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  font-size: 0.9rem;
+}
+
+.companion-select-option small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.companion-select-option.is-selected {
+  border-color: rgba(240, 189, 108, 0.78);
+  background: rgba(240, 189, 108, 0.16);
+}
+
+@keyframes reward-arrival {
+  from { opacity: 0; transform: translateY(0.4rem) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .discovery-body {
   display: grid;
   gap: 0.6rem;

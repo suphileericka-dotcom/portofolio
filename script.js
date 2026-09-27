@@ -21,6 +21,11 @@ const ui = {
   encyclopediaDetailDialog: document.getElementById("encyclopediaDetailDialog"),
   encyclopediaDetailTitle: document.getElementById("encyclopediaDetailTitle"),
   encyclopediaDetailBody: document.getElementById("encyclopediaDetailBody"),
+  companionSelectDialog: document.getElementById("companionSelectDialog"),
+  companionSelectGrid: document.getElementById("companionSelectGrid"),
+  companionConfirmActions: document.getElementById("companionConfirmActions"),
+  confirmCompanionChangeButton: document.getElementById("confirmCompanionChangeButton"),
+  cancelCompanionChangeButton: document.getElementById("cancelCompanionChangeButton"),
   infoDialog: document.getElementById("infoDialog"),
   optionsDialog: document.getElementById("optionsDialog"),
   journalList: document.getElementById("journalList"),
@@ -117,6 +122,8 @@ const secretWorldItemSpacing = 760;
 const secretWorldDurationSeconds = 60;
 const secretPortalIntervals = [15 * 60, 7 * 60, 20 * 60];
 const secretPortalScheduleVersion = 1;
+const portalInvokerItemId = "star";
+const companionChangerItemId = "feather";
 const secretWorlds = [
   {
     id: "firefly-garden",
@@ -276,6 +283,8 @@ let audioSceneKey = "";
 let appearanceDraft = null;
 let secretTransitionToken = 0;
 let pendingVillagerConversation = null;
+let pendingCompanionSpecies = "";
+let itemUseInProgress = false;
 const villagerBubbles = {};
 const villagerProximity = {};
 const fallingTreeItems = [];
@@ -316,6 +325,7 @@ const state = {
   nextSecretAt: secretPortalIntervals[0],
   secretCycleIndex: 1,
   activeSecretPortal: null,
+  itemEffects: { scoutUntil: 0, scoutTargetId: "", strideUntil: 0 },
   activeSecretWorld: null,
   lastSecretWorldId: "",
   lastSecretEdgeMessageAt: 0,
@@ -848,7 +858,7 @@ function scheduleNextSecretPortal() {
   state.secretCycleIndex = (state.secretCycleIndex + 1) % secretPortalIntervals.length;
 }
 
-function createSecretPortal() {
+function createSecretPortal(source = "natural") {
   if (state.activeSecretPortal || isInSecretWorld()) return;
   const direction = state.player.face || 1;
   const x = clampToPlayableWorldX(state.player.x + direction * 460);
@@ -856,14 +866,15 @@ function createSecretPortal() {
     id: makeId("portal", Math.floor(state.time * 10)),
     x,
     name: "Portail",
-    createdAt: state.time
+    createdAt: state.time,
+    source
   };
   playSoftPing();
 }
 
 function updateSecretPortal() {
   if (!running || isInSecretWorld() || state.activeSecretPortal) return;
-  if (state.time >= state.nextSecretAt) createSecretPortal();
+  if (state.time >= state.nextSecretAt) createSecretPortal("natural");
 }
 
 function pickSecretWorldConfig() {
@@ -1805,6 +1816,15 @@ function drawWorldObjects() {
     const bob = item.grounded ? 0 : Math.sin(state.time * 2 + index) * 5;
     const y = (Number.isFinite(item.y) ? item.y : world.ground - 20) + (item.groundOffset || 0) + bob;
     drawCollectibleIcon(item, index, item.x, y);
+    if (state.itemEffects?.scoutTargetId === item.id && state.time < state.itemEffects.scoutUntil) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 224, 122, 0.9)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(item.x, y - 16, 24 + Math.sin(state.time * 5) * 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
     if (interactionTarget?.kind === "item" && interactionTarget.entry.id === item.id) drawPrompt(item.x, y - 42, "E Ramasser");
   });
 
@@ -3155,7 +3175,8 @@ function getWeatherSpeedFactor(weather = getWeatherForChapter()) {
 
 function getPlayerTargetSpeed(weather = getWeatherForChapter()) {
   const calmSpeed = state.player.rest > 0.15 ? 55 : playerWalkSpeed;
-  return calmSpeed * getWeatherSpeedFactor(weather) * (1 + state.player.runBlend * (playerRunMultiplier - 1));
+  const strideBoost = state.itemEffects?.strideUntil > state.time ? 1.08 : 1;
+  return calmSpeed * getWeatherSpeedFactor(weather) * (1 + state.player.runBlend * (playerRunMultiplier - 1)) * strideBoost;
 }
 
 function isRunInput(input = 0) {
@@ -3180,10 +3201,157 @@ function getCatalogItem(itemId) {
 }
 
 function getItemUse(itemId) {
+  const baseId = baseDiscoveryId(itemId);
+  if (baseId === portalInvokerItemId) return "Consommable rare : invoque un portail vers un monde temporaire, sans modifier le cycle naturel.";
+  if (baseId === companionChangerItemId) return "Consommable rare : permet de choisir l'animal qui t'accompagne.";
   const item = getCatalogItem(itemId);
+  const typeUses = {
+    leaf: "Exploration : consomme une feuille pour reperer une trouvaille proche.",
+    stone: "Mission : materiau fiable pour les demandes du village et les anciens passages.",
+    shell: "Ambiance : garde la trace de la riviere et sert aux missions des zones humides.",
+    cone: "Mouvement : consomme une graine ou une pomme de pin pour un leger elan temporaire.",
+    mushroom: "Exploration : eclaire les zones calmes, humides ou nocturnes.",
+    flower: "Echange : une attention simple pour les habitants et les missions de clairiere.",
+    paper: "Mission : sert aux lettres, cartes et demandes des habitants.",
+    tool: "Exploration : objet rare utile aux passages et aux grandes collections.",
+    rare: "Exploration : ressource precieuse a garder pour les moments importants.",
+    charm: "Echange : petit objet de voyage utile aux habitants et au Carnet."
+  };
+  const typeUse = typeUses[getItemVisualType(item || { id: baseId })];
+  if (typeUse) return typeUse;
   if (item && item.use) return item.use;
   const need = villagerNeeds.find((entry) => entry.itemId === baseDiscoveryId(itemId));
   return need ? need.use : "Servira peut-etre plus loin sur la route.";
+}
+
+function getReservedMissionQuantity(itemId) {
+  if (!state.activeQuest || state.activeQuest.itemId !== baseDiscoveryId(itemId)) return 0;
+  return Math.max(0, (state.activeQuest.target || 0) - (state.activeQuest.progress || 0));
+}
+
+function getAvailableItemQuantity(itemId) {
+  const baseId = baseDiscoveryId(itemId);
+  return Math.max(0, (state.inventory[baseId] || 0) - getReservedMissionQuantity(baseId));
+}
+
+function getItemAction(itemId) {
+  const baseId = baseDiscoveryId(itemId);
+  if (baseId === portalInvokerItemId) return { label: "Utiliser", kind: "portal" };
+  if (baseId === companionChangerItemId && state.companion.unlocked) return { label: "Utiliser", kind: "companion" };
+  const type = getItemVisualType(baseId);
+  if (type === "leaf") return { label: "Reperer", kind: "scout" };
+  if (type === "cone") return { label: "Prendre elan", kind: "stride" };
+  return null;
+}
+
+function consumeItem(itemId) {
+  const baseId = baseDiscoveryId(itemId);
+  if (getAvailableItemQuantity(baseId) < 1) return false;
+  state.inventory[baseId] -= 1;
+  saveGame();
+  return true;
+}
+
+function invokePortalFromItem() {
+  if (itemUseInProgress || getAvailableItemQuantity(portalInvokerItemId) < 1) return;
+  if (isInSecretWorld() || state.activeSecretPortal) {
+    showMessage("Un portail est deja present ou en cours d'exploration.");
+    return;
+  }
+  itemUseInProgress = true;
+  createSecretPortal("manual");
+  if (!state.activeSecretPortal || !consumeItem(portalInvokerItemId)) {
+    state.activeSecretPortal = null;
+    itemUseInProgress = false;
+    showMessage("Le portail n'a pas pu apparaitre. L'objet a ete conserve.");
+    return;
+  }
+  closeDialog(ui.encyclopediaDetailDialog);
+  closeDialog(ui.journalDialog);
+  showSecretTransition("Une etoile ouvre un passage pres de toi.");
+  itemUseInProgress = false;
+}
+
+function useScoutItem(itemId) {
+  if (itemUseInProgress || getAvailableItemQuantity(itemId) < 1) return;
+  ensureVisibleDiscoveryZones();
+  const target = getVisibleWorldDiscoveries().find((item) => !item.collected && !item.missionItem && !item.grounded);
+  if (!target) {
+    showMessage("Aucune trouvaille proche a reperer pour le moment.");
+    return;
+  }
+  itemUseInProgress = true;
+  state.itemEffects.scoutTargetId = target.id;
+  state.itemEffects.scoutUntil = state.time + 75;
+  if (!consumeItem(itemId)) {
+    state.itemEffects.scoutTargetId = "";
+    state.itemEffects.scoutUntil = 0;
+    itemUseInProgress = false;
+    return;
+  }
+  closeDialog(ui.encyclopediaDetailDialog);
+  closeDialog(ui.journalDialog);
+  showMessage("Une feuille indique une trouvaille proche.");
+  itemUseInProgress = false;
+}
+
+function useStrideItem(itemId) {
+  if (itemUseInProgress || getAvailableItemQuantity(itemId) < 1) return;
+  itemUseInProgress = true;
+  state.itemEffects.strideUntil = state.time + 45;
+  if (!consumeItem(itemId)) {
+    state.itemEffects.strideUntil = 0;
+    itemUseInProgress = false;
+    return;
+  }
+  closeDialog(ui.encyclopediaDetailDialog);
+  closeDialog(ui.journalDialog);
+  showMessage("Tes pas sont un peu plus legers pendant un moment.");
+  itemUseInProgress = false;
+}
+
+function openCompanionSelector() {
+  if (itemUseInProgress || !state.companion.unlocked || getAvailableItemQuantity(companionChangerItemId) < 1) return;
+  pendingCompanionSpecies = "";
+  ui.companionConfirmActions.hidden = true;
+  ui.companionSelectGrid.innerHTML = companionSpecies.map((companion) => `
+    <button class="companion-select-option" type="button" data-companion-species="${companion.species}">
+      <span class="companion-portrait">${getCompanionPickerIcon(companion.species)}</span>
+      <strong>${companion.name}</strong>
+      <small>${companion.species}</small>
+    </button>
+  `).join("");
+  openDialog(ui.companionSelectDialog);
+}
+
+function getCompanionPickerIcon(species) {
+  return { Renard: "🦊", Chat: "🐈", Lapin: "🐇", Herisson: "🦔", Chien: "🐕", Ecureuil: "🐿", "Petit oiseau": "🐦" }[species] || "🐾";
+}
+
+function selectCompanionSpecies(species) {
+  if (!companionSpecies.some((entry) => entry.species === species)) return;
+  pendingCompanionSpecies = species;
+  ui.companionSelectGrid.querySelectorAll(".companion-select-option").forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.companionSpecies === species);
+  });
+  ui.companionConfirmActions.hidden = false;
+}
+
+function confirmCompanionChange() {
+  if (itemUseInProgress || !pendingCompanionSpecies) return;
+  const picked = companionSpecies.find((entry) => entry.species === pendingCompanionSpecies);
+  if (!picked || !consumeItem(companionChangerItemId)) return;
+  itemUseInProgress = true;
+  const wasPresent = state.companion.present !== false;
+  state.companion = { ...state.companion, ...picked, present: wasPresent, x: state.player.x - state.player.face * 90, y: world.ground, pace: 0, transitionUntil: state.time + 1.2 };
+  pendingCompanionSpecies = "";
+  closeDialog(ui.companionSelectDialog);
+  closeDialog(ui.encyclopediaDetailDialog);
+  closeDialog(ui.journalDialog);
+  saveGame();
+  updateMobilePadCompanionState();
+  showMessage(`${picked.name} t'accompagne maintenant.`);
+  itemUseInProgress = false;
 }
 
 function getMissionCatalogItem(itemId) {
@@ -3423,6 +3591,7 @@ function enterSecretWorld(secret) {
   state.activeSecretWorld = {
     id: secret.id,
     name: secret.name,
+    source: secret.source || "natural",
     worldId: secretWorld.id,
     worldName: secretWorld.name,
     zoneKey: makeId("secret-world", state.openedSecrets.length || 1),
@@ -3491,7 +3660,7 @@ function leaveSecretWorld(reason = "auto") {
   });
   state.lastSecretWorldId = secretWorld.worldId || state.lastSecretWorldId;
   state.activeSecretWorld = null;
-  scheduleNextSecretPortal();
+  if (secretWorld.source !== "manual") scheduleNextSecretPortal();
   showSecretTransition(reason === "force"
     ? "Le passage te ramene avant que le chemin ne se bloque."
     : "Tu reviens exactement la ou la porte t'avait trouve.");
@@ -3816,18 +3985,22 @@ function openQuestCompletePopup(reward) {
   const rewardItems = reward.rewardItems || [];
   setPlayerAction("reward", 1.8);
   ui.questCompleteBody.innerHTML = `
-    <p><strong>${reward.questTitle}</strong></p>
-    <p>Recompense :</p>
-    <ul class="mission-reward-list">
-      ${rewardItems.map((item) => `<li>${getItemIcon(item, "small")}<span>${item.label}</span></li>`).join("")}
+    <div class="mission-complete-mark">&#10003;</div>
+    <p class="mission-complete-thanks"><strong>Merci pour ton aide !</strong></p>
+    <p>${reward.questTitle}</p>
+    <p><strong>Recompense</strong></p>
+    <ul class="mission-reward-list mission-reward-list-celebration">
+      ${rewardItems.map((item) => `<li>${getItemIcon(item, "small")}<span>${item.label} &times;1</span></li>`).join("")}
     </ul>
   `;
+  ui.questCompleteDialog.classList.add("is-reward-pending");
   openDialog(ui.questCompleteDialog);
 }
 
 function claimQuestReward() {
   if (!state.pendingQuestReward) return;
   state.pendingQuestReward = null;
+  ui.questCompleteDialog.classList.remove("is-reward-pending");
   state.nextLetterAt = state.time + letterRespawnDelaySeconds;
   updateMissionTracker();
   saveGame();
@@ -3993,6 +4166,7 @@ function closeDiscoveryPopup() {
 function setVillagerDialogMode(mode = "help") {
   ui.villagerChoices.hidden = mode !== "choices";
   ui.villagerActions.hidden = mode === "choices";
+  ui.villagerDialog.classList.toggle("is-choice-pending", mode === "choices");
 }
 
 function getVillagerMemoryLine(villager, memory) {
@@ -4334,6 +4508,7 @@ function renderEncyclopedia() {
         <div class="journal-object-image">${discovered ? getItemIcon(item) : getUnknownItemIcon()}</div>
         <strong>${discovered ? item.label : "Objet inconnu"}</strong>
         <span>${discovered ? `${item.place} - ${getRarityStars(item.rarity)}` : "Silhouette dans le brouillard"}</span>
+        ${discovered ? `<small>Possede : ${state.inventory[item.id] || 0}</small>` : ""}
         <small>${discovered ? getShortItemConditionHint(item) : "Conditions inconnues"}</small>
       </article>
     `;
@@ -4348,15 +4523,21 @@ function getShortItemConditionHint(itemOrId) {
 function openEncyclopediaDetail(itemId) {
   const item = getCatalogItem(itemId);
   if (!item || !state.inventory[item.id]) return;
+  const action = getItemAction(item.id);
+  const available = getAvailableItemQuantity(item.id);
+  const reserved = getReservedMissionQuantity(item.id);
   ui.encyclopediaDetailTitle.textContent = item.label;
+  ui.encyclopediaDetailTitle.dataset.itemId = item.id;
   ui.encyclopediaDetailBody.innerHTML = `
     <div class="discovery-icon">${getItemIcon(item, "large")}</div>
     <p>${item.text}</p>
     <p><strong>Utilite</strong> ${getItemUse(item.id)}</p>
+    <p><strong>Possede</strong> ${state.inventory[item.id] || 0}${reserved ? ` (${reserved} reserve pour la mission)` : ""}</p>
     <p><strong>Lieu</strong> ${item.place || "Chemin"}</p>
     <p><strong>Conditions d'apparition</strong> ${getItemConditionHint(item)}</p>
     <p><strong>Rarete</strong> ${getRarityStars(item.rarity)} - ${item.rarity || "Commun"}</p>
     <p><strong>Date de decouverte</strong> ${formatDiscoveryDate(item.id)}</p>
+    ${action ? `<div class="choice-actions item-use-actions"><button class="primary-button" type="button" data-item-action="${action.kind}" ${available < 1 ? "disabled" : ""}>${action.label}</button></div>` : ""}
   `;
   openDialog(ui.encyclopediaDetailDialog);
 }
@@ -4647,6 +4828,7 @@ function resetGame() {
   state.nextSecretAt = secretPortalIntervals[0];
   state.secretCycleIndex = 1;
   state.activeSecretPortal = null;
+  state.itemEffects = { scoutUntil: 0, scoutTargetId: "", strideUntil: 0 };
   state.activeSecretWorld = null;
   state.lastSecretWorldId = "";
   state.lastSecretEdgeMessageAt = 0;
@@ -4702,6 +4884,7 @@ function saveGame() {
     secretCycleIndex: state.secretCycleIndex,
     secretPortalScheduleVersion,
     activeSecretPortal: state.activeSecretPortal,
+    itemEffects: state.itemEffects,
     activeSecretWorld: state.activeSecretWorld,
     lastSecretWorldId: state.lastSecretWorldId,
     recentDiscoveryNotice: state.recentDiscoveryNotice,
@@ -4766,6 +4949,9 @@ function loadGame() {
       && Number.isFinite(payload.activeSecretPortal.x)
       ? payload.activeSecretPortal
       : null;
+    state.itemEffects = payload.itemEffects && typeof payload.itemEffects === "object"
+      ? { scoutUntil: Number(payload.itemEffects.scoutUntil) || 0, scoutTargetId: typeof payload.itemEffects.scoutTargetId === "string" ? payload.itemEffects.scoutTargetId : "", strideUntil: Number(payload.itemEffects.strideUntil) || 0 }
+      : { scoutUntil: 0, scoutTargetId: "", strideUntil: 0 };
     state.activeSecretWorld = payload.activeSecretWorld && typeof payload.activeSecretWorld === "object" ? payload.activeSecretWorld : null;
     state.lastSecretWorldId = typeof payload.lastSecretWorldId === "string" ? payload.lastSecretWorldId : "";
     state.lastSecretEdgeMessageAt = 0;
@@ -5748,6 +5934,9 @@ ui.villagerChoices.addEventListener("click", (event) => {
   handleVillagerChoice(Number(button.dataset.choiceIndex));
 });
 ui.claimQuestRewardButton.addEventListener("click", claimQuestReward);
+ui.questCompleteDialog.addEventListener("cancel", (event) => {
+  if (state.pendingQuestReward) event.preventDefault();
+});
 ui.questDialog.addEventListener("close", () => {
   if (state.activeQuest) showMissionTracker("new", state.activeQuest);
 });
@@ -5779,11 +5968,35 @@ ui.journalList.addEventListener("keydown", (event) => {
   event.preventDefault();
   openEncyclopediaDetail(card.dataset.itemId);
 });
+ui.encyclopediaDetailBody.addEventListener("click", (event) => {
+  const action = event.target.closest("[data-item-action]");
+  if (!action) return;
+  if (action.dataset.itemAction === "portal") invokePortalFromItem();
+  if (action.dataset.itemAction === "companion") openCompanionSelector();
+  if (action.dataset.itemAction === "scout") useScoutItem(ui.encyclopediaDetailTitle.dataset.itemId);
+  if (action.dataset.itemAction === "stride") useStrideItem(ui.encyclopediaDetailTitle.dataset.itemId);
+});
+ui.companionSelectGrid.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-companion-species]");
+  if (option) selectCompanionSpecies(option.dataset.companionSpecies);
+});
+ui.confirmCompanionChangeButton.addEventListener("click", confirmCompanionChange);
+ui.cancelCompanionChangeButton.addEventListener("click", () => {
+  pendingCompanionSpecies = "";
+  closeDialog(ui.companionSelectDialog);
+});
+ui.companionSelectDialog.addEventListener("close", () => {
+  pendingCompanionSpecies = "";
+  ui.companionConfirmActions.hidden = true;
+});
 ui.infoButton.addEventListener("click", () => openDialog(ui.infoDialog));
 ui.discoveryDialog.addEventListener("close", closeDiscoveryPopup);
 ui.villagerDialog.addEventListener("close", () => {
   pendingVillagerConversation = null;
   setVillagerDialogMode("help");
+});
+ui.villagerDialog.addEventListener("cancel", (event) => {
+  if (pendingVillagerConversation) event.preventDefault();
 });
 ui.optionsButton.addEventListener("click", () => openDialog(ui.optionsDialog));
 ui.fullscreenButton.addEventListener("click", toggleFullscreen);
