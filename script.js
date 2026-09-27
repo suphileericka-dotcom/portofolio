@@ -194,6 +194,7 @@ const missionItemSpacing = 1050;
 const missionItemFirstDistance = 1100;
 const missionItemRevealDelayMin = 15;
 const missionItemRevealDelayMax = 45;
+const missionTrackerDisplaySeconds = 5.5;
 const farFutureTime = 1000000000;
 const playerAppearanceOptions = {
   skin: {
@@ -268,6 +269,8 @@ let startingGame = false;
 let messageTimer = 0;
 let pendingVillagerHelp = null;
 let pendingDiscoveryPopup = null;
+let missionTrackerNotice = null;
+let completedMissionNotice = null;
 let audioSceneKey = "";
 let appearanceDraft = null;
 let secretTransitionToken = 0;
@@ -3594,8 +3597,13 @@ function advanceQuest(type, amount = 1) {
   state.questLastProgressAt = state.time;
   if (state.activeQuest.itemId) state.activeQuest.nextMissionRevealAt = state.time + getMissionRevealDelay();
   showMessage(`Mission: ${state.activeQuest.objective} ${state.activeQuest.progress} / ${state.activeQuest.target}`);
-  updateMissionTracker();
-  if (state.activeQuest.progress >= state.activeQuest.target) completeQuest();
+  if (state.activeQuest.progress >= state.activeQuest.target) {
+    completedMissionNotice = { ...state.activeQuest };
+    showMissionTracker("complete", completedMissionNotice);
+    completeQuest();
+    return;
+  }
+  showMissionTracker("progress", state.activeQuest);
 }
 
 function updateQuestHint() {
@@ -3782,6 +3790,10 @@ function completeQuest() {
   rememberJournalEvent(`J'ai termine la mission "${quest.title || quest.label}" et recu deux objets.`);
   state.pendingQuestReward = {
     questTitle: quest.title || quest.label,
+    objective: quest.objective,
+    progress: quest.progress,
+    target: quest.target,
+    itemId: quest.itemId || "",
     rewardItems,
     completedAt: state.time
   };
@@ -3842,25 +3854,33 @@ function claimQuestReward() {
 }
 
 function updateMissionTracker() {
-  if (state.activeQuest) {
-    ui.missionTracker.innerHTML = `
-      <strong>Mission</strong>
-      <span>${state.activeQuest.objective}</span>
-      <span>${state.activeQuest.progress} / ${state.activeQuest.target}</span>
-      <span>${getQuestHint(state.activeQuest)}</span>
-    `;
-    ui.missionTracker.classList.add("is-visible");
-    return;
+  if (!missionTrackerNotice || state.time >= missionTrackerNotice.expiresAt) {
+    ui.missionTracker.classList.remove("is-visible");
+    missionTrackerNotice = null;
   }
-  if (state.pendingQuestReward) {
-    ui.missionTracker.innerHTML = `
-      <strong>Mission terminee</strong>
-      <span>Recompense a valider</span>
-    `;
-    ui.missionTracker.classList.add("is-visible");
-    return;
+}
+
+function showMissionTracker(kind, quest) {
+  if (!quest) return;
+  const progress = `${quest.progress || 0} / ${quest.target || 1}`;
+  let title = "Mission";
+  let detail = quest.objective || quest.title || "Objectif de mission";
+
+  if (kind === "new") {
+    title = "Nouvelle mission";
+  } else if (kind === "progress") {
+    title = quest.title || "Mission en cours";
+    detail = `${quest.objective} - ${progress}`;
+  } else if (kind === "complete") {
+    title = "Objectif atteint";
+    detail = `${quest.title || quest.objective} - ${progress}`;
   }
+
+  ui.missionTracker.innerHTML = `<strong>${title}</strong><span>${detail}</span>${kind === "new" ? `<span>${progress}</span>` : ""}`;
+  missionTrackerNotice = { expiresAt: state.time + missionTrackerDisplaySeconds };
   ui.missionTracker.classList.remove("is-visible");
+  void ui.missionTracker.offsetWidth;
+  ui.missionTracker.classList.add("is-visible");
 }
 
 function normalizeQuest(quest) {
@@ -4361,12 +4381,15 @@ function renderQuestCard(compact = false) {
   }
   if (!quest) return `<article class="quest-card"><strong>Aucune mission active</strong><p>Une enveloppe pourra apparaitre sur le chemin.</p></article>`;
   const percent = Math.round((quest.progress / quest.target) * 100);
+  const remaining = Math.max(0, quest.target - quest.progress);
   return `<article class="quest-card ${compact ? "is-wide" : ""}">
     <strong>${quest.title || quest.label}</strong>
+    <p>${quest.description}</p>
     <p>${quest.objective}</p>
     <p>${getQuestHint(quest)}</p>
     <div class="progress-bar"><span style="width: ${percent}%"></span></div>
     <p>${quest.progress} / ${quest.target}</p>
+    <p>Reste a faire : ${remaining}</p>
     <p>Recompense : 2 objets aleatoires</p>
   </article>`;
 }
@@ -5681,6 +5704,14 @@ ui.villagerChoices.addEventListener("click", (event) => {
   handleVillagerChoice(Number(button.dataset.choiceIndex));
 });
 ui.claimQuestRewardButton.addEventListener("click", claimQuestReward);
+ui.questDialog.addEventListener("close", () => {
+  if (state.activeQuest) showMissionTracker("new", state.activeQuest);
+});
+ui.questCompleteDialog.addEventListener("close", () => {
+  if (!completedMissionNotice) return;
+  showMissionTracker("complete", completedMissionNotice);
+  completedMissionNotice = null;
+});
 ui.welcomeCompanionButton.addEventListener("click", () => showMessage(`${state.companion.name} marche maintenant avec toi.`));
 ui.missionTracker.addEventListener("click", () => {
   if (state.pendingQuestReward && !ui.questCompleteDialog.open) openQuestCompletePopup(state.pendingQuestReward);

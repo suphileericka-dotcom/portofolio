@@ -361,7 +361,7 @@ h2 {
   left: 1rem;
   top: 4.4rem;
   width: min(20rem, calc(100% - 2rem));
-  display: none;
+  display: grid;
   gap: 0.25rem;
   padding: 0.85rem 0.95rem;
   border-radius: 0.5rem;
@@ -371,10 +371,17 @@ h2 {
   color: var(--muted);
   line-height: 1.35;
   pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-0.5rem);
+  transition: opacity 0.32s ease, transform 0.32s ease, visibility 0s linear 0.32s;
 }
 
 .mission-tracker.is-visible {
-  display: grid;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 0s;
 }
 
 .mission-tracker strong {
