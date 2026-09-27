@@ -4471,9 +4471,15 @@ function closeDiscoveryPopup() {
 }
 
 function setVillagerDialogMode(mode = "help") {
-  ui.villagerChoices.hidden = mode !== "choices";
-  ui.villagerActions.hidden = mode === "choices";
-  ui.villagerDialog.classList.toggle("is-choice-pending", mode === "choices");
+  const awaitingChoice = mode === "choices";
+  ui.villagerChoices.hidden = !awaitingChoice;
+  ui.villagerActions.hidden = awaitingChoice;
+  ui.villagerDialog.classList.toggle("is-choice-pending", awaitingChoice);
+  const closeButton = ui.villagerDialog.querySelector(".close-button");
+  if (closeButton) {
+    closeButton.hidden = awaitingChoice;
+    closeButton.disabled = awaitingChoice;
+  }
 }
 
 function getVillagerMemoryLine(villager, memory) {
@@ -4633,6 +4639,7 @@ function handleVillagerChoice(index) {
   ui.giveItemButton.disabled = alreadyHelped || available < required;
   ui.giveItemButton.style.opacity = ui.giveItemButton.disabled ? "0.55" : "1";
   ui.giveItemButton.textContent = alreadyHelped ? "Aide apportee" : `Donner (${available}/${required})`;
+  pendingVillagerConversation = null;
   setVillagerDialogMode("help");
   saveGame();
 }
@@ -6312,7 +6319,9 @@ ui.customizeButton.addEventListener("click", openCustomizeDialog);
 document.querySelectorAll(".panel-dialog form").forEach((form) => {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    closeDialog(form.closest(".panel-dialog"));
+    const dialog = form.closest(".panel-dialog");
+    if (dialog === ui.villagerDialog && pendingVillagerConversation) return;
+    closeDialog(dialog);
   });
 });
 ui.appearanceChoices.addEventListener("click", (event) => {
@@ -6398,7 +6407,9 @@ ui.villagerDialog.addEventListener("close", () => {
   setVillagerDialogMode("help");
 });
 ui.villagerDialog.addEventListener("cancel", (event) => {
-  if (pendingVillagerConversation) event.preventDefault();
+  if (!pendingVillagerConversation) return;
+  event.preventDefault();
+  showMessage("Choisis une reponse pour continuer la conversation.");
 });
 ui.optionsButton.addEventListener("click", () => openDialog(ui.optionsDialog));
 ui.fullscreenButton.addEventListener("click", toggleFullscreen);
