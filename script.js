@@ -77,6 +77,7 @@ const mainMusicFile = "jean-paul-v-aventures-chinoises-289659.mp3";
 const musicLoopCrossfadeSeconds = 0.12;
 const musicScheduleLookaheadSeconds = 4;
 const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
+const villageSpacing = 15000;
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
 const joystick = { active: false, id: null, x: 0, y: 0, mode: "walk", jumpArmed: true, lastZone: "walk" };
@@ -992,8 +993,39 @@ function ensureDiscoveryZone(zoneKey, builder) {
   if (hasZone) return;
   builder().forEach((item, index) => {
     const placed = placeDiscoverySafely(item, index);
-    state.worldDiscoveries[placed.id] = placed;
+    storeWorldDiscovery(placed);
   });
+}
+
+function storeWorldDiscovery(item) {
+  if (!item || typeof item.id !== "string") return null;
+  const existing = state.worldDiscoveries[item.id];
+  if (existing && !existing.collected) return existing;
+  const baseId = baseDiscoveryId(item.id);
+  const duplicate = Object.values(state.worldDiscoveries).find((candidate) => (
+    candidate && !candidate.collected
+    && baseDiscoveryId(candidate.id) === baseId
+    && Math.abs((candidate.x || 0) - (item.x || 0)) < 56
+  ));
+  if (duplicate) return duplicate;
+  state.worldDiscoveries[item.id] = item;
+  return item;
+}
+
+function normalizeWorldDiscoveries(rawDiscoveries) {
+  const cleaned = {};
+  const visible = [];
+  Object.values(rawDiscoveries || {}).forEach((item) => {
+    if (!item || typeof item !== "object" || typeof item.id !== "string" || !Number.isFinite(item.x)) return;
+    const duplicate = !item.collected && visible.find((candidate) => (
+      baseDiscoveryId(candidate.id) === baseDiscoveryId(item.id)
+      && Math.abs(candidate.x - item.x) < 56
+    ));
+    if (duplicate) return;
+    cleaned[item.id] = item;
+    if (!item.collected) visible.push(item);
+  });
+  return cleaned;
 }
 
 function placeDiscoverySafely(item, index = 0) {
@@ -1118,7 +1150,7 @@ function ensureSecretWorldDiscoveries() {
       hiddenUntil: state.time + 2 + index * 1.2,
       createdAt: state.time
     }, index);
-    state.worldDiscoveries[placed.id] = placed;
+    storeWorldDiscovery(placed);
   });
 }
 
@@ -1406,19 +1438,17 @@ function getProceduralLandmarks() {
 function getProceduralVillages() {
   if (isInSecretWorld()) return [];
   if (!isExpandedWorld()) return [];
-  const relativeCamera = state.camera.x - world.firstRouteEnd;
-  const start = Math.max(0, Math.floor((relativeCamera - 800) / world.chapterSize));
-  const end = Math.floor((relativeCamera + window.innerWidth + 1200) / world.chapterSize);
+  const firstVillageX = world.firstRouteEnd + 520;
+  const start = Math.max(0, Math.floor((state.camera.x - firstVillageX - 1200) / villageSpacing));
+  const end = Math.max(start, Math.floor((state.camera.x + window.innerWidth + 1200 - firstVillageX) / villageSpacing));
   const items = [];
-  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
-    if (chapterIndex >= 0 && chapterIndex % 2 === 0) {
-      items.push({
-        x: world.firstRouteEnd + chapterIndex * world.chapterSize + 520,
-        name: `Village ${Math.floor(chapterIndex / 2) + 1}`,
-        chapterIndex,
-        villager: villagers[chapterIndex % villagers.length]
-      });
-    }
+  for (let villageIndex = start; villageIndex <= end; villageIndex += 1) {
+    items.push({
+      x: firstVillageX + villageIndex * villageSpacing,
+      name: `Village ${villageIndex + 1}`,
+      chapterIndex: villageIndex,
+      villager: villagers[villageIndex % villagers.length]
+    });
   }
   return items;
 }
@@ -1881,7 +1911,7 @@ function drawWorldObjects() {
     }
   });
 
-  fallingTreeItems.forEach((drop, index) => {
+  fallingTreeItems.filter((drop) => !state.worldDiscoveries[drop.item.id]).forEach((drop, index) => {
     drawCollectibleIcon(drop.item, index + 20, drop.x, drop.y);
   });
 
@@ -4731,7 +4761,7 @@ function maybeStartRollingItem(micro) {
     rollUntil: state.time + 4.8,
     hiddenUntil: state.time + 0.2
   });
-  state.worldDiscoveries[item.id] = item;
+  storeWorldDiscovery(item);
 }
 
 function maybeStartShootingStar(micro) {
@@ -4768,7 +4798,7 @@ function updateFallingTreeItems(dt) {
         drop.item.groundOffset = 0;
         drop.item.place = getPlaceType(drop.x);
         drop.item.expiresAt = state.time + groundedDiscoveryLifetimeSeconds + hashNumber(drop.x + state.time) * 120;
-        state.worldDiscoveries[drop.item.id] = drop.item;
+        storeWorldDiscovery(drop.item);
         fallingTreeItems.splice(index, 1);
       }
     }
@@ -5241,8 +5271,8 @@ function getVillagerConversation(villager, memory, alreadyHelped, previousLastSe
       ]
     }
   };
-  if (everydayByMood[personality.mood]) conversations.push(everydayByMood[personality.mood]);
-  if (conversations.length === 0 || hashNumber(seed) < 0.42) return null;
+  // Ordinary visits stay simple. Choices are reserved for a few natural contexts.
+  if (conversations.length === 0 || Math.random() > 0.18) return null;
   return pickFreshConversation(villager, memory, conversations, seed);
 }
 
@@ -5276,6 +5306,7 @@ function handleVillagerChoice(index) {
 }
 
 function openVillagerHelp(villager) {
+  if (ui.villagerDialog.open && pendingVillagerConversation) return;
   setPlayerAction("talk", 1.4);
   const alreadyHelped = state.helpedVillagers.includes(villager.villageId);
   const relationKey = getVillagerKey(villager);
@@ -5303,7 +5334,7 @@ function openVillagerHelp(villager) {
   const meetings = memory.visits;
   const relationLine = getVillagerRelationLine(villager, meetings, memory);
   const requestLine = getVillagerRequestLine(villager, alreadyHelped);
-  const conversation = Math.random() < 0.48 ? getVillagerConversation(villager, memory, alreadyHelped, previousLastSeen) : null;
+  const conversation = getVillagerConversation(villager, memory, alreadyHelped, previousLastSeen);
   ui.villagerTitle.textContent = villager.role;
   const available = getAvailableItemQuantity(villager.need.itemId);
   const required = villager.need.amount || 1;
@@ -5919,7 +5950,7 @@ function loadGame() {
     state.nextLetterAt = Number.isFinite(payload.nextLetterAt) ? payload.nextLetterAt : 0;
     state.completedQuests = Number.isFinite(payload.completedQuests) ? payload.completedQuests : 0;
     state.rewards = Array.isArray(payload.rewards) ? payload.rewards : [];
-    state.worldDiscoveries = payload.worldDiscoveries && typeof payload.worldDiscoveries === "object" ? payload.worldDiscoveries : {};
+    state.worldDiscoveries = normalizeWorldDiscoveries(payload.worldDiscoveries);
     state.discoveryRespawns = payload.discoveryRespawns && typeof payload.discoveryRespawns === "object" ? payload.discoveryRespawns : {};
     state.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
     const hasPortalSchedule = payload.secretPortalScheduleVersion === secretPortalScheduleVersion
@@ -7059,6 +7090,14 @@ ui.companionSelectDialog.addEventListener("close", () => {
 ui.infoButton.addEventListener("click", () => openDialog(ui.infoDialog));
 ui.discoveryDialog.addEventListener("close", closeDiscoveryPopup);
 ui.villagerDialog.addEventListener("close", () => {
+  if (pendingVillagerConversation) {
+    // A choice is a real turn in the conversation: keep it available until clicked.
+    requestAnimationFrame(() => {
+      openDialog(ui.villagerDialog);
+      setVillagerDialogMode("choices");
+    });
+    return;
+  }
   pendingVillagerConversation = null;
   setVillagerDialogMode("help");
 });
