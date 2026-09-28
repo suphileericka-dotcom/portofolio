@@ -320,6 +320,7 @@ const state = {
   villagerLastMet: {},
   villagerMemory: {},
   discoveredPlaces: [],
+  visitedLandmarks: [],
   visitedVillages: [],
   journalEvents: [],
   walkMemories: [],
@@ -1390,6 +1391,28 @@ function getProceduralRests() {
   return items;
 }
 
+const landmarkTypes = [
+  { type: "cabin", name: "Cabane du sentier", action: "Se refugier", rewardId: "leaf", description: "Une petite cabane ouverte aux voyageurs. Sa lanterne chasse la fatigue." },
+  { type: "clearing", name: "Clairiere des fougeres", action: "Observer", rewardId: "flower", description: "Un espace calme ou les fleurs sauvages restent visibles entre les arbres." },
+  { type: "bridge", name: "Pont de mousse", action: "Traverser", rewardId: "shell", description: "Un vieux pont solide qui relie les deux rives du ruisseau." },
+  { type: "marker", name: "Pierre des sentiers", action: "Lire le repere", rewardId: "stone", description: "Une pierre gravee qui indique les lieux connus de la region." }
+];
+
+function getProceduralLandmarks() {
+  if (isInSecretWorld() || !isExpandedWorld()) return [];
+  const relativeCamera = state.camera.x - world.firstRouteEnd;
+  const start = Math.max(0, Math.floor((relativeCamera - 800) / world.chapterSize));
+  const end = Math.floor((relativeCamera + window.innerWidth + 1400) / world.chapterSize);
+  const landmarks = [];
+  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
+    if (chapterIndex < 0 || chapterIndex % 3 !== 1) continue;
+    const template = landmarkTypes[Math.floor(chapterIndex / 3) % landmarkTypes.length];
+    const x = world.firstRouteEnd + chapterIndex * world.chapterSize + 1720;
+    landmarks.push({ ...template, id: makeId("landmark", chapterIndex + 4), x, chapterIndex });
+  }
+  return landmarks;
+}
+
 function getProceduralVillages() {
   if (isInSecretWorld()) return [];
   if (!isExpandedWorld()) return [];
@@ -1801,7 +1824,7 @@ function drawWorldObjects() {
       ctx.fill();
     }
     const resident = getResidentForVillage(village);
-    drawVillageMotif(village, theme);
+    drawVillageMotif(village, theme, resident);
     drawVillager(resident.x, resident);
     drawVillagerBubble(resident);
     if (interactionTarget?.kind === "villager" && Math.abs(interactionTarget.entry.x - resident.x) < 2) drawPrompt(resident.x, y - 102, "E Parler");
@@ -1812,6 +1835,11 @@ function drawWorldObjects() {
     drawVillager(companionGiver.x, companionGiver);
     if (interactionTarget?.kind === "companion") drawPrompt(companionGiver.x, world.ground - 120, "E Parler");
   }
+
+  getProceduralLandmarks().forEach((landmark) => {
+    drawLandmark(landmark);
+    if (interactionTarget?.kind === "landmark" && interactionTarget.entry.id === landmark.id) drawPrompt(landmark.x, world.ground - 142, `E ${landmark.action}`);
+  });
 
   getProceduralRests().forEach((rest) => {
     const y = world.ground - 18;
@@ -1897,6 +1925,70 @@ function drawWorldObjects() {
   ctx.restore();
 }
 
+function drawLandmark(landmark) {
+  const x = landmark.x;
+  const y = world.ground;
+  const visited = state.visitedLandmarks.includes(landmark.id);
+  ctx.save();
+  if (landmark.type === "cabin") {
+    ctx.fillStyle = "#6f4729";
+    roundedRect(x - 68, y - 94, 112, 94, 5);
+    ctx.fill();
+    ctx.fillStyle = "#3d3028";
+    ctx.beginPath();
+    ctx.moveTo(x - 82, y - 94);
+    ctx.lineTo(x - 12, y - 142);
+    ctx.lineTo(x + 58, y - 94);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = visited ? "#ffe07a" : "#7a654b";
+    roundedRect(x - 4, y - 67, 24, 28, 4);
+    ctx.fill();
+  } else if (landmark.type === "clearing") {
+    ctx.fillStyle = "rgba(247, 243, 223, 0.18)";
+    ctx.beginPath();
+    ctx.ellipse(x, y - 12, 105, 28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#8ebf76";
+    for (let index = 0; index < 7; index += 1) drawEllipse(x - 70 + index * 24, y - 18 - (index % 2) * 10, 8, 8, ctx.fillStyle);
+  } else if (landmark.type === "bridge") {
+    ctx.strokeStyle = "#704b2e";
+    ctx.lineWidth = 12;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x - 92, y - 10);
+    ctx.quadraticCurveTo(x, y - 58, x + 92, y - 10);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(103, 180, 200, 0.68)";
+    ctx.lineWidth = 18;
+    ctx.beginPath();
+    ctx.moveTo(x - 118, y + 10);
+    ctx.lineTo(x + 118, y + 10);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = "#71827a";
+    ctx.beginPath();
+    ctx.moveTo(x - 34, y);
+    ctx.lineTo(x - 20, y - 86);
+    ctx.lineTo(x + 24, y - 98);
+    ctx.lineTo(x + 43, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = visited ? "#f0bd6c" : "#d6d1bc";
+    ctx.font = "900 22px Nunito";
+    ctx.textAlign = "center";
+    ctx.fillText("+", x + 4, y - 42);
+  }
+  ctx.fillStyle = "rgba(20, 34, 33, 0.78)";
+  roundedRect(x - 72, y - 170, 144, 24, 7);
+  ctx.fill();
+  ctx.fillStyle = "#f7f3df";
+  ctx.font = "800 10px Nunito";
+  ctx.textAlign = "center";
+  ctx.fillText(landmark.name, x, y - 154);
+  ctx.restore();
+}
+
 function drawVillageSignpost(village, theme) {
   const x = village.x - 170;
   const y = world.ground - 18;
@@ -1928,7 +2020,7 @@ function drawVillageSignpost(village, theme) {
   ctx.restore();
 }
 
-function drawVillageMotif(village, theme) {
+function drawVillageMotif(village, theme, resident = getResidentForVillage(village)) {
   const x = village.x + 308;
   const y = world.ground - 8;
   ctx.save();
@@ -1964,6 +2056,29 @@ function drawVillageMotif(village, theme) {
       ctx.arc(sx, sy, 3 + Math.sin(state.time * 2 + index) * 0.8, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+  const relation = getVillagerMemory(resident).relation || 0;
+  if (relation >= 3) {
+    ctx.strokeStyle = "rgba(240, 189, 108, 0.72)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(village.x + 88, y - 96);
+    ctx.quadraticCurveTo(village.x + 204, y - 64, village.x + 324, y - 96);
+    ctx.stroke();
+    for (let index = 0; index < 4; index += 1) {
+      ctx.fillStyle = index % 2 ? theme.accent : "#f0bd6c";
+      ctx.beginPath();
+      ctx.arc(village.x + 112 + index * 62, y - 77 + Math.sin(index) * 5, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (relation >= 6) {
+    ctx.fillStyle = "#8c6135";
+    roundedRect(village.x + 245, y - 22, 58, 9, 4);
+    ctx.fill();
+    ctx.fillStyle = "#4a2c1b";
+    ctx.fillRect(village.x + 252, y - 13, 7, 18);
+    ctx.fillRect(village.x + 289, y - 13, 7, 18);
   }
   ctx.restore();
 }
@@ -3328,6 +3443,9 @@ function getInteractionTarget(visibleDiscoveries = getVisibleWorldDiscoveries(),
     .sort(byAim)[0];
   if (village) return { kind: "villager", entry: village };
 
+  const landmark = getProceduralLandmarks().filter((entry) => inRange(entry, 112)).sort(byAim)[0];
+  if (landmark) return { kind: "landmark", entry: landmark };
+
   const lantern = getProceduralLanterns()
     .filter((entry) => !state.lanterns.includes(entry.id) && inRange(entry, interactionRanges.lantern))
     .sort(byAim)[0];
@@ -3433,6 +3551,11 @@ function interact() {
   if (target?.kind === "villager") {
     advanceQuest("talkVillager", 1);
     if (!state.pendingQuestReward) openVillagerHelp(target.entry);
+    saveGame();
+    return;
+  }
+  if (target?.kind === "landmark") {
+    visitLandmark(target.entry);
     saveGame();
     return;
   }
@@ -3911,6 +4034,8 @@ function getPlaceType(x = state.player.x) {
   if (isInSecretWorld() || x >= secretWorldOffset) return getSecretWorldConfig().name;
   const secret = getProceduralSecretLocations().find((entry) => state.openedSecrets.includes(entry.id) && Math.abs(x - entry.x) < 420);
   if (secret) return "Lieu secret";
+  const landmark = getProceduralLandmarks().find((entry) => Math.abs(x - entry.x) < 150);
+  if (landmark) return landmark.name;
   const nearVillage = getProceduralVillages().some((village) => Math.abs(x - (village.x + 170)) < 620);
   if (nearVillage) return "Village";
   const riverX = isExpandedWorld()
@@ -3926,6 +4051,35 @@ function rememberPlace(place) {
     state.discoveredPlaces.push(place);
     rememberJournalEvent(`J'ai decouvert ${place.toLowerCase()} et ajoute ce lieu a ma carte.`);
   }
+}
+
+function visitLandmark(landmark) {
+  const firstVisit = !state.visitedLandmarks.includes(landmark.id);
+  if (!firstVisit) {
+    showMessage(`Tu retrouves ${landmark.name.toLowerCase()}.`);
+    return;
+  }
+  state.visitedLandmarks.push(landmark.id);
+  rememberPlace(landmark.name);
+  advanceQuest("landmark", 1);
+  const reward = getCatalogItem(landmark.rewardId);
+  if (landmark.type === "cabin") {
+    state.player.rest = 1;
+    state.itemEffects.glowUntil = Math.max(state.itemEffects.glowUntil || 0, state.time + 65);
+  } else if (landmark.type === "clearing") {
+    state.itemEffects.strideUntil = Math.max(state.itemEffects.strideUntil || 0, state.time + 40);
+  } else if (landmark.type === "marker") {
+    const target = getCompassTarget();
+    if (target) {
+      state.itemEffects.compassUntil = state.time + 60;
+      state.itemEffects.compassTargetX = target.x;
+      state.itemEffects.compassLabel = target.label;
+    }
+  }
+  if (reward) collectDiscovery({ ...reward, id: makeId(`landmark-${reward.id}`, Math.floor(state.time * 10)), place: landmark.name }, true);
+  showMessage(`${landmark.name} ajoute a ta carte.${reward ? ` ${reward.label} rejoint ton sac.` : ""}`);
+  rememberJournalEvent(`J'ai pris le temps de visiter ${landmark.name.toLowerCase()}.`);
+  updateAchievements();
 }
 
 function rememberJournalEvent(text) {
@@ -4172,6 +4326,7 @@ const questTemplates = [
   { title: "Lueurs du sous-bois", description: "Trouve 3 champignons lumineux pres des passages humides.", objective: "Trouver 3 champignons lumineux.", type: "collect:mushroom", itemId: "mushroom", target: 3, hint: "Indice : les champignons lumineux poussent dans les zones sombres ou humides. Ils ne se trouvent pas tous au meme endroit." },
   { title: "Pierres anciennes", description: "Ramasse 8 pierres anciennes ou polies sur le chemin.", objective: "Ramasser 8 pierres anciennes.", type: "collect:stone", itemId: "stone", target: 8, hint: "Indice : les pierres anciennes se trouvent pres des rivieres, des montagnes et des vieux sentiers. Continue d'explorer pour les retrouver." },
   { title: "Fleurs sauvages", description: "Decouvre 4 fleurs sauvages pendant l'exploration.", objective: "Decouvrir 4 fleurs sauvages.", type: "collectFlower", itemId: "flower", target: 4, hint: "Indice : les fleurs sauvages aiment les clairieres et le printemps. Elles apparaissent naturellement sur la route." },
+  { title: "Haltes du Bosquet", description: "Visite 3 lieux remarquables et ajoute-les a ta carte.", objective: "Explorer 3 haltes du Bosquet.", type: "landmark", target: 3, hint: "Indice : les cabanes, clairieres, ponts et pierres gravees portent un nom au-dessus d'eux. Approche-toi et utilise E." },
   { title: "Voix du village", description: "Rencontre 5 habitants et ecoute leurs histoires.", objective: "Rencontrer 5 habitants.", type: "talkVillager", target: 5, hint: "Indice : avance jusqu'aux villages et parle aux habitants quand l'invite apparait." },
   { title: "Chemins nouveaux", description: "Explore 2 nouveaux villages sur la route.", objective: "Explorer 2 nouveaux villages.", type: "village", target: 2, hint: "Indice : continue vers la droite. Chaque nouveau village visite fait avancer la mission." }
 ];
@@ -5358,7 +5513,8 @@ function renderCompanionJournal() {
 
 function renderMap() {
   const places = ["Foret", "Riviere", "Village", "Montagne", "Clairiere", "Lieu secret"];
-  return `<div class="travel-map">${places.map((place) => {
+  const landmarkPlaces = landmarkTypes.map((landmark) => landmark.name);
+  return `<div class="travel-map">${places.concat(landmarkPlaces).map((place) => {
     const discovered = state.discoveredPlaces.some((known) => known === place || known.includes(place));
     return `<div class="map-zone ${discovered ? "is-known" : "is-fog"}"><span>${getPlaceIcon(place)}</span><strong>${place}</strong></div>`;
   }).join("")}</div>`;
@@ -5519,6 +5675,9 @@ function getWeatherIcon(weatherId) {
 }
 
 function getPlaceIcon(place) {
+  if (place.includes("Cabane")) return "H";
+  if (place.includes("Pont")) return "=";
+  if (place.includes("Pierre")) return "+";
   if (place.includes("Riviere")) return "~";
   if (place.includes("Village")) return "M";
   if (place.includes("Montagne")) return "^";
@@ -5586,6 +5745,7 @@ function resetGame() {
   state.villagerLastMet = {};
   state.villagerMemory = {};
   state.discoveredPlaces = [];
+  state.visitedLandmarks = [];
   state.visitedVillages = [];
   state.journalEvents = [];
   state.walkMemories = [];
@@ -5648,6 +5808,7 @@ function saveGame() {
     villagerLastMet: state.villagerLastMet,
     villagerMemory: state.villagerMemory,
     discoveredPlaces: state.discoveredPlaces,
+    visitedLandmarks: state.visitedLandmarks,
     visitedVillages: state.visitedVillages,
     journalEvents: state.journalEvents,
     walkMemories: state.walkMemories,
@@ -5714,6 +5875,7 @@ function loadGame() {
       ? Object.fromEntries(Object.entries(payload.villagerMemory).map(([key, value]) => [key, normalizeVillagerMemory(value)]))
       : {};
     state.discoveredPlaces = Array.isArray(payload.discoveredPlaces) ? payload.discoveredPlaces : [];
+    state.visitedLandmarks = Array.isArray(payload.visitedLandmarks) ? payload.visitedLandmarks.filter((id) => typeof id === "string") : [];
     state.visitedVillages = Array.isArray(payload.visitedVillages) ? payload.visitedVillages : [];
     state.journalEvents = Array.isArray(payload.journalEvents) ? payload.journalEvents : [];
     state.walkMemories = Array.isArray(payload.walkMemories) ? payload.walkMemories : [];
