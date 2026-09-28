@@ -2090,15 +2090,6 @@ function drawFriendlyChallengeObstacle(obstacle, direction) {
     ctx.ellipse(obstacle.x - 7, y - 19, 7, 3, -0.2, 0, Math.PI * 2);
     ctx.fill();
     drawChallengeJumpLabel(obstacle.x, y - 62);
-  } else if (obstacle.type === "branch" || obstacle.type === "roots") {
-    ctx.strokeStyle = obstacle.type === "roots" ? "#6b4527" : "#7a5130";
-    ctx.lineWidth = obstacle.type === "roots" ? 12 : 10;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(obstacle.x - 30, y - 5);
-    ctx.lineTo(obstacle.x + 31, y - 15);
-    ctx.stroke();
-    drawChallengeJumpLabel(obstacle.x, y - 62);
   }
   ctx.restore();
 }
@@ -4290,10 +4281,7 @@ function createFriendlyChallengeRoute(startX, targetX) {
   const direction = Math.sign(targetX - startX) || 1;
   return [
     { id: "rock-1", type: "rock", x: startX + direction * 720, radius: 24, playerPassed: false, runnerPassed: false, lastBlockedAt: -Infinity },
-    { id: "branch", type: "branch", x: startX + direction * 1540, radius: 28, playerPassed: false, runnerPassed: false, lastBlockedAt: -Infinity },
     { id: "rock-2", type: "rock", x: startX + direction * 2420, radius: 26, playerPassed: false, runnerPassed: false, lastBlockedAt: -Infinity },
-    { id: "roots", type: "roots", x: startX + direction * 3520, radius: 30, playerPassed: false, runnerPassed: false, lastBlockedAt: -Infinity },
-    { id: "branch-2", type: "branch", x: startX + direction * 4440, radius: 28, playerPassed: false, runnerPassed: false, lastBlockedAt: -Infinity },
     { id: "rock-3", type: "rock", x: startX + direction * 5320, radius: 24, playerPassed: false, runnerPassed: false, lastBlockedAt: -Infinity }
   ];
 }
