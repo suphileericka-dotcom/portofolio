@@ -493,14 +493,14 @@ const villagerNeeds = [
 ];
 
 const discoveries = [
-  { id: "leaf", x: 860, label: "Feuille nervuree", rarity: "Rare", place: "Foret", text: "Une feuille rare, brillante comme du papier dore.", use: "Repare les cartes fragiles, ouvre certains raccourcis et protege de la pluie." },
-  { id: "stone", x: 1420, label: "Pierre polie", rarity: "Commun", place: "Riviere", text: "Elle tient dans la paume et garde une fraicheur de ruisseau.", use: "Stabilise des mecanismes, des portes et des ponts anciens." },
-  { id: "feather", x: 2140, label: "Plume claire", rarity: "Rare", place: "Foret", text: "Un oiseau l'a laissee tomber sans se presser.", use: "Ecrit des messages et apaise certains habitants." },
-  { id: "moss", x: 3020, label: "Statue moussue", rarity: "Rare", place: "Village", text: "Un visage ancien sourit sous les fougeres.", use: "Reveille la memoire de lieux oublies." },
-  { id: "shell", x: 3910, label: "Coquille de riviere", rarity: "Rare", place: "Riviere", text: "Minuscule spirale trouvee au bord de l'eau.", use: "Comprend les rivieres, les puits, les passages humides et la pluie." },
-  { id: "cone", x: 4740, label: "Pomme de pin bleue", rarity: "Commun", place: "Foret", text: "Sa couleur change legerement quand on la tourne.", use: "Garde une chaleur douce contre la neige et le froid." },
-  { id: "mushroom", x: 5660, label: "Champignon lumineux", rarity: "Rare", place: "Riviere", text: "Il emet une lumiere calme, presque musicale.", use: "Sert de lampe calme contre la brume, la nuit et la neige." },
-  { id: "star", x: 6520, label: "Etoile tombee", rarity: "Legendaire", place: "Montagne", text: "Posee dans l'herbe comme un souvenir du ciel.", use: "Active les grands passages et garde une lumiere dans la brume." }
+  { id: "leaf", x: 860, label: "Feuille nervuree", rarity: "Rare", place: "Foret", text: "Une feuille rare, brillante comme du papier dore.", use: "Peut etre utilisee pour reperer une trouvaille proche." },
+  { id: "stone", x: 1420, label: "Pierre polie", rarity: "Commun", place: "Riviere", text: "Elle tient dans la paume et garde une fraicheur de ruisseau.", use: "Materiau de collection que certains habitants peuvent demander." },
+  { id: "feather", x: 2140, label: "Plume claire", rarity: "Rare", place: "Foret", text: "Un oiseau l'a laissee tomber sans se presser.", use: "Permet de choisir ou de changer de compagnon." },
+  { id: "moss", x: 3020, label: "Statue moussue", rarity: "Rare", place: "Village", text: "Un visage ancien sourit sous les fougeres.", use: "Objet rare de collection et de mission." },
+  { id: "shell", x: 3910, label: "Coquille de riviere", rarity: "Rare", place: "Riviere", text: "Minuscule spirale trouvee au bord de l'eau.", use: "Objet de collection que les habitants peuvent demander." },
+  { id: "cone", x: 4740, label: "Pomme de pin bleue", rarity: "Commun", place: "Foret", text: "Sa couleur change legerement quand on la tourne.", use: "Peut etre consommee pour donner un leger elan temporaire." },
+  { id: "mushroom", x: 5660, label: "Champignon lumineux", rarity: "Rare", place: "Riviere", text: "Il emet une lumiere calme, presque musicale.", use: "Peut etre consomme pour creer une lueur temporaire." },
+  { id: "star", x: 6520, label: "Etoile tombee", rarity: "Legendaire", place: "Montagne", text: "Posee dans l'herbe comme un souvenir du ciel.", use: "Peut ouvrir un portail vers un monde temporaire." }
 ];
 
 const extraItemNames = [
@@ -548,10 +548,10 @@ const generatedCatalogItems = extraItemNames.map((label, index) => {
         ? "Un objet discret, mais assez singulier pour meriter une page du carnet."
         : "Une petite chose du chemin, simple et rassurante.",
     use: rarity === "Legendaire"
-      ? "Ouvre des lieux secrets, reveille des meteo rares et nourrit les grandes missions."
+      ? "Objet legendaire de collection ou de mission."
       : rarity === "Rare"
-        ? "Aide a reparer, proteger ou comprendre certains passages."
-        : "Complete l'album, sert aux missions simples et garde la memoire du voyage."
+        ? "Objet rare de collection ou de mission."
+        : "Objet de collection qui peut etre demande dans une mission."
   };
 });
 
