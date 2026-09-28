@@ -123,9 +123,12 @@ const secretWorldItemSpacing = 760;
 const secretWorldDurationSeconds = 60;
 const secretPortalIntervals = [15 * 60, 7 * 60, 20 * 60];
 const secretPortalScheduleVersion = 1;
-const friendlyChallengeDurationSeconds = 16;
-const friendlyChallengeDistance = 1200;
+const friendlyChallengeDurationSeconds = 22;
+const friendlyChallengeDistance = 1650;
 const friendlyChallengeCooldownSeconds = 120;
+const friendlyChallengeRunnerStartDelay = 0.75;
+const friendlyChallengeRunnerSpeed = playerWalkSpeed * 1.18;
+const friendlyChallengeRunnerReturnSpeed = playerWalkSpeed * 0.82;
 const portalInvokerItemId = "star";
 const companionChangerItemId = "feather";
 const secretWorlds = [
@@ -291,6 +294,7 @@ let pendingCompanionSpecies = "";
 let itemUseInProgress = false;
 const villagerBubbles = {};
 const villagerProximity = {};
+const villagerChallengeReturns = {};
 const fallingTreeItems = [];
 const shootingStars = [];
 const discoveryBursts = [];
@@ -641,14 +645,22 @@ function getResidentForVillage(village) {
     : Math.round((village.x - world.firstRouteEnd - 520) / world.chapterSize);
   const villageId = getVillageIdFromX(village.x);
   const villager = village.villager || villagers[chapterIndex % villagers.length];
+  const homeX = village.x + 410;
+  const challengeRunner = getChallengeRunnerForVillage(villageId);
   return {
     ...villager,
-    x: village.x + 410,
+    x: Number.isFinite(challengeRunner?.x) ? challengeRunner.x : homeX,
+    homeX,
     villageId,
     villageName: village.name,
     need: villagerNeeds[Math.round(village.x / world.chapterSize) % villagerNeeds.length],
     personality: getVillagerPersonality(villager)
   };
+}
+
+function getChallengeRunnerForVillage(villageId) {
+  const activeRunner = state.friendlyChallenge?.villageId === villageId ? state.friendlyChallenge.runner : null;
+  return activeRunner || villagerChallengeReturns[villageId] || null;
 }
 
 function getVisibleVillageResidents() {
@@ -1991,6 +2003,23 @@ function drawFriendlyChallengeGoal() {
   if (!challenge || isInSecretWorld()) return;
   const x = challenge.targetX;
   const y = world.ground - 18;
+  const startX = Number.isFinite(challenge.startX) ? challenge.startX : challenge.villager.x;
+  const direction = Math.sign(x - startX) || 1;
+  [0.34, 0.68].forEach((progress) => {
+    const markerX = startX + (x - startX) * progress;
+    ctx.save();
+    ctx.fillStyle = "rgba(240, 189, 108, 0.86)";
+    ctx.beginPath();
+    ctx.arc(markerX, y - 18, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(96, 68, 44, 0.72)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(markerX - direction * 5, y - 18);
+    ctx.lineTo(markerX + direction * 6, y - 18);
+    ctx.stroke();
+    ctx.restore();
+  });
   const pulse = 0.55 + Math.sin(state.time * 4) * 0.14;
   ctx.save();
   const glow = ctx.createRadialGradient(x, y - 56, 10, x, y - 56, 128);
@@ -2961,14 +2990,18 @@ function drawOverlay() {
 function drawFriendlyChallengeHud() {
   const challenge = state.friendlyChallenge;
   if (!challenge || isInSecretWorld()) return;
-  const remaining = Math.max(0, Math.ceil(challenge.remaining));
-  const distance = Math.max(0, Math.round(Math.abs(challenge.targetX - state.player.x) / 10));
+  const startX = Number.isFinite(challenge.startX) ? challenge.startX : challenge.villager.x;
+  const direction = Math.sign(challenge.targetX - startX) || 1;
+  const courseLength = Math.max(1, Math.abs(challenge.targetX - startX));
+  const progressAt = (x) => Math.max(0, Math.min(1, ((x - startX) * direction) / courseLength));
+  const playerProgress = Math.round(progressAt(state.player.x) * 100);
+  const runnerProgress = Math.round(progressAt(challenge.runner?.x ?? startX) * 100);
   const x = window.innerWidth * 0.5;
   const y = 34;
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = "rgba(20, 34, 33, 0.8)";
-  roundedRect(-112, -17, 224, 34, 8);
+  roundedRect(-126, -17, 252, 34, 8);
   ctx.fill();
   ctx.strokeStyle = "rgba(240, 189, 108, 0.4)";
   ctx.lineWidth = 1;
@@ -2976,7 +3009,7 @@ function drawFriendlyChallengeHud() {
   ctx.fillStyle = "#f0bd6c";
   ctx.font = "900 12px Nunito";
   ctx.textAlign = "center";
-  ctx.fillText(`Defi amical  ${remaining}s  ${distance}m`, 0, 4);
+  ctx.fillText(`Course amicale  Toi ${playerProgress}%  Habit. ${runnerProgress}%`, 0, 4);
   ctx.restore();
 }
 
@@ -3277,13 +3310,14 @@ function update(dt) {
     advanceQuest("weather", 1);
   }
   updateWeatherVisual(dt);
+  updateReturningChallengeRunners(dt);
+  updateFriendlyChallenge(dt);
   updateVillagerAwareness(dt, input);
   updateCompanion(dt);
   updateMobilePadCompanionState();
   updateQuestHint(dt);
   updateWorldDiscoveries(dt);
   updateDiscoveryBursts();
-  updateFriendlyChallenge(dt);
   updateMicroEvents(dt);
   updateSecretWorld(dt, input, beforeMoveX);
   updateSecretPortal();
@@ -4171,15 +4205,76 @@ function getFriendlyChallengeReward(challenge) {
   return pool[Math.floor(hashNumber(challenge.targetX + challenge.startedAt * 13) * pool.length) % pool.length];
 }
 
+function createFriendlyChallengeRunner(villager, targetX, direction) {
+  const homeX = Number.isFinite(villager.homeX) ? villager.homeX : villager.x;
+  return {
+    x: homeX,
+    homeX,
+    targetX,
+    direction,
+    departAt: state.time + friendlyChallengeRunnerStartDelay,
+    paceSeed: hashNumber(homeX + targetX + state.time * 7),
+    vx: 0
+  };
+}
+
+function updateChallengeRunner(challenge, dt) {
+  const runner = challenge.runner || (challenge.runner = createFriendlyChallengeRunner(challenge.villager, challenge.targetX, Math.sign(challenge.targetX - challenge.startX) || 1));
+  if (state.time < runner.departAt) return false;
+  const remaining = Math.abs(runner.targetX - runner.x);
+  if (remaining < 1) {
+    runner.x = runner.targetX;
+    runner.vx = 0;
+    return true;
+  }
+  // The inhabitant follows its own pace; it never uses the player's position or inputs.
+  const breathing = 0.96 + Math.sin((state.time - runner.departAt) * 2.4 + runner.paceSeed * 8) * 0.035;
+  const speed = friendlyChallengeRunnerSpeed * getWeatherSpeedFactor() * breathing;
+  const direction = Math.sign(runner.targetX - runner.x) || runner.direction;
+  runner.vx += (direction * speed - runner.vx) * Math.min(1, dt * 5.2);
+  runner.x = clampToPlayableWorldX(runner.x + runner.vx * dt);
+  if (Math.abs(runner.targetX - runner.x) <= 18) {
+    runner.x = runner.targetX;
+    runner.vx = 0;
+    return true;
+  }
+  return false;
+}
+
+function updateReturningChallengeRunners(dt) {
+  if (isInSecretWorld()) return;
+  Object.entries(villagerChallengeReturns).forEach(([villageId, runner]) => {
+    if (state.time < runner.returnAt) return;
+    const distance = runner.homeX - runner.x;
+    if (Math.abs(distance) <= 8) {
+      delete villagerChallengeReturns[villageId];
+      return;
+    }
+    const direction = Math.sign(distance);
+    const speed = friendlyChallengeRunnerReturnSpeed * getWeatherSpeedFactor();
+    runner.x += direction * Math.min(Math.abs(distance), speed * dt);
+    runner.vx = direction * speed;
+  });
+}
+
+function sendChallengeRunnerHome(challenge, won) {
+  const runner = challenge.runner;
+  if (!runner) return;
+  runner.vx = 0;
+  runner.returnAt = state.time + (won ? 1.4 : 0.8);
+  villagerChallengeReturns[challenge.villageId] = runner;
+}
+
 function updateFriendlyChallenge(dt) {
   const challenge = state.friendlyChallenge;
   if (!challenge || isInSecretWorld()) return;
   challenge.remaining = Math.max(0, challenge.remaining - dt);
+  const runnerFinished = updateChallengeRunner(challenge, dt);
   if (Math.abs(state.player.x - challenge.targetX) <= 58) {
     finishFriendlyChallenge(true);
     return;
   }
-  if (challenge.remaining <= 0) finishFriendlyChallenge(false);
+  if (runnerFinished || challenge.remaining <= 0) finishFriendlyChallenge(false);
 }
 
 function finishFriendlyChallenge(won) {
@@ -4187,6 +4282,7 @@ function finishFriendlyChallenge(won) {
   if (!challenge) return;
   state.friendlyChallenge = null;
   state.friendlyChallengeCooldowns[challenge.villageId] = state.time + (won ? friendlyChallengeCooldownSeconds : 12);
+  sendChallengeRunnerHome(challenge, won);
   const villager = challenge.villager;
   if (won) {
     const reward = getFriendlyChallengeReward(challenge);
@@ -4659,31 +4755,40 @@ function updateVillagerChallengeButton(villager) {
   ui.challengeButton.disabled = !available;
 }
 
+function getFriendlyChallengeDirection(villager) {
+  const homeX = Number.isFinite(villager.homeX) ? villager.homeX : villager.x;
+  if (homeX - friendlyChallengeDistance < world.firstRouteEnd + 180) return 1;
+  return hashNumber(homeX + villager.villageId.length * 17) > 0.5 ? 1 : -1;
+}
+
 function startFriendlyChallenge() {
   const villager = pendingVillagerHelp;
   if (!canStartFriendlyChallenge(villager)) {
     showMessage(state.friendlyChallenge ? "Un defi est deja en cours." : "Ce defi sera disponible un peu plus tard.");
     return;
   }
-  const direction = state.player.face || 1;
-  const targetX = clampToPlayableWorldX(state.player.x + direction * friendlyChallengeDistance);
-  if (Math.abs(targetX - state.player.x) < friendlyChallengeDistance * 0.55) {
+  const startX = Number.isFinite(villager.homeX) ? villager.homeX : villager.x;
+  const direction = getFriendlyChallengeDirection(villager);
+  const targetX = clampToPlayableWorldX(startX + direction * friendlyChallengeDistance);
+  if (Math.abs(targetX - startX) < friendlyChallengeDistance * 0.8) {
     showMessage("Le chemin est trop court ici. Essaie depuis un autre village.");
     return;
   }
   state.friendlyChallenge = {
     villageId: villager.villageId,
     villager,
+    startX,
     targetX,
     remaining: friendlyChallengeDurationSeconds,
-    startedAt: state.time
+    startedAt: state.time,
+    runner: createFriendlyChallengeRunner(villager, targetX, direction)
   };
   closeDialog(ui.villagerDialog);
   pendingVillagerConversation = null;
   pendingVillagerHelp = null;
-  setPlayerAction("run", 0.8);
-  showMessage(`Defi amical : rejoins la borne en ${friendlyChallengeDurationSeconds} secondes.`);
-  showVillagerBubble(villager, "Je t'attends a la borne !", { cooldown: 20, force: true });
+  setPlayerAction("run", 0.5);
+  showMessage("Course amicale : suis les deux reperes et arrive avant l'habitant.");
+  showVillagerBubble(villager, "Je pars a mon rythme. Rendez-vous a l'arrivee !", { cooldown: 20, force: true });
   playSoftPing();
   saveGame();
 }
@@ -5388,6 +5493,7 @@ function resetGame() {
   joystick.mode = "walk";
   Object.keys(villagerBubbles).forEach((key) => delete villagerBubbles[key]);
   Object.keys(villagerProximity).forEach((key) => delete villagerProximity[key]);
+  Object.keys(villagerChallengeReturns).forEach((key) => delete villagerChallengeReturns[key]);
   fallingTreeItems.length = 0;
   shootingStars.length = 0;
   pendingVillagerConversation = null;
