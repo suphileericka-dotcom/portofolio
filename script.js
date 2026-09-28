@@ -1399,18 +1399,8 @@ const landmarkTypes = [
 ];
 
 function getProceduralLandmarks() {
-  if (isInSecretWorld() || !isExpandedWorld()) return [];
-  const relativeCamera = state.camera.x - world.firstRouteEnd;
-  const start = Math.max(0, Math.floor((relativeCamera - 800) / world.chapterSize));
-  const end = Math.floor((relativeCamera + window.innerWidth + 1400) / world.chapterSize);
-  const landmarks = [];
-  for (let chapterIndex = start; chapterIndex <= end; chapterIndex += 1) {
-    if (chapterIndex < 0 || chapterIndex % 3 !== 1) continue;
-    const template = landmarkTypes[Math.floor(chapterIndex / 3) % landmarkTypes.length];
-    const x = world.firstRouteEnd + chapterIndex * world.chapterSize + 1720;
-    landmarks.push({ ...template, id: makeId("landmark", chapterIndex + 4), x, chapterIndex });
-  }
-  return landmarks;
+  // These locations remain disabled until each one has a physical, coherent route.
+  return [];
 }
 
 function getProceduralVillages() {
@@ -1827,19 +1817,12 @@ function drawWorldObjects() {
     drawVillageMotif(village, theme, resident);
     drawVillager(resident.x, resident);
     drawVillagerBubble(resident);
-    if (interactionTarget?.kind === "villager" && Math.abs(interactionTarget.entry.x - resident.x) < 2) drawPrompt(resident.x, y - 102, "E Parler");
   });
 
   const companionGiver = getCompanionGiver();
   if (companionGiver) {
     drawVillager(companionGiver.x, companionGiver);
-    if (interactionTarget?.kind === "companion") drawPrompt(companionGiver.x, world.ground - 120, "E Parler");
   }
-
-  getProceduralLandmarks().forEach((landmark) => {
-    drawLandmark(landmark);
-    if (interactionTarget?.kind === "landmark" && interactionTarget.entry.id === landmark.id) drawPrompt(landmark.x, world.ground - 142, `E ${landmark.action}`);
-  });
 
   getProceduralRests().forEach((rest) => {
     const y = world.ground - 18;
@@ -1852,7 +1835,6 @@ function drawWorldObjects() {
     ctx.fillStyle = "#8c6135";
     roundedRect(rest.x - 50, y - 38, 100, 12, 4);
     ctx.fill();
-    if (interactionTarget?.kind === "rest" && Math.abs(interactionTarget.entry.x - rest.x) < 2) drawPrompt(rest.x, y - 64, "E se reposer");
   });
 
   getProceduralLanterns().forEach((lantern) => {
@@ -1879,7 +1861,6 @@ function drawWorldObjects() {
     ctx.fillStyle = lit ? "#ffe07a" : "#7a654b";
     roundedRect(lantern.x - 9, y - 14, 18, 22, 5);
     ctx.fill();
-    if (!lit && interactionTarget?.kind === "lantern" && interactionTarget.entry.id === lantern.id) drawPrompt(lantern.x, y - 58, "E allumer");
   });
 
   visibleDiscoveries.forEach((item, index) => {
@@ -1898,7 +1879,6 @@ function drawWorldObjects() {
       ctx.stroke();
       ctx.restore();
     }
-    if (interactionTarget?.kind === "item" && interactionTarget.entry.id === item.id) drawPrompt(item.x, y - 42, "E Ramasser");
   });
 
   fallingTreeItems.forEach((drop, index) => {
@@ -1910,12 +1890,10 @@ function drawWorldObjects() {
   getProceduralLetters().forEach((letter, index) => {
     const y = world.ground - 26 + Math.sin(state.time * 1.8 + index) * 4;
     drawLetterIcon(letter.x, y);
-    if (interactionTarget?.kind === "letter" && interactionTarget.entry.id === letter.id) drawPrompt(letter.x, y - 44, "E lire");
   });
 
   getProceduralSecretLocations().forEach((secret) => {
     drawSecretLocation(secret);
-    if (interactionTarget?.kind === "secret" && interactionTarget.entry.id === secret.id) drawPrompt(secret.x, world.ground - 138, "E explorer");
   });
 
   drawFriendlyChallengeGoal();
@@ -3014,7 +2992,7 @@ function drawPlayer() {
     skin: appearance.skin,
     hair: appearance.hair,
     accessory: appearance.accessory,
-    label: state.playerProfile.nickname,
+    label: "",
     seated: p.rest > 0.2,
     action: p.actionUntil > state.time && p.action !== "hop" ? p.action : ""
   });
@@ -3163,8 +3141,10 @@ function drawOverlay() {
       ctx.restore();
   }
   if (state.itemEffects?.compassUntil > state.time) drawCompassHint();
+  if (state.itemEffects?.scoutUntil > state.time) drawScoutHint();
   drawSecretWorldHud();
   drawFriendlyChallengeHud();
+  drawContextualInteraction();
   if (state.player.rest > 0) {
     ctx.save();
     ctx.globalAlpha = state.player.rest * 0.24;
@@ -3172,6 +3152,59 @@ function drawOverlay() {
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
   }
+}
+
+function drawScoutHint() {
+  const target = getVisibleWorldDiscoveries().find((item) => item.id === state.itemEffects.scoutTargetId && !item.collected)
+    || Object.values(state.worldDiscoveries).find((item) => item.id === state.itemEffects.scoutTargetId && !item.collected);
+  if (!target) return;
+  const screenX = target.x - state.camera.x;
+  const visible = screenX > 28 && screenX < window.innerWidth - 28;
+  const x = visible ? screenX : (screenX < 0 ? 32 : window.innerWidth - 32);
+  const y = window.innerHeight * 0.2;
+  ctx.save();
+  ctx.fillStyle = "rgba(20, 34, 33, 0.84)";
+  roundedRect(x - 42, y - 18, 84, 34, 8);
+  ctx.fill();
+  ctx.fillStyle = "#f0bd6c";
+  ctx.font = "900 13px Nunito";
+  ctx.textAlign = "center";
+  ctx.fillText(visible ? "TROUVAILLE" : screenX < 0 ? "← OBJET" : "OBJET →", x, y + 4);
+  ctx.restore();
+}
+
+function getInteractionLabel(target) {
+  if (!target) return "";
+  if (target.kind === "item") return `${target.entry.label || "Objet"} • Ramasser`;
+  if (target.kind === "letter") return "Enveloppe • Lire";
+  if (target.kind === "villager" || target.kind === "companion") return `${target.entry.role} • Parler`;
+  if (target.kind === "lantern") return "Lanterne • Allumer";
+  if (target.kind === "rest") return `${target.entry.label || "Halte"} • Se reposer`;
+  if (target.kind === "secret") return `${target.entry.name || "Portail"} • Entrer`;
+  return "";
+}
+
+function drawContextualInteraction() {
+  if (!running || isModalOpen()) return;
+  const label = getInteractionLabel(getInteractionTarget());
+  if (!label) return;
+  const mobile = window.matchMedia("(pointer: coarse)").matches;
+  const text = mobile ? label : `${label}  •  E`;
+  ctx.save();
+  ctx.font = "800 12px Nunito";
+  const width = Math.min(window.innerWidth - 32, ctx.measureText(text).width + 34);
+  const x = window.innerWidth * 0.5;
+  const y = mobile ? window.innerHeight - 150 : window.innerHeight - 36;
+  ctx.fillStyle = "rgba(20, 34, 33, 0.86)";
+  roundedRect(x - width / 2, y - 18, width, 34, 8);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(240, 189, 108, 0.45)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = "#f7f3df";
+  ctx.textAlign = "center";
+  ctx.fillText(text, x, y + 4);
+  ctx.restore();
 }
 
 function drawFriendlyChallengeHud() {
@@ -4326,7 +4359,6 @@ const questTemplates = [
   { title: "Lueurs du sous-bois", description: "Trouve 3 champignons lumineux pres des passages humides.", objective: "Trouver 3 champignons lumineux.", type: "collect:mushroom", itemId: "mushroom", target: 3, hint: "Indice : les champignons lumineux poussent dans les zones sombres ou humides. Ils ne se trouvent pas tous au meme endroit." },
   { title: "Pierres anciennes", description: "Ramasse 8 pierres anciennes ou polies sur le chemin.", objective: "Ramasser 8 pierres anciennes.", type: "collect:stone", itemId: "stone", target: 8, hint: "Indice : les pierres anciennes se trouvent pres des rivieres, des montagnes et des vieux sentiers. Continue d'explorer pour les retrouver." },
   { title: "Fleurs sauvages", description: "Decouvre 4 fleurs sauvages pendant l'exploration.", objective: "Decouvrir 4 fleurs sauvages.", type: "collectFlower", itemId: "flower", target: 4, hint: "Indice : les fleurs sauvages aiment les clairieres et le printemps. Elles apparaissent naturellement sur la route." },
-  { title: "Haltes du Bosquet", description: "Visite 3 lieux remarquables et ajoute-les a ta carte.", objective: "Explorer 3 haltes du Bosquet.", type: "landmark", target: 3, hint: "Indice : les cabanes, clairieres, ponts et pierres gravees portent un nom au-dessus d'eux. Approche-toi et utilise E." },
   { title: "Voix du village", description: "Rencontre 5 habitants et ecoute leurs histoires.", objective: "Rencontrer 5 habitants.", type: "talkVillager", target: 5, hint: "Indice : avance jusqu'aux villages et parle aux habitants quand l'invite apparait." },
   { title: "Chemins nouveaux", description: "Explore 2 nouveaux villages sur la route.", objective: "Explorer 2 nouveaux villages.", type: "village", target: 2, hint: "Indice : continue vers la droite. Chaque nouveau village visite fait avancer la mission." }
 ];
@@ -5513,8 +5545,7 @@ function renderCompanionJournal() {
 
 function renderMap() {
   const places = ["Foret", "Riviere", "Village", "Montagne", "Clairiere", "Lieu secret"];
-  const landmarkPlaces = landmarkTypes.map((landmark) => landmark.name);
-  return `<div class="travel-map">${places.concat(landmarkPlaces).map((place) => {
+  return `<div class="travel-map">${places.map((place) => {
     const discovered = state.discoveredPlaces.some((known) => known === place || known.includes(place));
     return `<div class="map-zone ${discovered ? "is-known" : "is-fog"}"><span>${getPlaceIcon(place)}</span><strong>${place}</strong></div>`;
   }).join("")}</div>`;
