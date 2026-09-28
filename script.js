@@ -78,6 +78,7 @@ const musicLoopCrossfadeSeconds = 0.12;
 const musicScheduleLookaheadSeconds = 4;
 const world = { ground: 0, chapterSize: 2400, firstRouteEnd: 7200 };
 const villageSpacing = 15000;
+const trailMarkerSpacing = 3000;
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
 const joystick = { active: false, id: null, x: 0, y: 0, mode: "walk", jumpArmed: true, lastZone: "walk" };
@@ -1435,6 +1436,19 @@ function getProceduralLandmarks() {
   return [];
 }
 
+function getProceduralTrailMarkers() {
+  if (isInSecretWorld() || !isExpandedWorld()) return [];
+  const firstMarkerX = world.firstRouteEnd + 3520;
+  const start = Math.max(0, Math.floor((state.camera.x - firstMarkerX - 500) / trailMarkerSpacing));
+  const end = Math.max(start, Math.floor((state.camera.x + window.innerWidth + 700 - firstMarkerX) / trailMarkerSpacing));
+  return Array.from({ length: end - start + 1 }, (_, offset) => {
+    const index = start + offset;
+    const x = firstMarkerX + index * trailMarkerSpacing;
+    const nextVillageIndex = Math.max(0, Math.ceil((x - (world.firstRouteEnd + 520)) / villageSpacing));
+    return { id: `trail-marker-${index}`, x, nextVillageIndex };
+  });
+}
+
 function getProceduralVillages() {
   if (isInSecretWorld()) return [];
   if (!isExpandedWorld()) return [];
@@ -1849,6 +1863,8 @@ function drawWorldObjects() {
     drawVillagerBubble(resident);
   });
 
+  getProceduralTrailMarkers().forEach(drawTrailMarker);
+
   const companionGiver = getCompanionGiver();
   if (companionGiver) {
     drawVillager(companionGiver.x, companionGiver);
@@ -1994,6 +2010,30 @@ function drawLandmark(landmark) {
   ctx.font = "800 10px Nunito";
   ctx.textAlign = "center";
   ctx.fillText(landmark.name, x, y - 154);
+  ctx.restore();
+}
+
+function drawTrailMarker(marker) {
+  const x = marker.x;
+  const y = world.ground;
+  const visited = state.visitedLandmarks.includes(marker.id);
+  ctx.save();
+  ctx.strokeStyle = "#60442e";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(x, y + 6);
+  ctx.lineTo(x, y - 52);
+  ctx.stroke();
+  ctx.fillStyle = visited ? "#c79d60" : "#8f6d45";
+  roundedRect(x - 24, y - 58, 48, 22, 4);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(45, 35, 28, 0.5)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#f7f3df";
+  ctx.font = "900 12px Nunito";
+  ctx.textAlign = "center";
+  ctx.fillText("->", x + 1, y - 43);
   ctx.restore();
 }
 
@@ -3211,6 +3251,7 @@ function getInteractionLabel(target) {
   if (target.kind === "lantern") return "Lanterne • Allumer";
   if (target.kind === "rest") return `${target.entry.label || "Halte"} • Se reposer`;
   if (target.kind === "secret") return `${target.entry.name || "Portail"} • Entrer`;
+  if (target.kind === "trail-marker") return "Repere de chemin - Consulter";
   return "";
 }
 
@@ -3509,6 +3550,9 @@ function getInteractionTarget(visibleDiscoveries = getVisibleWorldDiscoveries(),
   const landmark = getProceduralLandmarks().filter((entry) => inRange(entry, 112)).sort(byAim)[0];
   if (landmark) return { kind: "landmark", entry: landmark };
 
+  const trailMarker = getProceduralTrailMarkers().filter((entry) => inRange(entry, 92)).sort(byAim)[0];
+  if (trailMarker) return { kind: "trail-marker", entry: trailMarker };
+
   const lantern = getProceduralLanterns()
     .filter((entry) => !state.lanterns.includes(entry.id) && inRange(entry, interactionRanges.lantern))
     .sort(byAim)[0];
@@ -3619,6 +3663,11 @@ function interact() {
   }
   if (target?.kind === "landmark") {
     visitLandmark(target.entry);
+    saveGame();
+    return;
+  }
+  if (target?.kind === "trail-marker") {
+    consultTrailMarker(target.entry);
     saveGame();
     return;
   }
@@ -4145,6 +4194,16 @@ function visitLandmark(landmark) {
   updateAchievements();
 }
 
+function consultTrailMarker(marker) {
+  const villageX = world.firstRouteEnd + 520 + marker.nextVillageIndex * villageSpacing;
+  const distance = Math.max(0, Math.round((villageX - marker.x) / 1000));
+  if (!state.visitedLandmarks.includes(marker.id)) state.visitedLandmarks.push(marker.id);
+  showMessage(distance > 0
+    ? `Le repere indique : Village ${marker.nextVillageIndex + 1} a environ ${distance} km.`
+    : `Le repere indique : Village ${marker.nextVillageIndex + 1} tout pres.`);
+  rememberJournalEvent(`J'ai consulte un repere sur la route du village ${marker.nextVillageIndex + 1}.`);
+}
+
 function rememberJournalEvent(text) {
   if (!text) return;
   const day = state.chapter || 1;
@@ -4390,7 +4449,7 @@ const questTemplates = [
   { title: "Pierres anciennes", description: "Ramasse 8 pierres anciennes ou polies sur le chemin.", objective: "Ramasser 8 pierres anciennes.", type: "collect:stone", itemId: "stone", target: 8, hint: "Indice : les pierres anciennes se trouvent pres des rivieres, des montagnes et des vieux sentiers. Continue d'explorer pour les retrouver." },
   { title: "Fleurs sauvages", description: "Decouvre 4 fleurs sauvages pendant l'exploration.", objective: "Decouvrir 4 fleurs sauvages.", type: "collectFlower", itemId: "flower", target: 4, hint: "Indice : les fleurs sauvages aiment les clairieres et le printemps. Elles apparaissent naturellement sur la route." },
   { title: "Voix du village", description: "Rencontre 5 habitants et ecoute leurs histoires.", objective: "Rencontrer 5 habitants.", type: "talkVillager", target: 5, hint: "Indice : avance jusqu'aux villages et parle aux habitants quand l'invite apparait." },
-  { title: "Chemins nouveaux", description: "Explore 2 nouveaux villages sur la route.", objective: "Explorer 2 nouveaux villages.", type: "village", target: 2, hint: "Indice : continue vers la droite. Chaque nouveau village visite fait avancer la mission." }
+  { title: "Chemins nouveaux", description: "Atteins le prochain village sur la route.", objective: "Explorer un nouveau village.", type: "village", target: 1, hint: "Indice : les reperes de bois indiquent la distance jusqu'au prochain village." }
 ];
 
 function makeQuest(seed = Math.floor(state.player.x + state.time * 1000)) {
