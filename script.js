@@ -2252,20 +2252,7 @@ function drawFriendlyChallengeObstacle(obstacle, direction) {
     ctx.beginPath();
     ctx.ellipse(obstacle.x - 7, y - 19, 7, 3, -0.2, 0, Math.PI * 2);
     ctx.fill();
-    drawChallengeJumpLabel(obstacle.x, y - 62);
   }
-  ctx.restore();
-}
-
-function drawChallengeJumpLabel(x, y) {
-  ctx.save();
-  ctx.fillStyle = "rgba(20, 34, 33, 0.76)";
-  roundedRect(x - 28, y - 15, 56, 23, 7);
-  ctx.fill();
-  ctx.fillStyle = "#f7f3df";
-  ctx.font = "800 10px Nunito";
-  ctx.textAlign = "center";
-  ctx.fillText("SAUT", x, y);
   ctx.restore();
 }
 
@@ -2849,24 +2836,13 @@ function drawVillager(x, villager) {
       body: villager.specialCompanionGiver ? "#6f7f4f" : bodyColors[Math.floor(seed * bodyColors.length) % bodyColors.length],
       skin: "#e5b878",
       hair: villager.specialCompanionGiver ? "#6d7f3f" : "#4a3632",
-      label: villager.role
+      label: ""
     });
     return;
   }
   const bob = Math.sin(state.time * 2 + x) * 3;
   drawVillagerCharacter(x, y + bob, villager);
 
-  if (Math.abs(state.player.x - x) < 210) {
-    ctx.save();
-    ctx.font = "800 12px Nunito";
-    ctx.fillStyle = "rgba(20, 34, 33, 0.72)";
-    roundedRect(x - 74, y - 126, 148, 26, 7);
-    ctx.fill();
-    ctx.fillStyle = "#f7f3df";
-    ctx.textAlign = "center";
-    ctx.fillText(villager.role, x, y - 108);
-    ctx.restore();
-  }
 }
 
 function drawVillagerCharacter(x, y, villager) {
