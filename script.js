@@ -29,7 +29,7 @@ const ui = {
   infoDialog: document.getElementById("infoDialog"),
   optionsDialog: document.getElementById("optionsDialog"),
   journalList: document.getElementById("journalList"),
-  resetButton: document.getElementById("resetButton"),
+  missionReminderButton: document.getElementById("missionReminderButton"),
   message: document.getElementById("message"),
   cinematic: document.getElementById("cinematic"),
   cinematicText: document.getElementById("cinematicText"),
@@ -4460,6 +4460,7 @@ function showMissionTracker(kind, quest) {
   const progress = `${quest.progress || 0} / ${quest.target || 1}`;
   let title = "Mission";
   let detail = quest.objective || quest.title || "Objectif de mission";
+  let hint = "";
 
   if (kind === "new") {
     title = "Nouvelle mission";
@@ -4469,13 +4470,40 @@ function showMissionTracker(kind, quest) {
   } else if (kind === "complete") {
     title = "Objectif atteint";
     detail = `${quest.title || quest.objective} - ${progress}`;
+  } else if (kind === "reminder") {
+    title = quest.title || "Mission en cours";
+    detail = `${quest.objective} - ${progress}`;
+    hint = getQuestSearchHint(quest) || getQuestHint(quest);
   }
 
-  ui.missionTracker.innerHTML = `<strong>${title}</strong><span>${detail}</span>${kind === "new" ? `<span>${progress}</span>` : ""}`;
+  ui.missionTracker.innerHTML = `<strong>${title}</strong><span>${detail}</span>${kind === "new" ? `<span>${progress}</span>` : ""}${hint ? `<span>${hint}</span>` : ""}`;
   missionTrackerNotice = { expiresAt: state.time + missionTrackerDisplaySeconds };
   ui.missionTracker.classList.remove("is-visible");
   void ui.missionTracker.offsetWidth;
   ui.missionTracker.classList.add("is-visible");
+}
+
+function updateMissionReminderButton() {
+  if (state.pendingQuestReward) {
+    ui.missionReminderButton.textContent = "Voir la recompense de mission";
+  } else if (state.activeQuest) {
+    ui.missionReminderButton.textContent = "Rappeler la mission";
+  } else {
+    ui.missionReminderButton.textContent = "Que faire maintenant ?";
+  }
+}
+
+function showMissionReminder() {
+  closeDialog(ui.optionsDialog);
+  if (state.pendingQuestReward) {
+    openQuestCompletePopup(state.pendingQuestReward);
+    return;
+  }
+  if (state.activeQuest) {
+    showMissionTracker("reminder", state.activeQuest);
+    return;
+  }
+  showMessage("Aucune mission active. Une enveloppe peut apparaitre sur le chemin.");
 }
 
 function normalizeQuest(quest) {
@@ -6607,7 +6635,10 @@ ui.villagerDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
   showMessage("Choisis une reponse pour continuer la conversation.");
 });
-ui.optionsButton.addEventListener("click", () => openDialog(ui.optionsDialog));
+ui.optionsButton.addEventListener("click", () => {
+  updateMissionReminderButton();
+  openDialog(ui.optionsDialog);
+});
 ui.fullscreenButton.addEventListener("click", toggleFullscreen);
 ui.muteButton.addEventListener("click", () => {
   state.options.muted = !state.options.muted;
@@ -6623,12 +6654,7 @@ ui.soundEnabledToggle.addEventListener("change", () => {
   resumeAudioAfterMobileInterruption();
   if (audio) updateAudio();
 });
-ui.resetButton.addEventListener("click", () => {
-  resetGame();
-  saveGame();
-  closeDialog(ui.optionsDialog);
-  showMessage("Nouvelle promenade prete.");
-});
+ui.missionReminderButton.addEventListener("click", showMissionReminder);
 ui.musicVolume.addEventListener("input", () => {
   state.options.music = Number(ui.musicVolume.value);
   saveOptions();
