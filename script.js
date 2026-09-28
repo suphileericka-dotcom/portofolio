@@ -2007,6 +2007,17 @@ function drawFriendlyChallengeGoal() {
   const y = world.ground - 18;
   const startX = Number.isFinite(challenge.startX) ? challenge.startX : challenge.villager.x;
   const direction = Math.sign(x - startX) || 1;
+  ctx.save();
+  ctx.strokeStyle = "rgba(240, 189, 108, 0.72)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([4, 13]);
+  ctx.lineDashOffset = -state.time * 24;
+  ctx.beginPath();
+  ctx.moveTo(startX, y + 6);
+  ctx.lineTo(x, y + 6);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
   (challenge.route || []).forEach((obstacle) => drawFriendlyChallengeObstacle(obstacle, direction));
   [0.34, 0.68].forEach((progress) => {
     const markerX = startX + (x - startX) * progress;
@@ -2069,6 +2080,7 @@ function drawFriendlyChallengeObstacle(obstacle, direction) {
     ctx.moveTo(obstacle.x - direction * 16, y - 49);
     ctx.lineTo(obstacle.x + direction * 18, y - 51);
     ctx.stroke();
+    drawChallengeJumpLabel(obstacle.x, y - 82);
   } else if (obstacle.type === "log") {
     ctx.strokeStyle = "#5b371f";
     ctx.lineWidth = 19;
@@ -2081,6 +2093,7 @@ function drawFriendlyChallengeObstacle(obstacle, direction) {
     ctx.beginPath();
     ctx.arc(obstacle.x + 48, y - 24, 9, 0, Math.PI * 2);
     ctx.fill();
+    drawChallengeJumpLabel(obstacle.x, y - 70);
   } else if (obstacle.type === "tunnel") {
     ctx.fillStyle = "#253e29";
     roundedRect(obstacle.x - obstacle.radius, y - 116, obstacle.radius * 2, 118, 44);
@@ -2095,6 +2108,18 @@ function drawFriendlyChallengeObstacle(obstacle, direction) {
     ctx.textAlign = "center";
     ctx.fillText("Passage sous les herbes", obstacle.x, y - 128);
   }
+  ctx.restore();
+}
+
+function drawChallengeJumpLabel(x, y) {
+  ctx.save();
+  ctx.fillStyle = "rgba(20, 34, 33, 0.76)";
+  roundedRect(x - 28, y - 15, 56, 23, 7);
+  ctx.fill();
+  ctx.fillStyle = "#f7f3df";
+  ctx.font = "800 10px Nunito";
+  ctx.textAlign = "center";
+  ctx.fillText("SAUT", x, y);
   ctx.restore();
 }
 
@@ -5556,7 +5581,7 @@ async function startGame(reset = false) {
   if (state.pendingQuestReward) {
     openQuestCompletePopup(state.pendingQuestReward);
   } else if (firstStart) {
-    showMessage("Fleches, ZQSD ou joystick pour marcher. Espace ou E pour interagir.");
+    showMessage("Fleches, ZQSD ou joystick pour marcher. Espace pour sauter, E pour interagir.");
   }
   saveGame();
 }
@@ -6699,10 +6724,11 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   keys.add(event.key);
-  if (event.key === "e" || event.key === "E" || event.key === " ") {
+  if (event.key === "e" || event.key === "E") {
     event.preventDefault();
     if (running) interact();
-  } else if (event.key === "ArrowUp" || event.key === "w" || event.key === "W" || event.key === "z" || event.key === "Z") {
+  } else if (event.key === " " || event.key === "ArrowUp" || event.key === "w" || event.key === "W" || event.key === "z" || event.key === "Z") {
+    event.preventDefault();
     triggerPlayerHop();
   }
 });
