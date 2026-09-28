@@ -125,7 +125,7 @@ const secretPortalIntervals = [15 * 60, 7 * 60, 20 * 60];
 const secretPortalScheduleVersion = 1;
 const friendlyChallengeDurationSeconds = 52;
 const friendlyChallengeDistance = 6000;
-const friendlyChallengeDistanceLabel = "2 km";
+const friendlyChallengeDistanceLabel = "6 km";
 const friendlyChallengeCooldownSeconds = 120;
 const friendlyChallengeRunnerStartDelay = 0.75;
 const friendlyChallengeRunnerSpeed = playerWalkSpeed * 1.18;
@@ -2010,13 +2010,19 @@ function drawFriendlyChallengeGoal() {
   const startX = Number.isFinite(challenge.startX) ? challenge.startX : challenge.villager.x;
   const direction = Math.sign(x - startX) || 1;
   ctx.save();
-  ctx.strokeStyle = "rgba(240, 189, 108, 0.72)";
-  ctx.lineWidth = 3;
-  ctx.setLineDash([4, 13]);
+  ctx.strokeStyle = "rgba(20, 34, 33, 0.32)";
+  ctx.lineWidth = 9;
+  ctx.setLineDash([8, 14]);
   ctx.lineDashOffset = -state.time * 24;
   ctx.beginPath();
-  ctx.moveTo(startX, world.ground + 2);
-  ctx.lineTo(x, world.ground + 2);
+  ctx.moveTo(startX, world.ground - 5);
+  ctx.lineTo(x, world.ground - 5);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255, 229, 137, 0.96)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(startX, world.ground - 5);
+  ctx.lineTo(x, world.ground - 5);
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.restore();
@@ -4400,10 +4406,14 @@ function updateFriendlyChallenge(dt) {
     finishFriendlyChallenge(true);
     return;
   }
-  if (runnerFinished || challenge.remaining <= 0) finishFriendlyChallenge(false);
+  if (runnerFinished) {
+    finishFriendlyChallenge(false, "runner");
+  } else if (challenge.remaining <= 0) {
+    finishFriendlyChallenge(false, "timeout");
+  }
 }
 
-function finishFriendlyChallenge(won) {
+function finishFriendlyChallenge(won, reason = "") {
   const challenge = state.friendlyChallenge;
   if (!challenge) return;
   state.friendlyChallenge = null;
@@ -4425,8 +4435,9 @@ function finishFriendlyChallenge(won) {
     showVillagerBubble(villager, "Bien joue. Tu connais vraiment le chemin.", { cooldown: 24, force: true });
     playSoftPing();
   } else {
-    showMessage("Le defi s'arrete ici. Tu pourras reessayer plus tard.");
-    showVillagerBubble(villager, "Ce n'est pas une course contre le temps. On recommencera.", { cooldown: 18, force: true });
+    const runnerWon = reason === "runner";
+    showMessage(runnerWon ? `${villager.role} atteint l'arrivee avant toi.` : "Le temps de la course est termine.");
+    showVillagerBubble(villager, runnerWon ? "J'y suis arrive avant toi. On recommence quand tu veux." : "Ce n'est pas une course contre le temps. On recommencera.", { cooldown: 18, force: true });
   }
   saveGame();
 }
@@ -4871,8 +4882,13 @@ function setVillagerDialogMode(mode = "help") {
   }
 }
 
+function isFriendlyChallengeHost(villager) {
+  const mood = getVillagerPersonality(villager).mood;
+  return mood === "energique" || mood === "drole";
+}
+
 function canStartFriendlyChallenge(villager) {
-  if (!villager || isInSecretWorld() || state.pendingQuestReward || state.friendlyChallenge) return false;
+  if (!villager || !isFriendlyChallengeHost(villager) || isInSecretWorld() || state.pendingQuestReward || state.friendlyChallenge) return false;
   return state.time >= (state.friendlyChallengeCooldowns[villager.villageId] || 0);
 }
 
