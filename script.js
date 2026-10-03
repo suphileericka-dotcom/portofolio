@@ -81,6 +81,8 @@ const villageSpacing = 15000;
 const trailMarkerSpacing = 3000;
 const keys = new Set();
 const pointer = { active: false, x: 0, y: 0, worldX: 0 };
+let pointerGestureId = 0;
+let lastPointerGestureId = 0;
 const joystick = { active: false, id: null, x: 0, y: 0, mode: "walk", jumpArmed: true, lastZone: "walk" };
 const weatherVisual = { rain: 0, targetRain: 0, rainMood: 0 };
 const letterRespawnDelaySeconds = 35;
@@ -99,6 +101,7 @@ const interactionRanges = { item: 78, letter: 78, secret: 105, villager: 98, com
 
 function openDialog(dialog) {
   if (!dialog) return;
+  if (lastPointerGestureId > 0) dialog.dataset.interactionGesture = String(lastPointerGestureId);
   if (typeof dialog.showModal === "function") {
     if (!dialog.open) dialog.showModal();
     return;
@@ -116,6 +119,11 @@ function closeDialog(dialog) {
   dialog.removeAttribute("open");
   dialog.classList.remove("is-fallback-open");
   dialog.dispatchEvent(new Event("close"));
+}
+
+function guardDynamicControls(element) {
+  if (!element || lastPointerGestureId <= 0) return;
+  element.dataset.interactionGesture = String(lastPointerGestureId);
 }
 
 const secretWorldOffset = 100000;
@@ -4003,6 +4011,7 @@ function selectCompanionSpecies(species) {
     button.classList.toggle("is-selected", button.dataset.companionSpecies === species);
   });
   ui.companionConfirmActions.hidden = false;
+  guardDynamicControls(ui.companionConfirmActions);
 }
 
 function confirmCompanionChange() {
@@ -6966,6 +6975,18 @@ window.addEventListener("keydown", (event) => {
   }
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key));
+
+document.addEventListener("pointerdown", () => {
+  pointerGestureId += 1;
+  lastPointerGestureId = pointerGestureId;
+}, true);
+document.addEventListener("click", (event) => {
+  if (event.detail === 0) return;
+  const guarded = event.target.closest?.("[data-interaction-gesture]");
+  if (!guarded || guarded.dataset.interactionGesture !== String(lastPointerGestureId)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, true);
 
 canvas.addEventListener("pointerdown", (event) => {
   if (!running) return;
