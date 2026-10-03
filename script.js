@@ -311,6 +311,7 @@ const villagerChallengeReturns = {};
 const fallingTreeItems = [];
 const shootingStars = [];
 const discoveryBursts = [];
+const collectingDiscoveryIds = new Set();
 
 const state = {
   player: { x: 380, y: 0, vx: 0, vy: 0, face: 1, rest: 0, action: "", actionUntil: 0, runBlend: 0 },
@@ -345,6 +346,7 @@ const state = {
   rewards: [],
   worldDiscoveries: {},
   discoveryRespawns: {},
+  discoveryVacancies: {},
   achievements: [],
   nextSecretAt: secretPortalIntervals[0],
   secretCycleIndex: 1,
@@ -1129,6 +1131,10 @@ function getInteractionObstacleXs(sourceItem = null) {
   Object.values(state.worldDiscoveries).forEach((item) => {
     if (item === sourceItem || item.collected) return;
     obstacles.push({ x: item.x, distance: minDiscoverySpacing });
+  });
+  Object.entries(state.discoveryVacancies || {}).forEach(([id, vacancy]) => {
+    if (id === sourceItem?.id || !vacancy || vacancy.until <= state.time) return;
+    obstacles.push({ x: vacancy.x, distance: minDiscoverySpacing });
   });
   return obstacles;
 }
@@ -4502,6 +4508,9 @@ function updateQuestHint() {
 }
 
 function updateWorldDiscoveries(dt = 1 / 60) {
+  Object.entries(state.discoveryVacancies || {}).forEach(([id, vacancy]) => {
+    if (!vacancy || vacancy.until <= state.time) delete state.discoveryVacancies[id];
+  });
   Object.values(state.worldDiscoveries).forEach((item) => {
     if (item.rolling && !item.collected) {
       updateRollingDiscovery(item, dt);
@@ -4779,7 +4788,7 @@ function maybeStartTreeDrop(micro) {
   micro.nextTreeDropAt = state.time + 36 + hashNumber(state.time + state.player.x) * 58;
   if (Math.random() > 0.34) return;
   const side = hashNumber(state.time) > 0.5 ? 1 : -1;
-  const x = clampToPlayableWorldX(state.player.x + side * (95 + hashNumber(state.player.x) * 120));
+  const x = placeXClearOfInteractions(state.player.x + side * (95 + hashNumber(state.player.x) * 120), { salt: state.time + 31 });
   const pool = getMicroEventItemPool("tree");
   const base = pool[Math.floor(hashNumber(x + state.time) * pool.length) % pool.length];
   fallingTreeItems.push({
@@ -4798,7 +4807,7 @@ function maybeStartRollingItem(micro) {
   const runSpeed = playerWalkSpeed * playerRunMultiplier * getWeatherSpeedFactor();
   const pool = getMicroEventItemPool("rolling");
   const base = pool[Math.floor(hashNumber(state.player.x + state.time * 3) * pool.length) % pool.length];
-  const startX = clampToPlayableWorldX(state.player.x + direction * 105);
+  const startX = placeXClearOfInteractions(state.player.x + direction * 105, { salt: state.time + 47 });
   const item = createMicroDiscovery(base, startX, {
     rolling: true,
     vx: direction * runSpeed * (0.75 + hashNumber(state.time) * 0.1),
@@ -5051,6 +5060,9 @@ function getQuestCollectTypes(item) {
 }
 
 function collectDiscovery(item, quiet = false) {
+  if (!item || item.collected || hasCollectedDiscovery(item) || collectingDiscoveryIds.has(item.id)) return false;
+  collectingDiscoveryIds.add(item.id);
+  try {
   const baseId = baseDiscoveryId(item.id);
   const firstTime = !hasCollectedBaseItem(baseId);
   if (!quiet) setPlayerAction((item.rarity === "Legendaire" || item.rarity === "Rare") ? "rare" : "pickup", 1.2);
@@ -5060,7 +5072,10 @@ function collectDiscovery(item, quiet = false) {
   }
   if (!quiet) {
     const respawnAt = state.time + getDiscoveryRespawnDelay();
-    if (!item.missionItem) state.discoveryRespawns[item.id] = respawnAt;
+    if (!item.missionItem) {
+      state.discoveryRespawns[item.id] = respawnAt;
+      state.discoveryVacancies[item.id] = { x: item.x, until: respawnAt };
+    }
     if (state.worldDiscoveries[item.id]) {
       state.worldDiscoveries[item.id].collected = true;
       state.worldDiscoveries[item.id].respawnAt = item.missionItem ? Number.POSITIVE_INFINITY : respawnAt;
@@ -5094,7 +5109,10 @@ function collectDiscovery(item, quiet = false) {
     return true;
   }
   updateAchievements();
-  return false;
+  return true;
+  } finally {
+    collectingDiscoveryIds.delete(item.id);
+  }
 }
 
 function openDiscoveryPopup(item) {
@@ -5866,6 +5884,7 @@ function resetGame() {
   state.rewards = [];
   state.worldDiscoveries = {};
   state.discoveryRespawns = {};
+  state.discoveryVacancies = {};
   state.achievements = [];
   state.nextSecretAt = secretPortalIntervals[0];
   state.secretCycleIndex = 1;
@@ -5929,6 +5948,7 @@ function saveGame() {
     rewards: state.rewards,
     worldDiscoveries: state.worldDiscoveries,
     discoveryRespawns: state.discoveryRespawns,
+    discoveryVacancies: state.discoveryVacancies,
     achievements: state.achievements,
     nextSecretAt: state.nextSecretAt,
     secretCycleIndex: state.secretCycleIndex,
@@ -5996,6 +6016,11 @@ function loadGame() {
     state.rewards = Array.isArray(payload.rewards) ? payload.rewards : [];
     state.worldDiscoveries = normalizeWorldDiscoveries(payload.worldDiscoveries);
     state.discoveryRespawns = payload.discoveryRespawns && typeof payload.discoveryRespawns === "object" ? payload.discoveryRespawns : {};
+    state.discoveryVacancies = payload.discoveryVacancies && typeof payload.discoveryVacancies === "object"
+      ? Object.fromEntries(Object.entries(payload.discoveryVacancies).filter(([, vacancy]) => (
+        vacancy && Number.isFinite(vacancy.x) && Number.isFinite(vacancy.until) && vacancy.until > state.time
+      )))
+      : {};
     state.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
     const hasPortalSchedule = payload.secretPortalScheduleVersion === secretPortalScheduleVersion
       && Number.isFinite(payload.nextSecretAt) && payload.nextSecretAt > 0;
