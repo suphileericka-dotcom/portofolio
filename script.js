@@ -5,7 +5,6 @@ const ui = {
   startScreen: document.getElementById("startScreen"),
   startButton: document.getElementById("startButton"),
   continueButton: document.getElementById("continueButton"),
-  fullscreenButton: document.getElementById("fullscreenButton"),
   pauseButton: document.getElementById("pauseButton"),
   journalButton: document.getElementById("journalButton"),
   customizeButton: document.getElementById("customizeButton"),
@@ -1012,6 +1011,15 @@ function storeWorldDiscovery(item) {
   if (!item || typeof item.id !== "string") return null;
   const existing = state.worldDiscoveries[item.id];
   if (existing && !existing.collected) return existing;
+  if (!item.missionItem && !item.grounded && !item.rolling) {
+    const crowded = Object.values(state.worldDiscoveries).some((other) => (
+      !other.collected && Math.abs(other.x - item.x) < minDiscoverySpacing
+    ));
+    if (crowded) {
+      item = placeDiscoverySafely(item);
+      if (Object.values(state.worldDiscoveries).some((other) => !other.collected && Math.abs(other.x - item.x) < minDiscoverySpacing)) return null;
+    }
+  }
   const baseId = baseDiscoveryId(item.id);
   const duplicate = Object.values(state.worldDiscoveries).find((candidate) => (
     candidate && !candidate.collected
@@ -1353,10 +1361,6 @@ function limitVisibleDiscoveries(items) {
       || Math.abs(a.x - state.player.x) - Math.abs(b.x - state.player.x));
   const picked = [];
   visible.forEach((item) => {
-    const priority = item.missionItem || item.grounded || item.rolling;
-    const ordinaryCount = picked.filter((entry) => !entry.missionItem && !entry.grounded && !entry.rolling).length;
-    if (!priority && ordinaryCount >= maxVisibleDiscoveries) return;
-    if (!priority && picked.some((other) => Math.abs(other.x - item.x) < minDiscoverySpacing)) return;
     picked.push(item);
   });
   return picked.sort((a, b) => a.x - b.x);
@@ -2202,6 +2206,19 @@ function drawFriendlyChallengeGoal() {
   ctx.lineTo(x, world.ground - 5);
   ctx.stroke();
   ctx.setLineDash([]);
+  const visibleStart = Math.max(Math.min(startX, x), state.camera.x - 60);
+  const visibleEnd = Math.min(Math.max(startX, x), state.camera.x + window.innerWidth + 60);
+  ctx.strokeStyle = "#fff1bc";
+  ctx.lineWidth = 3;
+  for (let arrowX = Math.ceil(visibleStart / 220) * 220; arrowX <= visibleEnd; arrowX += 220) {
+    ctx.beginPath();
+    ctx.moveTo(arrowX - direction * 9, world.ground - 13);
+    ctx.lineTo(arrowX + direction * 5, world.ground - 5);
+    ctx.lineTo(arrowX - direction * 9, world.ground + 3);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#e8dcb8";
+  ctx.fillRect(startX - 4, world.ground - 16, 8, 30);
   ctx.restore();
   (challenge.route || []).forEach((obstacle) => drawFriendlyChallengeObstacle(obstacle, direction));
   [0.34, 0.68].forEach((progress) => {
@@ -3271,6 +3288,19 @@ function drawContextualInteraction() {
 function drawFriendlyChallengeHud() {
   const challenge = state.friendlyChallenge;
   if (!challenge || isInSecretWorld()) return;
+  if (challenge.readyAt > state.time || state.time < challenge.readyAt + 0.7) {
+    ctx.save();
+    ctx.font = "900 24px Nunito";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#fff1bc";
+    ctx.strokeStyle = "#142221";
+    ctx.lineWidth = 4;
+    const count = challenge.readyAt > state.time ? String(Math.ceil(challenge.readyAt - state.time)) : "GO";
+    ctx.strokeText(count, window.innerWidth / 2, window.innerHeight * 0.3);
+    ctx.fillText(count, window.innerWidth / 2, window.innerHeight * 0.3);
+    ctx.restore();
+    return;
+  }
   const startX = Number.isFinite(challenge.startX) ? challenge.startX : challenge.villager.x;
   const direction = Math.sign(challenge.targetX - startX) || 1;
   const courseLength = Math.max(1, Math.abs(challenge.targetX - startX));
@@ -3292,6 +3322,23 @@ function drawFriendlyChallengeHud() {
   ctx.textAlign = "center";
   ctx.fillText(`Course ${friendlyChallengeDistanceLabel}  Toi ${playerProgress}%  Habit. ${runnerProgress}%`, 0, 4);
   ctx.restore();
+  const next = (challenge.route || []).find((obstacle) => !obstacle.playerPassed && (obstacle.x - state.player.x) * direction > 0);
+  const nextX = (next?.x ?? challenge.targetX) - state.camera.x;
+  if (nextX < 20 || nextX > window.innerWidth - 20) {
+    const edgeX = nextX < 20 ? 18 : window.innerWidth - 18;
+    ctx.save();
+    ctx.strokeStyle = "#142221";
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(edgeX - direction * 7, world.ground - 60);
+    ctx.lineTo(edgeX + direction * 4, world.ground - 51);
+    ctx.lineTo(edgeX - direction * 7, world.ground - 42);
+    ctx.stroke();
+    ctx.strokeStyle = "#fff1bc";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawCompassHint() {
@@ -3571,6 +3618,11 @@ function update(dt) {
   if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) input += 1;
   if (joystick.active) input += joystick.x;
   input = Math.max(-1, Math.min(1, input));
+  if (Math.abs(input) > 0.2) p.lastTravelDirection = Math.sign(input);
+  if (state.friendlyChallenge?.readyAt > state.time) {
+    input = 0;
+    p.vx = 0;
+  }
 
   const weather = getWeatherForChapter();
   const runTarget = isRunInput(input) && Math.abs(input) > 0.12 && p.rest <= 0.15 ? 1 : 0;
@@ -3579,6 +3631,7 @@ function update(dt) {
   const target = input * maxSpeed;
   p.vx += (target - p.vx) * Math.min(1, dt * 5.5);
   const beforeMoveX = p.x;
+  p.previousX = beforeMoveX;
   p.x += p.vx * dt;
   const unclampedX = p.x;
   p.x = clampToPlayableWorldX(p.x);
@@ -4567,7 +4620,9 @@ function updateChallengePlayerRoute(challenge) {
   (challenge.route || []).forEach((obstacle) => {
     if (obstacle.playerPassed) return;
     const distance = (player.x - obstacle.x) * direction;
-    if (distance < -obstacle.radius || distance > obstacle.radius) return;
+    const previousDistance = ((player.previousX ?? player.x) - obstacle.x) * direction;
+    const crossed = previousDistance < -obstacle.radius && distance >= -obstacle.radius;
+    if (!crossed && (distance < -obstacle.radius || distance > obstacle.radius)) return;
     const isHopping = player.action === "hop" && player.actionUntil > state.time;
     if (isHopping) {
       obstacle.playerPassed = true;
@@ -4658,6 +4713,7 @@ function sendChallengeRunnerHome(challenge, won) {
 function updateFriendlyChallenge(dt) {
   const challenge = state.friendlyChallenge;
   if (!challenge || isInSecretWorld()) return;
+  if (challenge.readyAt > state.time) return;
   challenge.remaining = Math.max(0, challenge.remaining - dt);
   const runnerFinished = updateChallengeRunner(challenge, dt);
   updateChallengePlayerRoute(challenge);
@@ -5168,8 +5224,9 @@ function updateVillagerChallengeButton(villager) {
 
 function getFriendlyChallengeDirection(villager) {
   const homeX = Number.isFinite(villager.homeX) ? villager.homeX : villager.x;
-  if (homeX - friendlyChallengeDistance < world.firstRouteEnd + 180) return 1;
-  return hashNumber(homeX + villager.villageId.length * 17) > 0.5 ? 1 : -1;
+  const preferred = state.player.lastTravelDirection || state.player.face || 1;
+  const available = Math.abs(clampToPlayableWorldX(homeX + preferred * friendlyChallengeDistance) - homeX);
+  return available >= friendlyChallengeDistance * 0.8 ? preferred : -preferred;
 }
 
 function startFriendlyChallenge() {
@@ -5192,9 +5249,14 @@ function startFriendlyChallenge() {
     targetX,
     remaining: friendlyChallengeDurationSeconds,
     startedAt: state.time,
+    readyAt: state.time + 3,
     route: createFriendlyChallengeRoute(startX, targetX),
     runner: createFriendlyChallengeRunner(villager, targetX, direction)
   };
+  state.player.x = startX;
+  state.player.face = direction;
+  state.player.vx = 0;
+  state.friendlyChallenge.runner.departAt = state.friendlyChallenge.readyAt;
   closeDialog(ui.villagerDialog);
   pendingVillagerConversation = null;
   pendingVillagerHelp = null;
@@ -5538,7 +5600,6 @@ function buildJournal() {
   appendJournalBlock("Habitants", renderVillagers(), "gallery-block");
   appendJournalBlock("Missions", renderQuestCard(true), "mission-block");
   appendJournalBlock("Carte", renderMap(), "map-block");
-  appendJournalBlock("Succes", renderAchievements(), "gallery-block");
   if (state.companion.unlocked) appendJournalBlock("Mon compagnon", renderCompanionJournal(), "companion-block");
 }
 
@@ -6075,6 +6136,16 @@ function loadGame() {
     state.startedAtLeastOnce = Boolean(payload.startedAtLeastOnce);
     state.cinematicPlayed = Boolean(payload.cinematicPlayed) && state.player.x >= world.firstRouteEnd;
     state.chapter = getChapter(state.player.x);
+    const ordinary = Object.values(state.worldDiscoveries)
+      .filter((item) => !item.collected && !item.missionItem && !item.grounded && !item.rolling)
+      .sort((a, b) => a.x - b.x);
+    for (let index = 1; index < ordinary.length; index += 1) {
+      const previous = ordinary[index - 1];
+      const item = ordinary[index];
+      if (item.zoneKey === previous.zoneKey || (!item.zoneKey?.startsWith("secret") && !previous.zoneKey?.startsWith("secret"))) {
+        if (item.x - previous.x < minDiscoverySpacing) item.x = previous.x + minDiscoverySpacing;
+      }
+    }
     if (payload.nickname) state.playerProfile.nickname = payload.nickname;
     return true;
   } catch {
@@ -6691,10 +6762,7 @@ function isStandaloneDisplay() {
 }
 
 function updateFullscreenButton() {
-  const active = Boolean(getFullscreenElement()) || isStandaloneDisplay();
-  ui.fullscreenButton.classList.toggle("is-active", active);
-  ui.fullscreenButton.title = active ? "Plein ecran actif" : "Plein ecran";
-  ui.fullscreenButton.setAttribute("aria-label", ui.fullscreenButton.title);
+  // Display mode changes remain handled for browser and PWA resizing.
 }
 
 function handleFullscreenChange() {
@@ -7192,7 +7260,6 @@ ui.optionsButton.addEventListener("click", () => {
   updateMissionReminderButton();
   openDialog(ui.optionsDialog);
 });
-ui.fullscreenButton.addEventListener("click", toggleFullscreen);
 ui.muteButton.addEventListener("click", () => {
   state.options.muted = !state.options.muted;
   updateMuteButton();
