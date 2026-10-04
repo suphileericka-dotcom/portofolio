@@ -264,6 +264,7 @@ h2 {
   color: #e8dcb8;
   cursor: pointer;
   position: relative;
+  pointer-events: auto;
   transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
 }
 
