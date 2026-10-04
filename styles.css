@@ -652,7 +652,7 @@ h2 {
   border-color: rgba(240, 189, 108, 0.48);
   background: rgba(240, 189, 108, 0.24);
   box-shadow: 0 0 18px rgba(240, 189, 108, 0.24);
-  transform: translate(-50%, -50%) scale(1.1);
+  transform: translate(-50%, -50%);
 }
 
 .pad-mode-shell {
@@ -672,130 +672,19 @@ h2 {
 
 .pad-action-mode:active,
 .pad-action-mode.is-active {
-  transform: scale(1.1);
+  transform: none;
 }
 
-.pad-mode-menu {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 0.34rem);
-  display: flex;
-  gap: 0.28rem;
-  padding: 0.28rem;
-  border: 1px solid rgba(247, 243, 223, 0.14);
-  border-radius: 999px;
-  background: rgba(20, 34, 33, 0.78);
-  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.22);
-  opacity: 0;
-  transform: translate(0, 0.35rem) scale(0.94);
-  transform-origin: left bottom;
-  pointer-events: none;
-  transition: opacity 0.16s ease, transform 0.16s ease;
-}
-
-.mobile-pad.is-mode-menu-open .pad-mode-menu {
-  opacity: 1;
-  transform: translate(0, 0) scale(1);
-  pointer-events: auto;
-}
-
-.pad-mode-option {
-  width: 2.15rem;
-  height: 2.15rem;
-  border: 0;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: rgba(247, 243, 223, 0.72);
-  background: transparent;
-  font-size: 0.98rem;
-  cursor: pointer;
-}
-
-.pad-mode-option.is-selected {
-  color: #fff3bc;
-  background: rgba(240, 189, 108, 0.24);
-  box-shadow: inset 0 0 0 1px rgba(240, 189, 108, 0.35);
-}
-
-.stick-figure {
-  position: relative;
-  width: 1.18rem;
-  height: 1.3rem;
-  display: block;
-  color: currentColor;
-}
-
-.stick-figure::before {
-  content: "";
-  position: absolute;
-  left: 0.43rem;
-  top: 0.02rem;
-  width: 0.34rem;
-  height: 0.34rem;
-  border: 0.12rem solid currentColor;
-  border-radius: 50%;
-}
-
-.stick-figure::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  height: 0.94rem;
-  background:
-    linear-gradient(90deg, transparent 45%, currentColor 45% 55%, transparent 55%) 50% 0 / 0.14rem 0.58rem no-repeat,
-    linear-gradient(42deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.12rem 0.35rem / 0.58rem 0.42rem no-repeat,
-    linear-gradient(-42deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.5rem 0.35rem / 0.58rem 0.42rem no-repeat,
-    linear-gradient(-36deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.12rem 0.53rem / 0.56rem 0.46rem no-repeat,
-    linear-gradient(36deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.5rem 0.53rem / 0.56rem 0.46rem no-repeat;
-}
-
-.stick-figure-run {
-  transform: skewX(-8deg) translateX(0.06rem);
-}
-
-.stick-figure-run::after {
-  background:
-    linear-gradient(70deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.42rem 0 / 0.2rem 0.65rem no-repeat,
-    linear-gradient(12deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.02rem 0.32rem / 0.72rem 0.38rem no-repeat,
-    linear-gradient(-58deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.48rem 0.29rem / 0.66rem 0.42rem no-repeat,
-    linear-gradient(-62deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.13rem 0.52rem / 0.72rem 0.5rem no-repeat,
-    linear-gradient(22deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.48rem 0.55rem / 0.67rem 0.42rem no-repeat;
-}
-
-.stick-figure-jump {
-  transform: rotate(-22deg) translate(0.02rem, -0.06rem);
-}
-
-.stick-figure-jump::after {
-  background:
-    linear-gradient(90deg, transparent 45%, currentColor 45% 55%, transparent 55%) 50% 0 / 0.14rem 0.54rem no-repeat,
-    linear-gradient(8deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.04rem 0.3rem / 0.72rem 0.36rem no-repeat,
-    linear-gradient(-72deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.48rem 0.28rem / 0.68rem 0.43rem no-repeat,
-    linear-gradient(-24deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.06rem 0.5rem / 0.7rem 0.42rem no-repeat,
-    linear-gradient(62deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.52rem 0.46rem / 0.64rem 0.48rem no-repeat;
-}
-
-.pad-paw {
-  width: 1.2rem;
-  height: 1.1rem;
-  display: block;
-  background:
-    radial-gradient(circle at 50% 78%, currentColor 0 28%, transparent 30%),
-    radial-gradient(circle at 18% 32%, currentColor 0 16%, transparent 18%),
-    radial-gradient(circle at 47% 16%, currentColor 0 16%, transparent 18%),
-    radial-gradient(circle at 78% 32%, currentColor 0 16%, transparent 18%);
-}
+.control-icon-definitions { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.control-icon { display: block; width: 1.5rem; height: 1.5rem; pointer-events: none; }
 
 .pad-action-jump {
   left: 50%;
-  top: -0.15rem;
+  top: -0.2rem;
 }
 
 .pad-action-companion {
-  left: calc(100% + 0.2rem);
+  left: calc(100% - 0.82rem);
   top: 50%;
 }
 
@@ -806,15 +695,15 @@ h2 {
 }
 
 .pad-action-companion.is-locked {
-  opacity: 0;
-  pointer-events: none;
+  color: rgba(247, 243, 223, 0.5);
 }
 
-.mobile-pad.is-jump .pad-action-jump {
+.mobile-pad.is-jump .pad-action-jump,
+.guide-pad.is-jump .pad-action-jump {
   color: #fff3bc;
   background: rgba(240, 189, 108, 0.24);
   box-shadow: 0 0 18px rgba(240, 189, 108, 0.28);
-  transform: translate(-50%, -50%) scale(1.16);
+  transform: translate(-50%, -50%);
 }
 
 .pad-knob {
@@ -1835,47 +1724,29 @@ h2 {
 
 .guide-pad {
   position: relative;
-  width: 7rem;
-  height: 7rem;
-  margin: 1.1rem auto 0.9rem;
-  border: 1px solid rgba(247, 243, 223, 0.18);
+  width: 7.5rem;
+  height: 7.5rem;
+  margin: 2rem auto;
+  border: 1px solid rgba(247, 243, 223, 0.16);
   border-radius: 50%;
   background: rgba(247, 243, 223, 0.08);
+  backdrop-filter: blur(12px);
 }
-
-.guide-pad::before {
+.guide-pad::before, .guide-pad::after {
   content: "";
   position: absolute;
-  inset: 1rem;
-  border: 1px solid rgba(247, 243, 223, 0.12);
+  inset: 1.05rem;
   border-radius: 50%;
+  pointer-events: none;
 }
-
-.guide-pad-jump,
-.guide-pad-mode,
-.guide-pad-companion,
+.guide-pad::before { border: 1px solid rgba(247, 243, 223, 0.1); }
+.guide-pad::after { inset: 0.42rem; border: 1px dashed rgba(240, 189, 108, 0.12); }
+.guide-pad-mode { left: 0.82rem; top: 50%; }
 .guide-pad-knob {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
+  position: absolute; top: 50%; left: 50%; width: 2.4rem; height: 2.4rem;
+  transform: translate(-50%, -50%); border-radius: 50%; background: rgba(240, 189, 108, 0.9);
 }
-
-.guide-pad-jump,
-.guide-pad-mode,
-.guide-pad-companion {
-  width: 2rem;
-  height: 2rem;
-  color: #fff3bc;
-  border: 1px solid rgba(240, 189, 108, 0.38);
-  background: rgba(20, 34, 33, 0.62);
-  font-size: 0.9rem;
-}
-
-.guide-pad-jump { top: -0.8rem; left: calc(50% - 1rem); }
-.guide-pad-mode { left: -0.8rem; top: calc(50% - 1rem); }
-.guide-pad-companion { right: -0.8rem; top: calc(50% - 1rem); }
-.guide-pad-knob { top: calc(50% - 1.15rem); left: calc(50% - 1.15rem); width: 2.3rem; height: 2.3rem; background: rgba(240, 189, 108, 0.9); }
+.guide-pad .pad-action { pointer-events: none; }
 
 .guide-control-list {
   display: grid;

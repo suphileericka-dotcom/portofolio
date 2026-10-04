@@ -47,6 +47,13 @@
   </script>
 </head>
 <body>
+  <svg class="control-icon-definitions" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="walkIcon" viewBox="0 0 32 32"><circle cx="18" cy="6" r="3" fill="currentColor"/><path d="M17 12l-3 9m3-9l-6 4-1 5m7-9l4 6 4 1m-11 2l-5 7m5-7l6 3 2 5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="runIcon" viewBox="0 0 32 32"><circle cx="21" cy="5" r="3" fill="currentColor"/><path d="M20 11l-5 9m5-9l-6 1-3 5m9-6l4 5 4-3m-13 7l-4 5-7-1m11-4l7 3-3 6" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12h5m-6 5h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity=".6"/></symbol>
+    <symbol id="jumpIcon" viewBox="0 0 32 32"><circle cx="20" cy="5" r="3" fill="currentColor"/><path d="M18 11l-4 8m4-8l-6-2-3-4m9 6l5 3 5-4m-14 9l-6 4-3-1m9-3l7 2-2 5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 29q10-8 20 0" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity=".65"/></symbol>
+    <symbol id="companionIcon" viewBox="0 0 32 32"><g fill="currentColor"><ellipse cx="6" cy="13" rx="3" ry="4" transform="rotate(-20 6 13)"/><ellipse cx="12" cy="7" rx="3" ry="4"/><ellipse cx="20" cy="7" rx="3" ry="4"/><ellipse cx="26" cy="13" rx="3" ry="4" transform="rotate(20 26 13)"/><path d="M16 15c-4 0-5 4-8 7-3 4-1 8 3 7l5-1 5 1c4 1 6-3 3-7-3-3-4-7-8-7z"/></g></symbol>
+  </defs></svg>
+
   <main class="game-shell">
     <canvas id="gameCanvas" aria-label="Jeu de marche contemplative dans une foret en 2D"></canvas>
 
@@ -83,15 +90,12 @@
     </section>
 
     <div id="mobilePad" class="mobile-pad">
-      <button id="padJumpButton" class="pad-action pad-action-jump" type="button" aria-label="Sauter"><span class="stick-figure stick-figure-jump" aria-hidden="true"></span></button>
+      <button id="padJumpButton" class="pad-action pad-action-jump" type="button" aria-label="Sauter"><svg class="control-icon " viewBox="0 0 32 32" aria-hidden="true"><use href="#jumpIcon"/></svg></button>
       <div class="pad-mode-shell">
-        <button id="padModeButton" class="pad-action pad-action-mode" type="button" aria-label="Choisir marche ou course"><span class="stick-figure stick-figure-walk" aria-hidden="true"></span></button>
-        <div id="padModeMenu" class="pad-mode-menu" aria-hidden="true">
-          <button class="pad-mode-option" type="button" data-move-mode="walk" aria-label="Marcher"><span class="stick-figure stick-figure-walk" aria-hidden="true"></span></button>
-          <button class="pad-mode-option" type="button" data-move-mode="run" aria-label="Courir"><span class="stick-figure stick-figure-run" aria-hidden="true"></span></button>
-        </div>
+        <button id="padModeButton" class="pad-action pad-action-mode" type="button" aria-label="Choisir marche ou course"><svg class="control-icon move-mode-icon" viewBox="0 0 32 32" aria-hidden="true"><use href="#walkIcon"/></svg></button>
+
       </div>
-      <button id="padCompanionButton" class="pad-action pad-action-companion is-locked" type="button" aria-label="Faire venir ou rappeler le compagnon"><span class="pad-paw" aria-hidden="true"></span></button>
+      <button id="padCompanionButton" class="pad-action pad-action-companion is-locked" type="button" aria-label="Faire venir ou rappeler le compagnon"><svg class="control-icon " viewBox="0 0 32 32" aria-hidden="true"><use href="#companionIcon"/></svg></button>
       <div id="padKnob" class="pad-knob"></div>
     </div>
 
@@ -243,16 +247,16 @@
         <section class="guide-section guide-controls">
           <h3>&#127918; Commandes mobiles</h3>
           <div class="guide-pad" aria-label="Joystick avec saut en haut, marche course a gauche et compagnon a droite">
-            <span class="guide-pad-jump">&#10548;</span>
-            <span class="guide-pad-mode">&#128694;</span>
-            <span class="guide-pad-companion">&#128062;</span>
+            <span class="guide-pad-jump pad-action pad-action-jump"><svg class="control-icon " viewBox="0 0 32 32" aria-hidden="true"><use href="#jumpIcon"/></svg></span>
+            <span class="guide-pad-mode pad-action"><svg class="control-icon move-mode-icon" viewBox="0 0 32 32" aria-hidden="true"><use href="#walkIcon"/></svg></span>
+            <span class="guide-pad-companion pad-action pad-action-companion"><svg class="control-icon " viewBox="0 0 32 32" aria-hidden="true"><use href="#companionIcon"/></svg></span>
             <span class="guide-pad-knob"></span>
           </div>
           <dl class="guide-control-list">
             <div><dt>&#9673; Deplacement</dt><dd>Maintiens et fais glisser la boule dans la direction souhaitee sur le chemin.</dd></div>
-            <div><dt>&#128694; / &#127939; Marche et course</dt><dd>Touche l'icone a gauche pour choisir un mode. La course reste douce et le choix reste actif.</dd></div>
-            <div><dt>&#10548; Saut</dt><dd>Touche l'icone du haut pour franchir certains petits obstacles.</dd></div>
-            <div><dt>&#128062; Compagnon</dt><dd>Touche l'icone de droite pour le rappeler ou le faire revenir.</dd></div>
+            <div><dt>Marche et course</dt><dd>Touche l'icone a gauche pour basculer entre marche et course. La course reste douce et le choix reste actif.</dd></div>
+            <div><dt>Saut</dt><dd>Touche l'icone du haut pour franchir certains petits obstacles.</dd></div>
+            <div><dt>Compagnon</dt><dd>Touche l'icone de droite pour le cacher ou faire revenir le meme compagnon.</dd></div>
           </dl>
         </section>
         <section class="guide-section guide-desktop-controls">
@@ -267,7 +271,7 @@
           </dl>
         </section>
         <section class="guide-section"><h3>&#127960; Villages</h3><p>Chaque village possede son habitant. Prends le temps de discuter : certaines conversations sont simples, d'autres menent naturellement a une vraie mission.</p></section>
-        <section class="guide-section"><h3>&#128062; Compagnon</h3><p>Ton compagnon marche pres de toi et te rejoint lorsque tu cours. Tu preferes explorer seul ? Rappelle-le avec la patte, puis fais-le revenir quand tu veux.</p></section>
+        <section class="guide-section"><h3>Compagnon</h3><p>Ton compagnon marche pres de toi et te rejoint lorsque tu cours. Tu preferes explorer seul ? Rappelle-le avec la patte, puis fais-le revenir quand tu veux.</p></section>
         <section class="guide-section"><h3>&#128269; Exploration</h3><p>Tout n'est pas place au milieu du chemin. Un passage discret, un element du decor ou un chemin secondaire peut meriter un detour. Le Carnet garde la trace de tes trouvailles.</p></section>
         <section class="guide-section"><h3>&#127783; Monde et meteo</h3><p>Le Bosquet evolue avec le temps, la meteo et les saisons. La pluie, la nuit ou une nouvelle visite peuvent changer l'ambiance et les possibilites de decouverte.</p></section>
       </form>

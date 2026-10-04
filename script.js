@@ -65,7 +65,6 @@ const ui = {
   padKnob: document.getElementById("padKnob"),
   padJumpButton: document.getElementById("padJumpButton"),
   padModeButton: document.getElementById("padModeButton"),
-  padModeMenu: document.getElementById("padModeMenu"),
   padCompanionButton: document.getElementById("padCompanionButton")
 };
 
@@ -3594,12 +3593,13 @@ function stopJoystick() {
 }
 
 function updateMobilePadModeState() {
-  const figure = ui.padModeButton.querySelector(".stick-figure");
-  if (figure) figure.className = `stick-figure stick-figure-${joystick.mode === "run" ? "run" : "walk"}`;
-  ui.padModeButton.classList.toggle("is-active", state.moveMode === "run");
-  ui.padModeMenu.querySelectorAll("[data-move-mode]").forEach((button) => {
-    button.classList.toggle("is-selected", button.dataset.moveMode === state.moveMode);
+  const runningMode = state.moveMode === "run";
+  document.querySelectorAll(".move-mode-icon use").forEach((icon) => {
+    icon.setAttribute("href", runningMode ? "#runIcon" : "#walkIcon");
   });
+  ui.padModeButton.classList.toggle("is-active", runningMode);
+  ui.padModeButton.setAttribute("aria-label", runningMode ? "Course : passer en marche" : "Marche : passer en course");
+  document.querySelector(".guide-pad-mode").classList.toggle("is-active", runningMode);
 }
 
 function updateMobilePadCompanionState() {
@@ -3607,11 +3607,15 @@ function updateMobilePadCompanionState() {
   ui.padCompanionButton.classList.toggle("is-locked", !unlocked);
   ui.padCompanionButton.classList.toggle("is-hidden", unlocked && state.companion.present === false);
   ui.padCompanionButton.classList.toggle("is-active", unlocked && state.companion.present !== false);
-  ui.padCompanionButton.setAttribute("aria-label", state.companion.present === false ? "Faire venir le compagnon" : "Rappeler le compagnon");
+  const guideCompanion = document.querySelector(".guide-pad-companion");
+  guideCompanion.classList.toggle("is-hidden", unlocked && state.companion.present === false);
+  guideCompanion.classList.toggle("is-active", unlocked && state.companion.present !== false);
+  ui.padCompanionButton.setAttribute("aria-label", state.companion.present === false ? "Faire venir le compagnon" : "Cacher le compagnon");
 }
 
 function updateMobilePadActionState(zone = "idle") {
   ui.mobilePad.classList.toggle("is-jump", zone === "jump");
+  document.querySelector(".guide-pad").classList.toggle("is-jump", zone === "jump");
   updateMobilePadModeState();
   updateMobilePadCompanionState();
 }
@@ -3637,14 +3641,6 @@ function updateJoystickFromPointer(event) {
   ui.padKnob.style.transform = `translate(calc(-50% + ${joystick.x * max}px), calc(-50% + ${joystick.y * max}px))`;
 }
 
-function setJoystickMoveMode(mode) {
-  setMoveMode(mode, true);
-  ui.mobilePad.classList.remove("is-mode-menu-open");
-  ui.padModeMenu.setAttribute("aria-hidden", "true");
-  updateMobilePadActionState(joystick.lastZone);
-  if (navigator.vibrate) navigator.vibrate(10);
-}
-
 function setMoveMode(mode, announce = false) {
   const nextMode = mode === "run" ? "run" : "walk";
   if (state.moveMode === nextMode) return;
@@ -3657,12 +3653,6 @@ function setMoveMode(mode, announce = false) {
 
 function toggleMoveMode() {
   setMoveMode(state.moveMode === "run" ? "walk" : "run", true);
-}
-
-function togglePadModeMenu() {
-  const isOpen = ui.mobilePad.classList.toggle("is-mode-menu-open");
-  ui.padModeMenu.setAttribute("aria-hidden", isOpen ? "false" : "true");
-  updateMobilePadModeState();
 }
 
 function getInteractionTarget(visibleDiscoveries = getVisibleWorldDiscoveries(), visibleResidents = getVisibleVillageResidents()) {
@@ -7225,8 +7215,6 @@ ui.mobilePad.addEventListener("pointerdown", (event) => {
   joystick.active = true;
   joystick.id = event.pointerId;
   joystick.jumpArmed = true;
-  ui.mobilePad.classList.remove("is-mode-menu-open");
-  ui.padModeMenu.setAttribute("aria-hidden", "true");
   ui.mobilePad.setPointerCapture(event.pointerId);
   updateJoystickFromPointer(event);
 });
@@ -7244,12 +7232,7 @@ ui.padJumpButton.addEventListener("click", () => {
   setJoystickZone("jump");
   window.setTimeout(() => updateMobilePadActionState(joystick.active ? joystick.lastZone : "idle"), 180);
 });
-ui.padModeButton.addEventListener("click", togglePadModeMenu);
-ui.padModeMenu.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-move-mode]");
-  if (!button) return;
-  setJoystickMoveMode(button.dataset.moveMode);
-});
+ui.padModeButton.addEventListener("click", toggleMoveMode);
 ui.padCompanionButton.addEventListener("click", () => {
   if (!state.companion.unlocked) {
     showMessage("Tu n'as pas encore de compagnon sur ce chemin.");
@@ -7257,7 +7240,7 @@ ui.padCompanionButton.addEventListener("click", () => {
   }
   toggleCompanionPresence();
   updateMobilePadCompanionState();
-  showMessage(state.companion.present === false ? "Compagnon rappele" : "Compagnon a vos cotes");
+  showMessage(state.companion.present === false ? "Compagnon cache" : "Compagnon a vos cotes");
   if (navigator.vibrate) navigator.vibrate(12);
 });
 
