@@ -238,8 +238,9 @@ h2 {
 
 .hud-group {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: clamp(0.25rem, 1vw, 0.55rem);
   min-width: 0;
 }
 
@@ -252,13 +253,14 @@ h2 {
 }
 
 .hud-icon-button {
-  width: 3.4rem;
-  height: 3.4rem;
+  width: clamp(2.75rem, 7vw, 3rem);
+  height: clamp(2.75rem, 7vw, 3rem);
+  flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
   padding: 0;
   border: 1px solid rgba(247, 243, 223, 0.14);
-  border-radius: 1.15rem;
+  border-radius: 1rem;
   background: rgba(25, 42, 40, 0.92);
   box-shadow: inset 0 1px 0 rgba(247, 243, 223, 0.05), 0 8px 22px rgba(0, 0, 0, 0.2);
   color: #e8dcb8;
@@ -280,6 +282,7 @@ h2 {
   position: relative;
   width: 1.35rem;
   height: 1.35rem;
+  transform: scale(0.9);
 }
 
 .sound-button::before {

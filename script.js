@@ -1103,7 +1103,9 @@ function placeXClearOfInteractions(x, options = {}) {
   const salt = Number.isFinite(options.salt) ? options.salt : 0;
   const sourceItem = options.sourceItem || null;
   const blockers = getInteractionObstacleXs(sourceItem).concat({ x: state.player.x, distance: minDiscoveryPlayerSpawnDistance });
-  const blocking = (value) => blockers
+  const blocking = (value) => getRiverCrossings(value, value)
+    .map((bridge) => ({ x: bridge.x, distance: 265 }))
+    .concat(blockers)
     .filter((blocker) => Math.abs(value - blocker.x) < blocker.distance)
     .sort((a, b) => Math.abs(value - a.x) - Math.abs(value - b.x))[0] || null;
 
@@ -1131,6 +1133,8 @@ function getInteractionObstacleXs(sourceItem = null) {
       .map((item) => ({ x: item.x, distance: minDiscoverySpacing }));
   }
   const obstacles = [];
+  getRiverCrossings((sourceItem?.x ?? state.player.x) - 5000, (sourceItem?.x ?? state.player.x) + 5000)
+    .forEach((bridge) => obstacles.push({ x: bridge.x, distance: 265 }));
   getProceduralVillages().forEach((village) => obstacles.push({ x: village.x + 410, distance: minDiscoveryVillagerDistance }));
   const companionGiver = getCompanionGiver();
   if (companionGiver) obstacles.push({ x: companionGiver.x, distance: minDiscoveryVillagerDistance });
@@ -1410,7 +1414,7 @@ function getCompanionGiver() {
 
 function getProceduralLanterns() {
   if (isInSecretWorld()) return [];
-  if (!isExpandedWorld()) return lanterns;
+  if (!isExpandedWorld()) return lanterns.filter((entry) => !isRiverGap(entry.x, 60));
   const relativeCamera = state.camera.x - world.firstRouteEnd;
   const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
   const end = Math.floor((relativeCamera + window.innerWidth + 900) / world.chapterSize);
@@ -1420,12 +1424,12 @@ function getProceduralLanterns() {
       items.push({ id: makeId("lantern", chapterIndex + 4), x: world.firstRouteEnd + chapterIndex * world.chapterSize + 650 + hashNumber(chapterIndex) * 120 });
     }
   }
-  return items;
+  return items.filter((entry) => !isRiverGap(entry.x, 60));
 }
 
 function getProceduralRests() {
   if (isInSecretWorld()) return [];
-  if (!isExpandedWorld()) return rests;
+  if (!isExpandedWorld()) return rests.filter((entry) => !isRiverGap(entry.x, 80));
   const relativeCamera = state.camera.x - world.firstRouteEnd;
   const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
   const end = Math.floor((relativeCamera + window.innerWidth + 900) / world.chapterSize);
@@ -1439,7 +1443,7 @@ function getProceduralRests() {
       });
     }
   }
-  return items;
+  return items.filter((entry) => !isRiverGap(entry.x, 80));
 }
 
 const landmarkTypes = [
@@ -1503,7 +1507,7 @@ function resize() {
   canvas.style.height = `${size.height}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   world.ground = size.height * 0.72;
-  state.player.y = world.ground;
+  state.player.y = getWalkSurfaceY(state.player.x);
   if (running) state.camera.x = Math.max(0, state.player.x - size.width * 0.45);
   updateMobileLayoutClasses();
 }
@@ -1802,6 +1806,9 @@ function drawParallaxTrees(colors) {
 function drawGround(colors) {
   const h = window.innerHeight;
   const w = window.innerWidth;
+  drawRiver();
+  ctx.save();
+  clipRiverBanks();
   ctx.fillStyle = colors.ground || "#241f18";
   ctx.fillRect(0, world.ground + 34, w, h - world.ground - 34);
   ctx.fillStyle = blendHex(colors.grass, colors.ground || "#241f18", 0.32);
@@ -1837,6 +1844,7 @@ function drawGround(colors) {
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+  ctx.restore();
   ctx.restore();
 }
 
@@ -1931,7 +1939,7 @@ function drawWorldObjects() {
     const collected = hasCollectedDiscovery(item);
     if (collected) return;
     const bob = item.grounded ? 0 : Math.sin(state.time * 2 + index) * 5;
-    const y = (Number.isFinite(item.y) ? item.y : world.ground - 20) + (item.groundOffset || 0) + bob;
+    const y = (Number.isFinite(item.y) ? item.y : world.ground - 20) + (getWalkSurfaceY(item.x) - world.ground) + (item.groundOffset || 0) + bob;
     if (item.missionItem) drawMissionDiscoveryMarker(item.x, y);
     drawCollectibleIcon(item, index, item.x, y);
     if (state.itemEffects?.scoutTargetId === item.id && state.time < state.itemEffects.scoutUntil) {
@@ -1961,9 +1969,10 @@ function drawWorldObjects() {
   });
 
   drawFriendlyChallengeGoal();
-  drawRiver();
+  drawBridges();
   drawCompanion();
   drawPlayer();
+  drawBridges(true);
   ctx.restore();
 }
 
@@ -2321,7 +2330,7 @@ function drawCompanion() {
   const moving = Math.abs(state.companion.pace || 0) > 18;
   const sleeping = p.rest > 0.2;
   const x = Number.isFinite(state.companion.x) ? state.companion.x : p.x - p.face * 82;
-  const y = world.ground - 18 + (moving ? Math.sin(state.time * 8.5) * 3 : 0);
+  const y = getWalkSurfaceY(x) - 7;
   const face = Math.sign(p.x - x) || p.face;
   const fade = state.companion.transitionUntil > state.time ? Math.min(1, Math.max(0.25, 1 - (state.companion.transitionUntil - state.time) / 1.2)) : 1;
   ctx.save();
@@ -2745,6 +2754,7 @@ function drawCoverForeground() {
   const start = Math.floor((state.camera.x - 260) / 900) * 900;
   for (let baseX = start; baseX < state.camera.x + window.innerWidth + 420; baseX += 900) {
     const x = baseX + 70;
+    if (isRiverGap(x, 230)) continue;
     const y = world.ground - 18;
     ctx.save();
     ctx.globalAlpha = 0.95;
@@ -2824,36 +2834,136 @@ function drawCoverLantern(x, y) {
   ctx.restore();
 }
 
-function drawRiver() {
-  const riverX = isExpandedWorld()
-    ? Math.floor((state.camera.x + window.innerWidth / 2 - world.firstRouteEnd) / 4200) * 4200 + world.firstRouteEnd + 3820
-    : 3820;
-  const y = world.ground + 25;
-  if (riverX < state.camera.x - 600 || riverX > state.camera.x + window.innerWidth + 600) return;
-  ctx.fillStyle = "rgba(103, 180, 200, 0.58)";
+// One deterministic geometry for terrain, rendering and every walking actor.
+// The lateral game has no depth lane: the deck is the only surface over water.
+function getRiverCrossings(startX, endX) {
+  if (isInSecretWorld()) return [];
+  const centers = [3820];
+  const first = world.firstRouteEnd + 3820;
+  for (let i = Math.max(0, Math.ceil((startX - 240 - first) / 4200));
+    first + i * 4200 <= endX + 240; i += 1) {
+    const x = first + i * 4200;
+    const villageIndex = Math.max(0, Math.round((x - world.firstRouteEnd - 520) / villageSpacing));
+    const villageX = world.firstRouteEnd + 520 + villageIndex * villageSpacing;
+    if (x > villageX - 650 && x < villageX + 1000) continue;
+    centers.push(x);
+  }
+  return centers.filter((x) => x + 240 >= startX && x - 240 <= endX)
+    .map((x) => ({ x, left: x - 210, right: x + 210, waterLeft: x - 170, waterRight: x + 170 }));
+}
+
+function getWalkSurfaceY(x) {
+  const bridge = getRiverCrossings(x, x).find((entry) => x >= entry.left && x <= entry.right);
+  if (!bridge) return world.ground;
+  const t = (x - bridge.left) / (bridge.right - bridge.left);
+  return world.ground - 12 * Math.sin(Math.PI * t) ** 2;
+}
+
+function isRiverGap(x, margin = 0) {
+  return getRiverCrossings(x - margin, x + margin)
+    .some((bridge) => x >= bridge.waterLeft - margin && x <= bridge.waterRight + margin);
+}
+
+function clipRiverBanks() {
+  const offset = state.camera.x;
   ctx.beginPath();
-  ctx.ellipse(riverX, y, 380, 34, -0.08, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(247, 243, 223, 0.24)";
-  ctx.lineWidth = 2;
-  for (let i = 0; i < 5; i += 1) {
+  ctx.rect(state.camera.x - offset - 1000, -1000, window.innerWidth + 2000, window.innerHeight + 2000);
+  for (const bridge of getRiverCrossings(state.camera.x - 240, state.camera.x + window.innerWidth + 240)) {
+    ctx.rect(bridge.waterLeft - offset, -1000, bridge.waterRight - bridge.waterLeft, window.innerHeight + 2000);
+  }
+  ctx.clip("evenodd");
+}
+
+function drawRiver() {
+  ctx.save();
+  ctx.translate(-state.camera.x, 0);
+  const g = world.ground;
+  for (const bridge of getRiverCrossings(state.camera.x, state.camera.x + window.innerWidth)) {
+    const width = bridge.waterRight - bridge.waterLeft;
+    ctx.fillStyle = "#659da2";
+    ctx.fillRect(bridge.waterLeft, g + 39, width, window.innerHeight - g);
+    ctx.fillStyle = "rgba(53, 109, 123, 0.25)";
+    ctx.fillRect(bridge.waterLeft, g + 85, width, window.innerHeight - g);
+    for (let i = 0; i < 9; i += 1) {
+      const x = bridge.waterLeft + 30 + (i * 47) % (width - 60);
+      const y = g + 53 + i * 15;
+      drawEllipse(x + Math.sin(state.time * 0.6 + i) * 6, y, 19 + i % 3 * 6, 2.5, "rgba(224, 242, 223, 0.24)");
+    }
+    for (const side of [-1, 1]) {
+      const bank = bridge.x + side * 170;
+      drawEllipse(bank - side * 13, g + 75, 19, 13, "#8b9890");
+      drawEllipse(bank - side * 25, g + 107, 12, 8, "#768b83");
+      ctx.strokeStyle = "#6b8b59";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      for (let i = 0; i < 3; i += 1) {
+        ctx.beginPath();
+        ctx.moveTo(bank + side * (10 + i * 7), g + 55);
+        ctx.quadraticCurveTo(bank + side * (20 + i * 6), g + 30, bank + side * (15 + i * 9), g + 15);
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawBridges(front = false) {
+  ctx.save();
+  ctx.lineCap = "round";
+  for (const bridge of getRiverCrossings(state.camera.x - 240, state.camera.x + window.innerWidth + 240)) {
+    if (!front) {
+      ctx.strokeStyle = "#72583f";
+      ctx.lineWidth = 12;
+      ctx.beginPath();
+      ctx.moveTo(bridge.left + 28, world.ground + 44);
+      ctx.lineTo(bridge.left + 90, world.ground + 10);
+      ctx.moveTo(bridge.right - 28, world.ground + 44);
+      ctx.lineTo(bridge.right - 90, world.ground + 10);
+      ctx.stroke();
+      for (let x = bridge.left; x < bridge.right; x += 20) {
+        const y = getWalkSurfaceY(x + 10) + 3;
+        ctx.fillStyle = "#72573e";
+        roundedRect(x, y + 5, 21, 13, 3);
+        ctx.fill();
+        ctx.fillStyle = ["#be9963", "#c6a572", "#b89261"][Math.floor((x - bridge.left) / 20) % 3];
+        roundedRect(x, y, 20.5, 8, 3);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(96, 73, 47, 0.3)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + 6, y + 2);
+        ctx.lineTo(x + 6, y + 6);
+        ctx.stroke();
+      }
+    }
+    // Four posts total: two rear posts, two foreground posts.
+    const inset = front ? 25 : 48;
+    const postY = world.ground - (front ? 32 : 45);
+    ctx.fillStyle = front ? "#846547" : "#967956";
+    for (const x of [bridge.left + inset, bridge.right - inset]) {
+      roundedRect(x - 7, postY, 14, front ? 66 : 65, 5);
+      ctx.fill();
+      drawEllipse(x + 3, world.ground + 12, 10, 5, "#6e8a50");
+      drawEllipse(x - 5, world.ground + 18, 6, 4, "#789754");
+    }
+    ctx.strokeStyle = front ? "rgba(230, 216, 169, 0.82)" : "#d5c79e";
+    ctx.lineWidth = front ? 3 : 3.5;
     ctx.beginPath();
-    ctx.moveTo(riverX - 300 + i * 120, y + Math.sin(state.time * 2 + i) * 8);
-    ctx.quadraticCurveTo(riverX - 250 + i * 120, y - 10, riverX - 200 + i * 120, y + 2);
+    ctx.moveTo(bridge.left + inset, postY + 13);
+    ctx.quadraticCurveTo(bridge.x, postY + 39, bridge.right - inset, postY + 13);
     ctx.stroke();
   }
+  ctx.restore();
 }
 
 function getVisibleRiverX() {
-  const riverX = isExpandedWorld()
-    ? Math.floor((state.camera.x + window.innerWidth / 2 - world.firstRouteEnd) / 4200) * 4200 + world.firstRouteEnd + 3820
-    : 3820;
-  if (riverX < state.camera.x - 600 || riverX > state.camera.x + window.innerWidth + 600) return null;
-  return riverX - state.camera.x;
+  const bridges = getRiverCrossings(state.camera.x, state.camera.x + window.innerWidth);
+  const bridge = bridges.sort((a, b) => Math.abs(a.x - state.player.x) - Math.abs(b.x - state.player.x))[0];
+  return bridge ? bridge.x - state.camera.x : null;
 }
 
 function drawVillager(x, villager) {
-  const y = world.ground;
+  const y = getWalkSurfaceY(x);
   if (villager.raceActor) {
     const seed = Math.abs(hashNumber(villager.role.length + villager.homeX));
     const bodyColors = ["#6a8a80", "#8b6840", "#6f7f4f", "#4f7f99", "#7f6a8a"];
@@ -3062,7 +3172,7 @@ function drawPlayer() {
   const hopOffset = hopTimeLeft > 0 ? Math.sin((1 - hopTimeLeft / hopDurationSeconds) * Math.PI) * hopHeight : 0;
   drawCharacter({
     x: p.x,
-    y: p.y - hopOffset,
+    y: getWalkSurfaceY(p.x) - hopOffset,
     face: p.face,
     velocity: p.vx,
     body: appearance.body,
@@ -3606,7 +3716,7 @@ function update(dt) {
   const p = state.player;
   if (isModalOpen()) {
     clearMovementIntent();
-    p.y = world.ground;
+    p.y = getWalkSurfaceY(p.x);
     if (audio) updateAudio();
     updateMissionTracker();
     autosave();
@@ -3639,7 +3749,7 @@ function update(dt) {
     state.lastSecretEdgeMessageAt = state.time;
     showMessageFor("Le bord de ce monde se replie. Reviens vers le chemin lumineux.", 2600);
   }
-  p.y = world.ground;
+  p.y = getWalkSurfaceY(p.x);
   if (Math.abs(p.vx) > 5) p.face = Math.sign(p.vx);
   p.rest = Math.max(0, p.rest - dt * 0.35);
   const previousWeather = state.weather;
@@ -3662,6 +3772,7 @@ function update(dt) {
   updateMicroEvents(dt);
   updateSecretWorld(dt, input, beforeMoveX);
   updateSecretPortal();
+  p.y = getWalkSurfaceY(p.x);
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
   const targetZoom = p.rest > 0 ? 1.08 : 1;
@@ -4195,10 +4306,7 @@ function getPlaceType(x = state.player.x) {
   if (landmark) return landmark.name;
   const nearVillage = getProceduralVillages().some((village) => Math.abs(x - (village.x + 170)) < 620);
   if (nearVillage) return "Village";
-  const riverX = isExpandedWorld()
-    ? Math.floor((x - world.firstRouteEnd) / 4200) * 4200 + world.firstRouteEnd + 3820
-    : 3820;
-  if (Math.abs(x - riverX) < 520) return "Riviere";
+  if (getRiverCrossings(x - 520, x + 520).some((bridge) => Math.abs(x - bridge.x) < 520)) return "Riviere";
   if (getBiome(x).name.toLowerCase().includes("nuit") || state.chapter % 8 === 0) return "Montagne";
   return "Foret";
 }
@@ -4302,7 +4410,7 @@ function updateCompanionMovement(dt) {
   const distance = Math.abs(dx);
   if (distance > 920 || isInSecretWorld()) {
     companion.x = state.player.x - preferredSide * 78;
-    companion.y = world.ground;
+    companion.y = getWalkSurfaceY(companion.x);
     companion.pace = 0;
     companion.transitionUntil = state.time + 0.8;
     return;
@@ -4315,7 +4423,7 @@ function updateCompanionMovement(dt) {
   const catchSpeed = walkCatch + companion.pace * (runCatch - walkCatch);
   const step = Math.sign(dx) * Math.min(distance, catchSpeed * dt);
   companion.x += step;
-  companion.y = world.ground;
+  companion.y = getWalkSurfaceY(companion.x);
 }
 
 function toggleCompanionPresence() {
@@ -4324,7 +4432,7 @@ function toggleCompanionPresence() {
   state.companion.transitionUntil = state.time + 1.2;
   if (state.companion.present) {
     state.companion.x = state.player.x - state.player.face * 90;
-    state.companion.y = world.ground;
+    state.companion.y = getWalkSurfaceY(state.companion.x);
   }
   saveGame();
   buildJournal();
@@ -4607,7 +4715,12 @@ function createFriendlyChallengeRoute(startX, targetX) {
     { id: "rock-1", type: "rock", x: startX + direction * 720, radius: 24, playerPassed: false, runnerPassed: false, lastBlockedAt: -Infinity },
     { id: "rock-2", type: "rock", x: startX + direction * 2420, radius: 26, playerPassed: false, runnerPassed: false, lastBlockedAt: -Infinity },
     { id: "rock-3", type: "rock", x: startX + direction * 5320, radius: 24, playerPassed: false, runnerPassed: false, lastBlockedAt: -Infinity }
-  ];
+  ].map((rock) => {
+    const bridge = getRiverCrossings(rock.x, rock.x)
+      .find((entry) => rock.x >= entry.waterLeft - 60 && rock.x <= entry.waterRight + 60);
+    if (bridge) rock.x = direction > 0 ? bridge.right + 100 : bridge.left - 100;
+    return rock;
+  });
 }
 
 function isPastChallengePoint(x, pointX, direction) {
