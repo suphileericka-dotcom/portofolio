@@ -715,6 +715,77 @@ h2 {
   box-shadow: inset 0 0 0 1px rgba(240, 189, 108, 0.35);
 }
 
+.stick-figure {
+  position: relative;
+  width: 1.18rem;
+  height: 1.3rem;
+  display: block;
+  color: currentColor;
+}
+
+.stick-figure::before {
+  content: "";
+  position: absolute;
+  left: 0.43rem;
+  top: 0.02rem;
+  width: 0.34rem;
+  height: 0.34rem;
+  border: 0.12rem solid currentColor;
+  border-radius: 50%;
+}
+
+.stick-figure::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 0.94rem;
+  background:
+    linear-gradient(90deg, transparent 45%, currentColor 45% 55%, transparent 55%) 50% 0 / 0.14rem 0.58rem no-repeat,
+    linear-gradient(42deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.12rem 0.35rem / 0.58rem 0.42rem no-repeat,
+    linear-gradient(-42deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.5rem 0.35rem / 0.58rem 0.42rem no-repeat,
+    linear-gradient(-36deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.12rem 0.53rem / 0.56rem 0.46rem no-repeat,
+    linear-gradient(36deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.5rem 0.53rem / 0.56rem 0.46rem no-repeat;
+}
+
+.stick-figure-run {
+  transform: skewX(-8deg) translateX(0.06rem);
+}
+
+.stick-figure-run::after {
+  background:
+    linear-gradient(70deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.42rem 0 / 0.2rem 0.65rem no-repeat,
+    linear-gradient(12deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.02rem 0.32rem / 0.72rem 0.38rem no-repeat,
+    linear-gradient(-58deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.48rem 0.29rem / 0.66rem 0.42rem no-repeat,
+    linear-gradient(-62deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.13rem 0.52rem / 0.72rem 0.5rem no-repeat,
+    linear-gradient(22deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.48rem 0.55rem / 0.67rem 0.42rem no-repeat;
+}
+
+.stick-figure-jump {
+  transform: rotate(-22deg) translate(0.02rem, -0.06rem);
+}
+
+.stick-figure-jump::after {
+  background:
+    linear-gradient(90deg, transparent 45%, currentColor 45% 55%, transparent 55%) 50% 0 / 0.14rem 0.54rem no-repeat,
+    linear-gradient(8deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.04rem 0.3rem / 0.72rem 0.36rem no-repeat,
+    linear-gradient(-72deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.48rem 0.28rem / 0.68rem 0.43rem no-repeat,
+    linear-gradient(-24deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.06rem 0.5rem / 0.7rem 0.42rem no-repeat,
+    linear-gradient(62deg, transparent 46%, currentColor 47% 54%, transparent 55%) 0.52rem 0.46rem / 0.64rem 0.48rem no-repeat;
+}
+
+.pad-paw {
+  width: 1.2rem;
+  height: 1.1rem;
+  display: block;
+  background:
+    radial-gradient(circle at 50% 78%, currentColor 0 28%, transparent 30%),
+    radial-gradient(circle at 18% 32%, currentColor 0 16%, transparent 18%),
+    radial-gradient(circle at 47% 16%, currentColor 0 16%, transparent 18%),
+    radial-gradient(circle at 78% 32%, currentColor 0 16%, transparent 18%);
+}
+
 .pad-action-jump {
   left: 50%;
   top: -0.15rem;

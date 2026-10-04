@@ -3437,7 +3437,8 @@ function stopJoystick() {
 }
 
 function updateMobilePadModeState() {
-  ui.padModeButton.textContent = joystick.mode === "run" ? "🏃" : "🚶";
+  const figure = ui.padModeButton.querySelector(".stick-figure");
+  if (figure) figure.className = `stick-figure stick-figure-${joystick.mode === "run" ? "run" : "walk"}`;
   ui.padModeButton.classList.toggle("is-active", state.moveMode === "run");
   ui.padModeMenu.querySelectorAll("[data-move-mode]").forEach((button) => {
     button.classList.toggle("is-selected", button.dataset.moveMode === state.moveMode);

@@ -72,7 +72,7 @@
         <button id="optionsButton" class="hud-icon-button options-button" type="button" title="Options" aria-label="Options"><span aria-hidden="true">&#9881;</span></button>
         <button id="infoButton" class="hud-icon-button info-button" type="button" title="Informations" aria-label="Informations"><span aria-hidden="true">i</span></button>
         <button id="pauseButton" class="hud-icon-button pause-button" type="button" title="Pause" aria-label="Pause"><span aria-hidden="true"></span></button>
-        <button id="fullscreenButton" class="fullscreen-button" type="button" title="Plein ecran" aria-label="Plein ecran">Plein ecran</button>
+        <button id="fullscreenButton" class="fullscreen-button" type="button" title="Plein ecran" aria-label="Plein ecran" hidden>Plein ecran</button>
       </div>
     </section>
 
@@ -86,15 +86,15 @@
     </section>
 
     <div id="mobilePad" class="mobile-pad">
-      <button id="padJumpButton" class="pad-action pad-action-jump" type="button" aria-label="Sauter">⤴</button>
+      <button id="padJumpButton" class="pad-action pad-action-jump" type="button" aria-label="Sauter"><span class="stick-figure stick-figure-jump" aria-hidden="true"></span></button>
       <div class="pad-mode-shell">
-        <button id="padModeButton" class="pad-action pad-action-mode" type="button" aria-label="Choisir marche ou course">🚶</button>
+        <button id="padModeButton" class="pad-action pad-action-mode" type="button" aria-label="Choisir marche ou course"><span class="stick-figure stick-figure-walk" aria-hidden="true"></span></button>
         <div id="padModeMenu" class="pad-mode-menu" aria-hidden="true">
-          <button class="pad-mode-option" type="button" data-move-mode="walk" aria-label="Marcher">🚶</button>
-          <button class="pad-mode-option" type="button" data-move-mode="run" aria-label="Courir">🏃</button>
+          <button class="pad-mode-option" type="button" data-move-mode="walk" aria-label="Marcher"><span class="stick-figure stick-figure-walk" aria-hidden="true"></span></button>
+          <button class="pad-mode-option" type="button" data-move-mode="run" aria-label="Courir"><span class="stick-figure stick-figure-run" aria-hidden="true"></span></button>
         </div>
       </div>
-      <button id="padCompanionButton" class="pad-action pad-action-companion is-locked" type="button" aria-label="Faire venir ou rappeler le compagnon">🐾</button>
+      <button id="padCompanionButton" class="pad-action pad-action-companion is-locked" type="button" aria-label="Faire venir ou rappeler le compagnon"><span class="pad-paw" aria-hidden="true"></span></button>
       <div id="padKnob" class="pad-knob"></div>
     </div>
 
