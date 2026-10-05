@@ -75,6 +75,35 @@ async function main(){
         return {notEarly,onTime,saved,hints,pauseSafe,manual,staysAhead,reachable};
       });
       for(const [key,value]of Object.entries(timing))assert.equal(value,true,key);
+      const loot=await page.evaluate(()=>{
+        const pick=pickSecretWorldConfig;const results=[];
+        state.activeSecretPortal=null;state.activeQuest=null;state.pendingQuestReward=null;
+        for(const config of secretWorlds){
+          pickSecretWorldConfig=()=>config;
+          state.time+=100;enterSecretWorld({id:'loot-'+config.id,name:'Portail',source:'manual'});
+          const zone=state.activeSecretWorld.zoneKey;
+          const items=Object.values(state.worldDiscoveries).filter(i=>i.zoneKey===zone).sort((a,b)=>a.x-b.x);
+          const bounds=getSecretWorldBounds();
+          const placed=items.length>=10 && items[0].x-state.player.x===220
+            && items.every(i=>i.x>bounds.start&&i.x<bounds.end&&i.hiddenUntil<=state.time);
+          const item=items[0],base=baseDiscoveryId(item.id),quantity=state.inventory[base]||0;
+          state.hiddenDiscoveryPopups.push(base);state.player.x=item.x;state.camera.x=item.x-window.innerWidth/2;
+          const target=getInteractionTarget();draw();interact();
+          const picked=target?.kind==='item' && state.inventory[base]===quantity+1 && item.collected;
+          const x=items[1].x;saveGame();loadGame();ensureSecretWorldDiscoveries();
+          const persisted=state.worldDiscoveries[item.id].collected && state.worldDiscoveries[items[1].id].x===x;
+          state.worldDiscoveries[items[1].id].x=bounds.end+1000;ensureSecretWorldDiscoveries();
+          const repaired=state.worldDiscoveries[items[1].id].x<bounds.end
+            && Object.values(state.worldDiscoveries).filter(i=>i.zoneKey===zone).every(i=>i.x>bounds.start&&i.x<bounds.end);
+          state.time=state.activeSecretWorld.returnAt+1;updateSecretWorld();
+          const retained=!state.activeSecretWorld && state.inventory[base]===quantity+1
+            && !Object.values(state.worldDiscoveries).some(i=>i.zoneKey===zone);
+          results.push({world:config.id,placed,picked,persisted,repaired,retained,count:items.length,target:target?.kind});
+        }
+        pickSecretWorldConfig=pick;
+        return results;
+      });
+      assert(loot.every(r=>r.placed&&r.picked&&r.persisted&&r.repaired&&r.retained),JSON.stringify(loot));
       assert.deepEqual(errors,[]);
       console.log(`${viewport.width}x${viewport.height}: 15-minute spawn, rendered portal, save reload, entry, 60-second world, return, slow-frame timing, directional hints, pause and star invocation passed`);
       await context.close();

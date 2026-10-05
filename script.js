@@ -1307,7 +1307,7 @@ function storeWorldDiscovery(item) {
   if (!item || typeof item.id !== "string") return null;
   const existing = state.worldDiscoveries[item.id];
   if (existing && !existing.collected) return existing;
-  if (!item.missionItem && !item.grounded && !item.rolling) {
+  if (!item.missionItem && !item.grounded && !item.rolling && !item.zoneKey?.startsWith("secret-world")) {
     const crowded = Object.values(state.worldDiscoveries).some((other) => (
       !other.collected && Math.abs(other.x - item.x) < minDiscoverySpacing
     ));
@@ -1319,6 +1319,7 @@ function storeWorldDiscovery(item) {
   const baseId = baseDiscoveryId(item.id);
   const duplicate = Object.values(state.worldDiscoveries).find((candidate) => (
     candidate && !candidate.collected
+    && (!item.zoneKey?.startsWith("secret-world") || candidate.zoneKey === item.zoneKey)
     && baseDiscoveryId(candidate.id) === baseId
     && Math.abs((candidate.x || 0) - (item.x || 0)) < 56
   ));
@@ -1450,29 +1451,36 @@ function getInteractionObstacleXs(sourceItem = null) {
 function ensureSecretWorldDiscoveries() {
   if (!state.activeSecretWorld) return;
   const zoneKey = state.activeSecretWorld.zoneKey;
-  const hasZone = Object.values(state.worldDiscoveries).some((item) => item.zoneKey === zoneKey);
-  if (hasZone) return;
+  const existing = Object.values(state.worldDiscoveries).filter((item) => item.zoneKey === zoneKey).sort((a,b)=>a.x-b.x);
+  if (existing.length) {
+    // Repair visits saved with the normal world's excessive spacing; preserve pickups.
+    existing.forEach((item,index)=>{
+      item.x = secretWorldOffset + 480 + index * secretWorldItemSpacing;
+      item.groundOffset = 0;
+    });
+    return;
+  }
   const bounds = getSecretWorldBounds();
   const secretWorld = getSecretWorldConfig();
   const pool = secretWorld.items.map(getMissionCatalogItem).filter(Boolean);
-  const usableWidth = Math.max(0, bounds.end - bounds.start - 1400);
+  const usableWidth = Math.max(0, bounds.end - bounds.start - 960);
   const itemCount = Math.max(pool.length, Math.floor(usableWidth / secretWorldItemSpacing));
   Array.from({ length: itemCount }).forEach((_, index) => {
     const item = pool[index % pool.length];
     if (!item) return;
-    const progress = itemCount <= 1 ? 0.5 : index / (itemCount - 1);
-    const jitter = (hashNumber(state.activeSecretWorld.startedAt + index * 23) - 0.5) * 260;
-    const x = bounds.start + 700 + progress * usableWidth + jitter;
-    const placed = placeDiscoverySafely({
+    const x = bounds.start + 480 + index * secretWorldItemSpacing;
+    const placed = {
       ...item,
       id: makeId(item.id, Math.floor(state.activeSecretWorld.startedAt * 10) + index + 500),
       x,
       place: secretWorld.name,
       visualType: getItemVisualType(item),
       zoneKey,
-      hiddenUntil: state.time + 2 + index * 1.2,
+      groundOffset: 0,
+      discoverySpot: "visible",
+      hiddenUntil: state.time,
       createdAt: state.time
-    }, index);
+    };
     storeWorldDiscovery(placed);
   });
 }
@@ -6804,7 +6812,7 @@ function loadGame() {
     for (let index = 1; index < ordinary.length; index += 1) {
       const previous = ordinary[index - 1];
       const item = ordinary[index];
-      if (item.zoneKey === previous.zoneKey || (!item.zoneKey?.startsWith("secret") && !previous.zoneKey?.startsWith("secret"))) {
+      if (!item.zoneKey?.startsWith("secret") && !previous.zoneKey?.startsWith("secret")) {
         if (item.x - previous.x < minDiscoverySpacing) item.x = previous.x + minDiscoverySpacing;
       }
     }
