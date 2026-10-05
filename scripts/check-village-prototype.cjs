@@ -36,8 +36,16 @@ async function main() {
         const resident=getResidentForVillage(village);
         const identity={name:village.name,role:resident.role,homeX:resident.homeX,villageId:resident.villageId};
         const signGap=layout.houses[0].x-layout.houses[0].width/2-(layout.signX+60);
-        const onlyFirst=getProceduralVillages().filter(v=>getVillagePrototypeLayout(v)).length===1
-          && getVillagePrototypeLayout({...village,chapterIndex:1})===null;
+        const variants=Array.from({length:8},(_,i)=>getVillagePrototypeLayout(getVillageByIndex(i)));
+        const varied=variants.every(l=>new Set(l.houses.map(h=>h.type)).size===4 && l.houses.every(h=>h.setback>=30))
+          && new Set(variants.map(l=>l.houses.map(h=>`${h.type}:${h.width}:${h.height}`).join('|'))).size>=4;
+        const anchors=variants.every((l,i)=>{
+          const v=getVillageByIndex(i),shelter=getVillageShelter(v);
+          const workshop=l.houses.find(h=>h.type==='workshop');
+          return shelter.x===l.houses[0].x && l.houses[0].type!=='raised'
+            && getVillageActivitySpots(v).find(s=>s.id==='workshop')?.x===workshop.x-44
+            && getResidentForVillage(v).homeX===v.x+410;
+        });
         const layoutBefore=JSON.stringify(layout);
         state.time=100;draw();
         const day=[...ctx.getImageData(0,0,canvas.width,canvas.height).data].filter((_,i)=>i%4!==3).reduce((a,b)=>a+b,0);
@@ -61,9 +69,9 @@ async function main() {
         state.companion.x=x-32;state.companion.y=getWalkSurfaceY(state.companion.x);
         state.camera.x=x-350;state.time=100;draw();
         ui.message.classList.remove('is-visible');
-        return {onlyFirst,signGap,sameLayout,sameResident,clearLane,crossed,companionFollowed,day,night,identity,types:layout.houses.map(h=>h.type)};
+        return {varied,anchors,signGap,sameLayout,sameResident,clearLane,crossed,companionFollowed,day,night,identity,types:layout.houses.map(h=>h.type)};
       });
-      assert(result.onlyFirst && result.sameLayout && result.sameResident && result.clearLane);
+      assert(result.varied && result.anchors && result.sameLayout && result.sameResident && result.clearLane);
       assert(result.signGap>100,'Entrance is separated from first house');
       assert(result.crossed && result.companionFollowed,`Player and companion have a continuous path: ${JSON.stringify(result)}`);
       assert(result.night<result.day,'Existing night phase darkens the same village');
@@ -81,7 +89,11 @@ async function main() {
         await page.screenshot({path:path.join(out,`workshop-${viewport.width}.png`)});
       }
       assert.deepEqual(errors,[]);
-      console.log(`${viewport.width}x${viewport.height}: only Village 1, four silhouettes, spaced entrance, same resident/day-night layout, open player/companion path, rendering passed`);
+      for(const index of [1,2,3]) {
+        await page.evaluate(index=>{const v=getVillageByIndex(index);state.camera.x=v.x-300;state.player.x=v.x+410;state.chapter=getChapter();state.time=100;draw();},index);
+        await page.screenshot({path:path.join(out,`village-${index+1}-${viewport.width}.png`)});
+      }
+      console.log(`${viewport.width}x${viewport.height}: varied villages, stable refuge/activity anchors, same Village 1, open walking lane and day/night passed`);
       await context.close();
     }
   } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}

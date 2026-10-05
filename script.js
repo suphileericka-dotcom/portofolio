@@ -665,7 +665,7 @@ function getVillageActivitySpots(village) {
   const candidates = layout ? [
     {id:"garden",x:layout.gardenX+12,label:"près du petit jardin",kind:"garden"},
     {id:"tree",x:layout.commonX-8,label:"près du grand arbre",kind:"tree"},
-    {id:"workshop",x:layout.houses[2].x-44,label:"près de l'auvent de l'atelier",kind:"house"}
+    {id:"workshop",x:layout.houses.find(house=>house.type==='workshop').x-44,label:"près de l'auvent de l'atelier",kind:"house"}
   ] : [0,1,3].map(index=>({id:`house-${index}`,x:village.x+index*86+26,label:"près d'une maison du village",kind:"house"}));
   return candidates.filter(spot=>!isRiverGap(spot.x,40) && Math.abs(spot.x-village.x)<1000);
 }
@@ -2353,7 +2353,28 @@ function drawTrailMarker(marker) {
 
 // A single existing village is the review prototype. Other villages keep their renderer.
 function getVillagePrototypeLayout(village) {
-  if (village.chapterIndex !== 0) return null;
+  if (village.chapterIndex !== 0) {
+    // Stable variations reuse the four silhouettes and keep the meeting place open.
+    const index = Math.max(1, Math.floor(village.chapterIndex));
+    const arrangements = [
+      ["garden", "raised", "workshop", "forest"],
+      ["workshop", "forest", "garden", "raised"],
+      ["forest", "workshop", "raised", "garden"]
+    ];
+    const types = arrangements[(index - 1) % arrangements.length];
+    const sizes = {forest:[76,56], garden:[96,62], workshop:[80,57], raised:[58,84]};
+    const offsets = [0, 205 + index % 3 * 12, 550 + index % 4 * 9, 760 + index % 3 * 16];
+    return {
+      signX: village.x - 270,
+      houses: types.map((type, slot) => ({type, x:village.x+offsets[slot],
+        width:sizes[type][0]+((index+slot)%3-1)*8,
+        height:sizes[type][1]+((index+slot)%3-1)*5,
+        setback:42+((index+slot)%3)*6})),
+      gardenX:village.x+70,
+      commonX:village.x+310,
+      residentX:village.x+410
+    };
+  }
   return {
     signX: village.x - 270,
     houses: [
