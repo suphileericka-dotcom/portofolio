@@ -4444,7 +4444,7 @@ function getItemUse(itemId) {
   if (label.includes("boussole")) return "Consommable : indique pendant un moment la direction d'un lieu deja connu ou de l'objectif actif.";
   if (label.includes("lanterne")) return "Equipement permanent : allume ou eteint une petite lueur autour de toi.";
   const typeUses = {
-    leaf: "Exploration : consomme une feuille et entoure pendant 75 secondes une trouvaille proche.",
+    leaf: "Dans le Carnet, touche « Repérer une trouvaille ». Pendant 75 secondes de jeu, une flèche indique la direction d'un objet à ramasser ; lorsqu'il est à l'écran, un cercle lumineux l'entoure. Rejoins-le, puis ramasse-le au toucher ou avec E sur clavier. Le repérage consomme un exemplaire de cet objet, mais seulement si une trouvaille est disponible. Il ne ramasse rien automatiquement.",
     stone: "Materiau de mission : les habitants peuvent en demander pour reparer le village.",
     shell: "Objet de mission et de collection lie aux zones humides.",
     cone: "Mouvement : consomme une graine ou une pomme de pin pour un leger elan temporaire.",
@@ -4481,7 +4481,7 @@ function getItemAction(itemId) {
   if (label.includes("boussole")) return { label: "Utiliser", kind: "compass" };
   if (label.includes("lanterne")) return { label: state.equipment.lanternOn ? "Eteindre" : "Allumer", kind: "lantern" };
   const type = getItemVisualType(item || baseId);
-  if (type === "leaf") return { label: "Reperer", kind: "scout" };
+  if (type === "leaf") return { label: "Repérer une trouvaille", kind: "scout" };
   if (type === "cone") return { label: "Prendre elan", kind: "stride" };
   if (type === "mushroom") return { label: "Allumer une lueur", kind: "glow" };
   if (type === "flower" || /fruit|baie|pomme/.test(label)) return { label: "Offrir", kind: "gift" };
@@ -4529,7 +4529,7 @@ function useScoutItem(itemId) {
   ensureVisibleDiscoveryZones();
   const target = getVisibleWorldDiscoveries().find((item) => !item.collected && !item.missionItem && !item.grounded);
   if (!target) {
-    showMessage("Aucune trouvaille proche a reperer pour le moment.");
+    showMessage("Aucune trouvaille proche. Ton objet est conservé.");
     return;
   }
   itemUseInProgress = true;
@@ -4543,7 +4543,7 @@ function useScoutItem(itemId) {
   }
   closeDialog(ui.encyclopediaDetailDialog);
   closeDialog(ui.journalDialog);
-  showMessage("Une feuille indique une trouvaille proche.");
+  showMessage("Repérage actif pendant 75 s : suis la flèche ou le cercle lumineux, puis ramasse l'objet.");
   itemUseInProgress = false;
 }
 
@@ -5847,10 +5847,8 @@ function updateVillagerChallengeButton(villager) {
 }
 
 function getFriendlyChallengeDirection(villager) {
-  const homeX = Number.isFinite(villager.homeX) ? villager.homeX : villager.x;
-  const preferred = state.player.lastTravelDirection || state.player.face || 1;
-  const available = Math.abs(clampToPlayableWorldX(homeX + preferred * friendlyChallengeDistance) - homeX);
-  return available >= friendlyChallengeDistance * 0.8 ? preferred : -preferred;
+  // Village races continue along the route, even after stepping back to talk.
+  return 1;
 }
 
 function startFriendlyChallenge() {
