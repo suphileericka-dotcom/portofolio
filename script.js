@@ -1861,29 +1861,33 @@ function drawWorldObjects() {
   getProceduralVillages().forEach((village) => {
     const y = world.ground - 18;
     const theme = getVillageTheme(village);
-    drawVillageSignpost(village, theme);
-    for (let i = 0; i < 4; i += 1) {
-      const houseX = village.x + i * 86;
-      const houseH = 48 + (i % 2) * 18;
-      ctx.fillStyle = i % 2 ? blendHex(theme.wall, "#f7f3df", 0.12) : theme.wall;
-      roundedRect(houseX - 32, y - houseH, 64, houseH, 5);
-      ctx.fill();
-      ctx.fillStyle = theme.roof;
-      ctx.beginPath();
-      ctx.moveTo(houseX - 40, y - houseH);
-      ctx.lineTo(houseX, y - houseH - 34);
-      ctx.lineTo(houseX + 40, y - houseH);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = theme.trim;
-      roundedRect(houseX - 10, y - houseH + 18, 20, 18, 4);
-      ctx.fill();
-      ctx.fillStyle = "#7d5a35";
-      roundedRect(houseX - 5, y - 20, 10, 20, 3);
-      ctx.fill();
-    }
     const resident = getResidentForVillage(village);
-    drawVillageMotif(village, theme, resident);
+    if (getVillagePrototypeLayout(village)) {
+      drawVillagePrototype(village, theme);
+    } else {
+      drawVillageSignpost(village, theme);
+      for (let i = 0; i < 4; i += 1) {
+        const houseX = village.x + i * 86;
+        const houseH = 48 + (i % 2) * 18;
+        ctx.fillStyle = i % 2 ? blendHex(theme.wall, "#f7f3df", 0.12) : theme.wall;
+        roundedRect(houseX - 32, y - houseH, 64, houseH, 5);
+        ctx.fill();
+        ctx.fillStyle = theme.roof;
+        ctx.beginPath();
+        ctx.moveTo(houseX - 40, y - houseH);
+        ctx.lineTo(houseX, y - houseH - 34);
+        ctx.lineTo(houseX + 40, y - houseH);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = theme.trim;
+        roundedRect(houseX - 10, y - houseH + 18, 20, 18, 4);
+        ctx.fill();
+        ctx.fillStyle = "#7d5a35";
+        roundedRect(houseX - 5, y - 20, 10, 20, 3);
+        ctx.fill();
+      }
+      drawVillageMotif(village, theme, resident);
+    }
     drawVillager(resident.x, resident);
     drawVillagerBubble(resident);
   });
@@ -2063,6 +2067,192 @@ function drawTrailMarker(marker) {
   ctx.restore();
 }
 
+// A single existing village is the review prototype. Other villages keep their renderer.
+function getVillagePrototypeLayout(village) {
+  if (village.chapterIndex !== 0) return null;
+  return {
+    signX: village.x - 270,
+    houses: [
+      {type:"forest", x:village.x - 40, width:76, height:56, setback:48},
+      {type:"garden", x:village.x + 215, width:96, height:62, setback:42},
+      {type:"workshop", x:village.x + 545, width:80, height:57, setback:48},
+      {type:"raised", x:village.x + 735, width:58, height:84, setback:42}
+    ],
+    gardenX: village.x + 54,
+    commonX: village.x + 310,
+    residentX: village.x + 410
+  };
+}
+
+function drawVillagePrototype(village, theme) {
+  const layout = getVillagePrototypeLayout(village);
+  const night = getDayPhase().night;
+  const shade = (color) => blendHex(color, "#253a40", night * 0.48);
+  const stroke = (points, color, width = 2) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = "round";
+    ctx.beginPath(); points(ctx); ctx.stroke();
+  };
+  const box = (x,y,w,h,color,r=3) => {ctx.fillStyle=shade(color);roundedRect(x,y,w,h,r);ctx.fill();};
+  const window = (x,y,r=8) => {
+    if (night > 0) {
+      const glow=ctx.createRadialGradient(x,y,1,x,y,r*3.4);
+      glow.addColorStop(0,`rgba(255,208,111,${night*.18})`);glow.addColorStop(1,"rgba(255,208,111,0)");
+      ctx.fillStyle=glow;ctx.beginPath();ctx.arc(x,y,r*3.4,0,Math.PI*2);ctx.fill();
+    }
+    drawEllipse(x,y,r+2,r+2,shade("#7f6947"));
+    drawEllipse(x,y,r,r,blendHex("#a7c0b8","#f1ce7d",night*.94));
+    stroke(c=>{c.moveTo(x-r,y);c.lineTo(x+r,y);c.moveTo(x,y-r);c.lineTo(x,y+r);},shade("#7f6947"),1.8);
+  };
+  const flowers = (x,y,count=4) => {
+    for(let i=0;i<count;i++) {
+      const px=x+i*9, py=y-5-(i%2)*4;
+      stroke(c=>{c.moveTo(px,y+2);c.lineTo(px,py);},shade("#62845b"),1.3);
+      for(let j=0;j<4;j++)drawEllipse(px+Math.cos(j*Math.PI/2)*2.4,py+Math.sin(j*Math.PI/2)*2.4,2,2,shade(i%2?"#d6c482":"#e2c0a6"));
+      drawEllipse(px,py,1.8,1.8,shade("#b79550"));
+    }
+  };
+  const bush = (x,y,size=12) => {
+    drawEllipse(x,y-3,size,size*.6,shade("#698653"));
+    drawEllipse(x-size*.6,y-1,size*.65,size*.5,shade("#7c995e"));
+    drawEllipse(x+size*.6,y,size*.65,size*.42,shade("#52774d"));
+  };
+  const fence = (x,y,length) => {
+    box(x,y-15,length,4,"#a28962",1);box(x,y-7,length,3,"#a28962",1);
+    for(let offset=0;offset<=length;offset+=14)box(x+offset,y-23,4,27,"#8b7352",2);
+  };
+  const lantern = (x,y) => {
+    box(x-2,y-61,4,61,"#6c624d",1);
+    if(night>0) {
+      const glow=ctx.createRadialGradient(x,y-56,2,x,y-56,35);
+      glow.addColorStop(0,`rgba(255,200,104,${night*.28})`);glow.addColorStop(1,"rgba(255,200,104,0)");
+      ctx.fillStyle=glow;ctx.beginPath();ctx.arc(x,y-56,35,0,Math.PI*2);ctx.fill();
+    }
+    box(x-7,y-65,14,18,"#826f4b",2);
+    ctx.fillStyle=blendHex("#b7c19e","#f3d28b",night);
+    roundedRect(x-4,y-62,8,12,2);ctx.fill();
+    box(x-10,y-68,20,4,"#6c624d",1);
+  };
+  const reeds = (x,y) => {
+    for(let i=0;i<4;i++) {
+      const height=18+i%3*7;
+      stroke(c=>{c.moveTo(x+i*6,y);c.quadraticCurveTo(x+i*6-5,y-height/2,x+i*6-2,y-height);},shade("#839762"),1.5);
+      box(x+i*6-4,y-height-8,4,9,"#a18456",2);
+    }
+  };
+
+  ctx.save();
+  // All architecture is behind the playable lane, never a solid on that lane.
+  const backY=world.ground-42;
+  // Sparse understory joins the existing forest to the village; gaps stay open.
+  bush(layout.signX-60,world.ground-22,15);
+  flowers(layout.signX-39,world.ground-24,3);
+  bush(village.x-118,backY-4,11);
+  bush(village.x+255,backY-7,15);
+  reeds(village.x+850,world.ground-25);
+  bush(village.x+795,backY-4,10);
+
+  // Entrance board is separated from the first façade and measured from its name.
+  const sx=layout.signX, sy=world.ground-28;
+  ctx.font="800 12px Nunito";
+  const signWidth=Math.max(92,Math.ceil(ctx.measureText(village.name).width)+28);
+  box(sx-signWidth*.3,sy-52,5,52,"#87704d",1);
+  box(sx+signWidth*.3,sy-52,5,52,"#87704d",1);
+  box(sx-signWidth/2-2,sy-68,signWidth+4,30,"#947853",4);
+  box(sx-signWidth/2,sy-66,signWidth,26,"#cbb284",3);
+  ctx.fillStyle=shade("#374a3c");ctx.textAlign="center";ctx.fillText(village.name,sx,sy-48);
+  drawEllipse(sx-signWidth/2+6,sy-61,1.5,1.5,shade("#8c704c"));
+  drawEllipse(sx+signWidth/2-6,sy-45,1.5,1.5,shade("#8c704c"));
+
+  for(const house of layout.houses) {
+    ctx.save();ctx.translate(house.x,world.ground-house.setback);
+    const w=house.width,h=house.height;
+    drawEllipse(0,2,w*.58,5,`rgba(38,48,30,${.12+night*.1})`);
+    // A narrow approach makes the setback readable without adding an entrance mechanic.
+    ctx.fillStyle=shade("#b0a280");ctx.beginPath();ctx.moveTo(-7,1);ctx.lineTo(7,1);ctx.lineTo(12,house.setback-20);ctx.lineTo(-11,house.setback-20);ctx.closePath();ctx.fill();
+    if(house.type==="raised") {
+      box(-27,-16,54,6,"#836d50",2);
+      box(-23,-12,6,13,"#776448",1);box(17,-12,6,13,"#776448",1);
+      stroke(c=>{c.moveTo(-21,-12);c.lineTo(20,0);c.moveTo(21,-12);c.lineTo(-20,0);},shade("#8b7555"),2.5);
+      box(-w/2,-h,w,h-17,"#aa9670",4);
+      for(let y=-h+10;y<-20;y+=12)stroke(c=>{c.moveTo(-w/2+4,y);c.lineTo(w/2-4,y);},shade("#907b5b"),1);
+      box(26,-32,4,33,"#826d50",1);box(41,-32,4,33,"#826d50",1);
+      for(let y=-29;y<-2;y+=8)box(28,y,14,2,"#a08a64",1);
+    } else {
+      ctx.fillStyle=shade(house.type==="garden"?"#d0c5a2":theme.wall);
+      ctx.beginPath();ctx.moveTo(-w/2,0);ctx.lineTo(-w/2,-h+6);ctx.quadraticCurveTo(-w/2,-h,0,-h-9);ctx.quadraticCurveTo(w/2,-h,w/2,-h+6);ctx.lineTo(w/2,0);ctx.closePath();ctx.fill();
+      box(-w/2-2,-5,w+4,5,"#9c9779",2);
+    }
+    const roof=house.type==="forest"?"#728d51":house.type==="garden"?"#789ba1":house.type==="workshop"?"#ac9164":"#6e8671";
+    ctx.fillStyle=shade(roof);ctx.beginPath();
+    if(house.type==="forest") {
+      ctx.moveTo(-w/2-10,-h+5);ctx.quadraticCurveTo(-w/2-14,-h-9,-13,-h-28);ctx.quadraticCurveTo(0,-h-40,15,-h-27);ctx.quadraticCurveTo(w/2+15,-h-8,w/2+9,-h+5);ctx.quadraticCurveTo(21,-h+12,5,-h+3);ctx.quadraticCurveTo(-13,-h+13,-w/2-10,-h+5);
+    } else if(house.type==="garden") {
+      ctx.moveTo(-w/2-8,-h+3);ctx.quadraticCurveTo(-w/2-10,-h-16,-5,-h-33);ctx.quadraticCurveTo(12,-h-30,w/2+10,-h+3);ctx.quadraticCurveTo(26,-h+12,0,-h+5);ctx.quadraticCurveTo(-25,-h+12,-w/2-8,-h+3);
+    } else if(house.type==="workshop") {
+      ctx.moveTo(-w/2-8,-h+2);ctx.lineTo(-12,-h-27);ctx.lineTo(w/2+9,-h+2);
+    } else {
+      ctx.moveTo(-w/2-8,-h+2);ctx.lineTo(0,-h-32);ctx.lineTo(w/2+8,-h+2);ctx.lineTo(w/2,-h+10);ctx.lineTo(-w/2,-h+10);
+    }
+    ctx.closePath();ctx.fill();
+    if(house.type==="forest") {
+      for(let i=0;i<6;i++)drawEllipse(-31+i*12,-h-3-(i%3)*7,10,5,shade(i%2?"#8ca15f":"#627e49"));
+      flowers(-w/2-18,0,3);
+    }
+    const doorY=house.type==="raised"?-18:0;
+    box(-9,doorY-30,18,30,"#8b7351",8);
+    stroke(c=>{c.moveTo(-4,doorY-24);c.lineTo(-4,doorY-4);},shade("#b49a6e"),1.3);
+    drawEllipse(5,doorY-12,1.5,1.5,shade("#d3bb7c"));
+    window(-w*.28,-h*.52,house.type==="forest"?7:8);
+    if(house.type!=="forest")window(w*.28,-h*.5,7);
+    if(house.type==="garden") {
+      fence(-w/2-26,9,23);fence(w/2+4,9,24);
+      box(w/2-3,-9,25,9,"#9a7d58",2);flowers(w/2,-10,3);
+      bush(-w/2-10,3,9);
+    }
+    if(house.type==="workshop") {
+      // Side awning and small workbench; no observation/use prompts.
+      box(-w/2-26,-26,3,27,"#8d7857",1);box(-w/2+10,-26,3,27,"#8d7857",1);
+      ctx.fillStyle=shade("#cdc19a");ctx.beginPath();ctx.moveTo(-w/2-29,-27);ctx.lineTo(-w/2-20,-43);ctx.lineTo(-w/2+13,-43);ctx.lineTo(-w/2+17,-27);ctx.closePath();ctx.fill();
+      stroke(c=>{c.moveTo(-w/2-8,-42);c.lineTo(-w/2-10,-27);},shade("#92a698"),7);
+      box(-w/2-26,-15,40,5,"#9b805a",1);box(-w/2-22,-10,4,10,"#826b4a",1);box(-w/2+4,-10,4,10,"#826b4a",1);
+      box(w/2+8,-18,16,19,"#a18a65",3);
+      stroke(c=>{c.moveTo(w/2+8,-13);c.lineTo(w/2+24,-13);c.moveTo(w/2+8,-4);c.lineTo(w/2+24,-4);},shade("#74634b"),1.7);
+      // One pale cloth marks the fisher's workshop without another interactive object.
+      stroke(c=>{c.moveTo(-w/2-26,-22);c.lineTo(-w/2+11,-22);},shade("#776448"),1);
+      box(-w/2-17,-22,12,13,"#9db7ad",1);
+    }
+    if(house.type==="garden" || house.type==="workshop") {
+      const cx=w*.22,cy=-h-17;
+      box(cx,cy-23,9,27,"#aa8666",2);box(cx-2,cy-25,13,5,"#8f7257",1);
+      // Light, slow chimney smoke; fades into the existing atmosphere.
+      for(let i=0;i<3;i++) {
+        const phase=(state.time*.22+i/3)%1;
+        drawEllipse(cx+4+Math.sin(phase*3+i)*4,cy-28-phase*22,3+phase*3,3+phase*3,`rgba(210,219,197,${(1-phase)*.15})`);
+      }
+    }
+    ctx.restore();
+  }
+
+  // Small shared river-garden: one bench and a tree, not every prop in the reference.
+  fence(layout.gardenX-10,backY+3,38);flowers(layout.gardenX-3,backY-2,5);
+  const cx=layout.commonX,cy=world.ground-30;
+  box(cx-31,cy-15,55,5,"#998360",2);box(cx-31,cy-28,55,9,"#a58d66",2);
+  box(cx-27,cy-10,4,10,"#786447",1);box(cx+16,cy-10,4,10,"#786447",1);
+  flowers(cx-49,cy-3,3);reeds(cx+35,cy);
+  lantern(village.x-162,world.ground-27);lantern(cx+72,cy-1);
+  // A compact, irregular canopy uses the established ellipse-tree language.
+  const tx=cx-8,ty=world.ground-88;
+  box(tx-4,ty-54,8,52,"#817352",2);
+  drawEllipse(tx-20,ty-66,28,35,shade("#5f825a"));
+  drawEllipse(tx+13,ty-74,29,42,shade("#729365"));
+  drawEllipse(tx,ty-96,21,30,shade("#88a374"));
+  bush(tx-18,ty,10);
+  // The resident still belongs to the same code and x=Village+410, with open space.
+  bush(village.x+454,backY-1,8);
+  ctx.restore();
+}
+
+
 function drawVillageSignpost(village, theme) {
   const x = village.x - 170;
   const y = world.ground - 18;
@@ -2183,6 +2373,14 @@ function drawDiscoveryBursts() {
     const y = particle.y + particle.vy * progress + progress * progress * 16;
     ctx.save();
     ctx.globalAlpha = alpha;
+    if (particle.objectId) {
+      ctx.translate(x, y);
+      const scale = 0.8 * (1 - progress * 0.3);
+      ctx.scale(scale, scale);
+      renderObjectVisual(particle.objectId, ctx);
+      ctx.restore();
+      return;
+    }
     ctx.fillStyle = particle.color;
     ctx.beginPath();
     ctx.arc(x, y, particle.size * (1 - progress * 0.38), 0, Math.PI * 2);
@@ -2525,227 +2723,211 @@ function drawLetterIcon(x, y) {
   ctx.restore();
 }
 
+// Object identity: the same vector paths drive Canvas and every HTML icon.
+const objectVisuals = (() => {
+  const objects = {};
+  const ink = "#594b3d", cream = "#eee2bd", green = "#779b57", gold = "#d5aa56";
+  const p = (d, fill = "none", stroke = ink, width = 1.5, opacity = 1) => ({d, fill, stroke, width, opacity});
+  const line = (d, stroke = ink, width = 1.8) => p(d, "none", stroke, width);
+  const oval = (x, y, rx, ry, fill, stroke = ink, opacity = 1) => p(`M${x-rx} ${y}a${rx} ${ry} 0 1 0 ${rx*2} 0a${rx} ${ry} 0 1 0 ${-rx*2} 0`, fill, stroke, 1.5, opacity);
+  const rect = (x, y, w, h, fill, r = 3) => p(`M${x+r} ${y}h${w-r*2}q${r} 0 ${r} ${r}v${h-r*2}q0 ${r} ${-r} ${r}h${-w+r*2}q${-r} 0 ${-r} ${-r}v${-h+r*2}q0 ${-r} ${r} ${-r}Z`, fill);
+  const polygon = (points, fill, stroke = ink) => p("M" + points.map(pt => pt.join(" ")).join("L") + "Z", fill, stroke);
+  const set = (id, category, distinction, shapes) => {objects[id] = {id, category, distinction, shapes};};
+  const leaf = (shape, color, veins = "M-9 17Q-1 2 10-19") => [p(shape, color), line(veins, "#506840")];
+  const flower = (petals, radius, color, center = gold, stem = true, start = -Math.PI/2) => {
+    const shapes = stem ? [line("M0 23Q-4 8 0-8", green, 2.4), p("M-2 14Q-17 4-14 18Q-8 22-2 14", green)] : [];
+    for (let i=0;i<petals;i++) {
+      const a=start+i*Math.PI*2/petals, cx=Math.cos(a)*radius, cy=-10+Math.sin(a)*radius;
+      shapes.push(oval(+cx.toFixed(2), +cy.toFixed(2), petals>6?4:6, petals>6?7:6, color));
+    }
+    shapes.push(oval(0,-10,4.5,4.5,center)); return shapes;
+  };
+  const rock = (points, color, marks) => [polygon(points,color),line(marks,"#eee2c5",1.8)];
+  const crystal = (points, color, facets) => [polygon(points,color),line(facets,"#f3f1de",1.5)];
+  const feather = (shape, color, shaft, barbs) => [p(shape,color),line(shaft,"#a38e68",1.9),line(barbs,"#c6b896",1.1)];
+  const nut = (shape, color, cup) => [p(shape,color),p(cup,"#98754d"),line("M-5-7Q-9 5-3 14","#e1bf86",1.5)];
+  const seed = (shape,color,marks) => [p(shape,color),line(marks,"#f0d59c",1.8)];
+  const branch = (shape,color,details) => [p(shape,color),line(details,"#d4bb89",1.5)];
+  const compass = (outer,color,needle,detail) => [p(outer,color),oval(0,1,15,15,cream),polygon(needle,"#a5624f"),line(detail,"#526c66",1.4)];
+  const bottle = (body,color,inside,cap) => [p(body,color,"#64888c"),...inside,rect(...cap,"#a58859",1),line("M-10-6V10","#f5f1d3",2)];
+  const crown = (shape,color,detail) => [p(shape,color),line(detail,"#f0d590",1.8)];
+  const star = (points, color, detail) => [polygon(points,color),line(detail,"#fff0b8",1.7)];
+  const scallop = (shape,color,ribs) => [p(shape,color),line(ribs,"#ac805f",1.4)];
+
+  set("leaf","Nature · feuille","Feuille allongée et dentelée, nervure centrale et nervures latérales", leaf("M-10 21L-17 11-13 7-18 1-12-2-15-9-8-10-7-17 0-17 9-27 17-17 15-10 20-6 15 0 17 5 10 9 9 16Z","#97a644","M-10 21L9-24M-5 11L-13 3M0 3L-9-7M4-7L-5-15M-5 11L9 9M0 3L13-1M4-7L14-13"));
+  set("stone","Nature · pierre","Galet horizontal poli avec reflet et petite strie", rock([[-25,7],[-19,-10],[0,-16],[22,-6],[25,10],[8,17],[-12,16]],"#a99c85","M-15-5Q-5-13 9-8M8 9l9-2"));
+  set("feather","Nature · plume","Plume claire incurvée, barbes découpées et rachis dépassant", feather("M-9 20Q-22-7 2-27L9-22 3-17 14-15 8-9 16-6 10 1 14 4 6 12 5 18-3 23Z",cream,"M-12 28Q-2 4 3-24","M-6 13l-9-6M-3 5l-11-7M0-3l-8-9M-6 13l12-3M-3 5l13-7M0-3l10-9"));
+  set("moss","Patrimoine · sculpture","Buste sculpté avec visage, socle et mousse sur les épaules",[rect(-19,17,38,9,"#8d927d"),p("M-16 17V4Q-23-2-12-9V-15Q-10-27 0-27T12-15V-9Q23-2 16 4V17Z","#a2a38c"),line("M-6-13h2m8 0h2M0-12v6l3 1M-5 0q5 4 10 0"),p("M-19 3Q-10-6-7 2L-5 8-13 12Z",green),oval(12,17,7,4,"#557847")]);
+  set("shell","Nature · coquille","Coquille de rivière en spirale, silhouette arrondie et ouverture",[p("M-23 9Q-25-17-4-22Q20-25 23-3Q25 21 3 23L-19 15Z","#dba780"),line("M12 10Q-10 20-13-1Q-13-14 0-14Q13-14 13-1Q12 9 2 8Q-5 7-3 0Q-1-4 3-1","#ae7458",2),p("M8 13Q28 6 22 22Q15 28 8 13","#986e5a")]);
+  set("cone","Nature · cône","Pomme de pin verticale en goutte avec huit écailles imbriquées",[p("M0-27Q24-16 22 8Q19 25 0 28Q-20 24-22 8Q-23-17 0-27Z","#60879b"),...[-15,-4,8,19].flatMap((y,i)=>[p(`M${-15+i*2} ${y}q7-7 14 0q-7 12-14 0Z`,"#426d82"),p(`M0 ${y-3}q8-7 16 0q-8 12-16 0Z`,"#7198a7")]),line("M0-27v-3","#75553c",2)]);
+  set("mushroom","Nature · champignon","Chapeau lumineux ouvert et retombant, lamelles, pied fin et halo",[oval(0,-10,29,20,"#f3d778","none",.18),p("M-4-2L-7 25Q0 30 6 24L4-2Z",cream),p("M-26-5Q-22-12-14-13Q-3-37 10-19Q16-12 24-10L28 1Q15 9 4 4Q-12 10-27 2Z","#d2bb68"),line("M-19 0l14-4M-10 3l9-7M10 3L4-4M21 0L9-5","#fff2bb",1.4)]);
+  set("star","Céleste","Étoile tombée à cinq branches, pointe cassée et cœur lumineux",star([[0,-27],[8,-9],[27,-7],[13,6],[19,25],[0,14],[-19,25],[-12,5],[-27,-7],[-8,-10]],"#e6bd42","M-5-6l5-8 5 8M8 9l5 6"));
+
+  set("item-1","Nature · feuille","Feuille d’argent fine en croissant, pointe recourbée et reflets",leaf("M-13 23Q-14-11 22-26Q8-14 13 0Q15 17-13 23Z","#c1c9c2","M-13 23Q-3 1 19-22M-2 5l8 1M4-7l5 1"));
+  set("item-2","Nature · fleur","Trèfle à trois feuilles en cœur et petite fleur sur tige",[line("M0 26V-4",green,2),p("M0 5Q-24 0-18-13Q-10-22 0-7Q9-24 19-12Q22 0 0 5Z",green),p("M0 5Q-17 13-9 22Q0 29 7 18Q12 10 0 5Z","#91b267"),...flower(3,5,"#dcb2c4",gold,false).map(s=>({...s,d:s.d}))]);
+  set("item-3","Nature · bois","Branche souple en arc avec fourche et deux bourgeons",branch("M-26 17Q-12-14 22-22L24-17Q-6-10-21 20Z","#9c8058","M-9 0L-13-15M8-13L19 1"));
+  set("item-4","Nature · pierre","Pierre de lune en croissant évidé",[p("M15-25Q-16-28-23 1Q-21 28 14 25Q-6 20-7 0Q-6-17 15-25Z","#cbd0c0"),oval(-16,6,3,3,"#a6b2a5"),oval(-12,-11,2,2,"#e8e9d6")]);
+  set("item-5","Nature · pierre","Galet ovoïde debout avec visage souriant gravé",rock([[-16,18],[-21,1],[-14,-20],[4,-25],[20,-9],[22,9],[12,23]],"#b7aa8b","M-9-3h1M8-3h1M-8 7q8 11 16 0"));
+  set("item-6","Nature · roseau","Roseau long à trois nœuds et ouverture de sifflet",[p("M-7 27L-2-28 6-27 2 27Z","#bba967"),line("M-6 11h9M-4-4h8M-2-19h6"),oval(1,-21,2,4,"#655d40"),p("M1 10Q27-12 20-21Q8-15 1 10",green)]);
+  set("item-7","Nature · fleur","Fleur d’averse penchée, trois pétales en gouttes",[line("M-10 25Q1 6 2-9",green,2),p("M2-15Q-19-16-22 1Q-8 8 2-15Z","#a5b5c6"),p("M2-15Q-3 13 10 11Q22 4 2-15Z","#c0ced7"),p("M2-15Q21-24 26-9Q27 2 2-15Z","#9baebe"),oval(2,-14,4,4,gold)]);
+  set("item-8","Nature · fruit","Grappe de trois baies charnues attachées à une petite feuille",[line("M0-24L-5-7M0-18L12-5",green),p("M0-18Q-18-28-20-14Q-9-6 0-18Z",green),oval(-11,5,10,11,"#c4827c"),oval(10,6,11,12,"#b26666"),oval(0,18,9,9,"#d19887")]);
+  set("item-9","Nature · noix","Noisette claire ronde, cupule courte et coque striée",nut("M-17-8Q-23 14-3 23Q16 22 18 0Q16-17-17-8Z","#cfa66d","M-18-6Q-18-17 0-17Q15-17 18-5Q0 3-18-6Z"));
+  set("item-10","Nature · bois","Bande d’écorce enroulée, bords irréguliers et fibres",[p("M-20-22L13-24 20-15 14 19 8 25-17 20-22 12-15 5-20-4Z","#a77851"),p("M13-24Q28-20 20-10L12-8Z","#c7a070"),line("M-10-15l4 30M1-18l-2 23M8-4l-1 17","#6f503c")]);
+  set("item-11","Nature · plume","Grande plume blanche étroite, barbes symétriques en peigne",feather("M0-28L10-21 6-17 13-13 8-8 12-4 7 2 10 6 4 15 0 23-6 13-12 4-8 0-13-6-8-11-10-17Z","#f2eedb","M0-26V29","M0-17l-7 6M0-8l9 7M0 1l-7 7M0 10l5 4"));
+  set("item-12","Nature · coquillage","Coquillage doré en éventail à cinq festons et côtes radiales",scallop("M-24 12Q-31-6-20-15Q-19-27-9-23Q0-30 9-23Q21-27 22-14Q32-5 24 12L7 23H-7Z",gold,"M0 20L-19-12M0 20L-9-21M0 20V-24M0 20L10-20M0 20L20-11"));
+  set("item-13","Nature · champignon","Petit champignon bleu à chapeau rond, pied court et clair",[rect(-6,2,12,19,cream,4),p("M-20 2Q-21-22 0-24Q22-22 20 2Z","#6b9db7"),line("M-12-9Q-4-18 7-15","#bdd7de",2)]);
+  set("item-14","Nature · pollen","Grain de pollen hérissé de six excroissances et granules",[...Array.from({length:6},(_,i)=>{const a=i*Math.PI/3;return oval(Math.round(Math.cos(a)*17),Math.round(Math.sin(a)*17),4,4,"#cba851");}),oval(0,0,17,17,"#e5c776"),oval(-5,-5,3,3,"#b89b4b"),oval(6,3,2,2,"#b89b4b"),oval(-4,7,2,2,"#f3dfa4")]);
+  set("item-15","Nature · fougère","Fronde repliée en crosse, folioles alternées",[line("M-4 27Q-14 10-3-12Q7-30 18-18Q21-4 7-5Q0-8 8-15",green,2.5),...[-2,8,18].flatMap(y=>[p(`M-6 ${y}q-19-12-15 1q4 8 15-1`,"#668c53"),p(`M-6 ${y}q15-13 14-1q-3 7-14 1`,"#84a65d")])]);
+  set("item-16","Nature · résine","Ambre trapézoïdal translucide avec inclusion végétale",[polygon([[-17,-20],[12,-25],[23,-7],[13,22],[-13,24],[-23,4]],"#d8a355"),line("M-5 12L4-12M0 1l-9-4M2-6l7 1","#8c6a3e"),line("M-12-13l-5 15","#f1d595",2)]);
+  set("item-17","Nature · lierre","Ruban de lierre sinueux avec trois feuilles triangulaires",[line("M-15 26Q17 4-4-25",green,2.5),p("M-5-15L-19-24-24-12-9-5Z","#567b47"),p("M1 0L18-14 23 1 7 8Z",green),p("M-1 13L-19 5-22 20-9 23Z","#8bac61")]);
+  set("item-18","Nature · bouton floral","Rose fermée en ogive avec sépales serrés",[line("M0 26L-2 1",green,2.5),p("M-13-9Q-19-24-4-27Q15-28 16-11Q14 3 0 7Q-13 2-13-9Z","#be727b"),line("M-4-24Q8-17 0 2M-12-14Q-3-17 3-12","#edb2ad"),p("M-13-6L-15 6-3 3 0 9 9 3 17-4 5 0Z",green)]);
+  set("item-19","Nature · fleur sèche","Clochette végétale sèche suspendue à une tige courbe",[line("M-15 26Q-8-20 8-23L12-12","#9a875b",2),p("M5-13Q-3-3-9 8L-4 12 1 9 7 14 13 8 19 10Q21-2 16-13Z","#bda674"),line("M7-8L1 7M13-8l1 13","#806e4c")]);
+  set("item-20","Nature · eau","Perle de rosée ronde posée sur un calice à trois pointes",[p("M-21 17L-15 6-3 13 0 3 7 13 19 7 22 18Z",green),oval(0,-1,14,15,"#aed1cf"),p("M-7-11Q-12-2-8 1L-3-9Z","#ecf1dd","none")]);
+  set("item-21","Fabriqué · carte","Carte fragile déchirée aux bords, chemin et croix",[p("M-24-18L-6-22 4-16 22-21 25 20 8 23-1 18-21 23-18 10-24 4Z",cream),line("M-8-19L-5 20M8-18L10 22","#bda66f"),line("M-16 11Q-11-6 0 0T17-10M12-13l7 7M18-13l-7 7","#8e785a")]);
+  set("item-22","Fabriqué · tuile","Fragment de tuile courbe avec cassure en dents",[p("M-24 8Q-13-29 18-22L23-6 14-4 18 6 8 6 9 18-2 17-5 26Z","#bb8065"),line("M-17 4Q-7-16 11-15M-11 15L9-4","#e0ad88",2)]);
+  set("item-23","Fabriqué · clef","Clef de mousse à anneau carré, dents et mousse",[rect(-18,-25,23,23,"#938a60",6),rect(-12,-19,11,11,"#263d32",2),p("M-4-2L4-2 4 23 16 23 16 15 10 15 10 8 4 8Z",gold),oval(-14,-21,6,3,green),oval(3,-8,4,5,green)]);
+  set("item-24","Fabriqué · fiole","Fiole ronde à col étroit contenant deux volutes de brume",bottle("M-6-18V-8Q-25 0-20 17Q0 32 20 17Q25 0 6-8V-18Z","#a8c8c6",[line("M-12 10q8-9 15-1t9-3M-13 17q8-6 19 0","#e5ecda",3)],[-8,-24,16,7]));
+  set("item-25","Fabriqué · boussole","Boussole ovale cabossée avec aiguille inclinée et fissure",compass("M-20-8Q-25 15-8 25Q16 31 24 9L20-14 7-23-5-22-12-15Z","#a49772",[[-8,14],[1,-11],[8,9]],"M-13-10L-9-2-16 2M-1 18v-5"));
+  set("item-26","Fabriqué · lanterne","Petite lanterne à anse, toit pointu et fenêtre lumineuse",[line("M-9-18Q-10-32 0-30Q10-32 9-18",ink,2.3),polygon([[-17,-14],[0,-24],[17,-14]],"#a88955"),rect(-15,-14,30,36,"#886c49",2),rect(-10,-9,20,25,"#e8c367",1),line("M0-9V16M-10 5h20"),rect(-18,22,36,5,"#a88955",1)]);
+  set("item-27","Fabriqué · ficelle","Bout de ficelle beige noué, boucle et deux extrémités",[line("M-26 16Q-14-8-3 5Q8 17 15 2Q24-18 7-19Q-9-18-1 1Q8 17 26 24","#bfa575",3),line("M-6 1L5 10M-5 7L3-1","#806d4e",2)]);
+  set("item-28","Nature · fruit","Pomme rouge bilobée avec creux, queue et feuille",[p("M0-14Q-22-27-25-5Q-28 18-6 26L0 22 7 26Q28 18 25-5Q22-27 0-14Z","#bf6b5e"),line("M0-14Q-2-24 4-28","#79603e",3),p("M3-23Q18-30 19-20Q9-14 3-23",green),line("M-16-6Q-21 4-16 12","#e6a18a",2)]);
+  set("item-29","Fabriqué · sachet","Sachet de graines resserré par un lien, graines dessinées",[p("M-12-25L14-25 9-13Q26-4 21 20Q4 31-21 20Q-25-4-9-13Z","#c5af7e"),line("M-12-13h25M-1-14l9-8M-1-14l-10-6"),oval(-5,7,3,5,"#8a704c"),oval(6,12,3,4,"#9e8054")]);
+  set("item-30","Fabriqué · miroir","Miroir à main rond et poignée évasée",[oval(0,-10,17,18,"#bc9c66"),oval(0,-10,12,13,"#b6cfca"),p("M-4 8H4L8 26H-8Z","#bc9c66"),line("M-6-15l8-4M-7-6l13-8","#f2efdc",2)]);
+  set("item-31","Nature · cristal","Cristal de pluie en aiguille à deux pointes latérales",crystal([[-6,26],[-19,6],[-13,-15],[-6,-7],[2,-29],[10,-9],[19,-18],[21,8],[6,26]],"#85b6c7","M2-29L-1 23M-13-15L-1 0 19-18M-19 6L-1 23 21 8"));
+  set("item-32","Nature · graine","Graine ancienne allongée avec coque entrouverte et germe",[...seed("M-17-19Q6-34 19-9Q26 9 6 26Q-17 24-21 5Z","#a28c60","M-8-19Q-15 7 7 21"),p("M-6-15Q9-20 13-6Q4 4-2 14Z","#dfc383"),line("M2 7Q-3-5 5-12",green,2)]);
+  set("item-33","Nature · fleur","Fleur éternelle à six pétales anguleux et deux feuilles",[line("M0 25V-5",green,2),p("M-1 13L-19 6-12 22Z",green),p("M2 17L18 9 13 25Z",green),...Array.from({length:6},(_,i)=>{const a=i*Math.PI/3,pt=(r,o=0)=>[+(Math.cos(a+o)*r).toFixed(2),+(-10+Math.sin(a+o)*r).toFixed(2)];return polygon([pt(5,-.4),pt(18,-.2),pt(22),pt(18,.2),pt(5,.4)],"#c8a0b1");}),oval(0,-10,5,5,gold)]);
+  set("item-34","Fabriqué · boussole","Boussole enchantée hexagonale avec rune et double aiguille",compass("M-23-12L0-27 23-12V15L0 28-23 15Z",gold,[[0,-13],[7,1],[0,15],[-7,1]],"M-15 0h5M10 0h5M0-19v4M-4 20l4-3 4 3"));
+  set("item-35","Fabriqué · verre","Papillon en verre, quatre ailes facettées asymétriques",[p("M-2-7Q-29-35-28-4Q-27 8-7 6Q-28 27-10 24L0 10 10 24Q28 27 7 6Q27 8 28-4Q29-35 2-7Z","#a9c7ca"),line("M0-8V17M-2-6l-5-10M2-6l5-10"),line("M-23-14L-6 3-16 18M23-14L6 3 16 18","#e7ebd8",1.7)]);
+  set("item-36","Céleste","Éclat de soleil en éventail à trois rayons larges",[polygon([[-21,23],[-25,-4],[-12,6],[-8,-27],[3,-7],[23,-20],[18,6],[29,10],[7,25]],"#e4bc56"),line("M-14 16L-7-12M-6 16L16-11M2 20L21 11","#fff0b3",2)]);
+  set("item-37","Fabriqué · couronne végétale","Couronne de fougère ouverte avec frondes en pointes",[p("M-25 3Q-30 30 0 27Q30 30 25 3L18 4Q21 21 0 20Q-21 21-18 4Z",green),...[-19,-9,9,19].map((x,i)=>p(`M${x} 18l${x<0?-6:6}-23 ${x<0?7:-7} 5 ${x<0?-4:4}-10 8 3-5 9 5-2-4 18Z`,i%2?"#94ad65":"#5d814d"))]);
+  set("item-38","Nature · silex","Silex triangulaire taillé avec arêtes et petites ondes",[...rock([[-24,20],[-8,-24],[4,-28],[26,15],[10,25]],"#818780","M-8-24L-5 14 10 25M-24 20L-5 14 26 15"),line("M18-25q8 5 7 13M23-29q10 7 8 20","#ada785",1.4)]);
+  set("item-39","Fabriqué · charme","Charme de vent suspendu à un anneau, trois rubans flottants",[oval(0,-21,5,5,"none"),rect(-15,-14,30,8,"#b5a175",2),line("M-10-6Q-22 7-6 25M0-6Q14 6 1 27M10-6Q25 12 19 20","#7ca5a3",3),oval(-6,25,3,3,gold)]);
+  set("item-40","Nature · plume","Plume d’aurore asymétrique allongée, pointe bifide et barbes étagées",feather("M-17 24Q-27 0-10-18L-3-27 3-22-1-15 9-18 7-8 17-7 12 2 20 4 8 13 10 17-3 24Z","#e6ba97","M-18 29Q-4 4 0-22","M-12 17l-9-7M-8 9l-12-9M-4 0l-9-11M-8 9l17-4M-4 0l14-9"));
+  set("item-41","Fabriqué · bouton","Bouton de manteau large, quatre trous et bord épais",[oval(0,0,23,23,"#987d5b"),oval(0,0,17,17,"#c3a77b"),...[-6,6].flatMap(x=>[-6,6].map(y=>oval(x,y,3,3,"#564d40")))]);
+  set("item-42","Fabriqué · vaisselle","Tasse fendue avec anse et fissure en zigzag",[p("M-22-17H13V14Q10 28-8 25Q-22 22-22 10Z","#c2c7b1"),line("M13-10Q31-15 28 6Q27 17 13 12",ink,4),oval(-4,-17,18,4,"#92967f"),line("M2-12L-3-1 3 5-2 16","#756e5c",2)]);
+  set("item-43","Fabriqué · jeton","Jeton de village octogonal avec maison gravée",[polygon([[-10,-24],[10,-24],[24,-10],[24,10],[10,24],[-10,24],[-24,10],[-24,-10]],"#bfa575"),line("M-13 0L0-12 13 0M-10-1V13H10V-1M-3 13V5H3V13","#756346",2.5)]);
+  set("item-44","Fabriqué · clou","Clou doré diagonal avec tête aplatie et pointe",[polygon([[-16,24],[3,-13],[10,-10],[-12,27]],gold),p("M-5-17L-1-24 20-14 17-7Z","#e1bd75"),line("M-12 19L4-9","#f3d995",1.3)]);
+  set("item-45","Fabriqué · pinceau","Pinceau sec, manche long, virole et poils écartés",[polygon([[-6,28],[-3,-1],[5,-1],[2,28]],"#a78251"),rect(-5,-10,12,10,"#aaa998",1),p("M-5-10L-11-24-5-20-3-29 1-23 6-28 8-18 13-21 7-10Z","#ad8c69"),line("M-3-19v7M3-21v9","#6f5740",1.3)]);
+  set("item-46","Fabriqué · note","Note pliée triangulaire, rabat et petite ligne manuscrite",[polygon([[-22,-22],[21,-16],[23,21],[-18,25]],cream),polygon([[-22,-22],[21,-16],[0,5]],"#d4c491"),line("M0 5L23 21M-18 25L0 5M-9 11l7 2","#9b8960",1.4)]);
+  set("item-47","Fabriqué · sifflet","Sifflet de bois oblong avec embouchure et trou sombre",[p("M-27-6L12-15Q28-17 28 0Q26 14 13 15L-27 8Z","#b49262"),rect(-23,-4,11,9,"#614b36",1),oval(15,0,5,6,"#674e35"),line("M-7-4L8-7","#dfbf8b",1.5)]);
+  set("item-48","Fabriqué · corde","Cordelette bleue tressée en double boucle et extrémités",[line("M-25 22Q-13 2-14-14Q-15-29-1-24Q11-18 2-4Q-13 15 4 19Q24 21 21 5Q17-9 4-1Q-3 7 25 26","#688fa6",4),line("M-13-17l6 1M-10-9l6 2M10 19l1-5M17 14l-4-1M11 16l2-4","#aec6cc",1.5)]);
+  set("item-49","Fabriqué · carnet","Herbier vierge rectangulaire, dos relié et pages claires",[rect(-21,-26,40,52,"#7c9369",4),rect(-14,-21,29,42,cream,1),line("M-15-23V24M-20-16h7M-20-5h7M-20 7h7M-20 18h7","#566b4c",2),line("M-8-10H8M-8-3H8M-8 4H4","#c6bd97",1.3)]);
+  set("item-50","Fabriqué · pendentif","Cordon en V avec pendentif ovale et bélière",[line("M-23-25Q-18-6 0 6Q18-6 23-25","#8c7756",2.7),oval(0,6,3,4,"none"),oval(0,19,10,12,"#bb9a67"),oval(0,18,5,7,"#84a9a5")]);
+  set("item-51","Nature · fleur","Fleur de neige à six pétales pointus autour d’un cœur glacé",[line("M0 27V5","#779797",2),...Array.from({length:6},(_,i)=>{const a=i*Math.PI/3,pt=(r,o=0)=>[+(Math.cos(a+o)*r).toFixed(2),+(-6+Math.sin(a+o)*r).toFixed(2)];return polygon([pt(4,-.5),pt(22),pt(4,.5)],"#e2ecdf");}),oval(0,-6,5,5,"#8cb9c6")]);
+  set("item-52","Nature · pierre","Galet noir bas et irrégulier avec bande minérale claire",rock([[-26,4],[-15,-14],[6,-12],[24,-1],[26,12],[10,19],[-17,15]],"#596367","M-21 6Q-8-7 12-1L23 5"));
+  set("item-53","Nature · bois","Bois flotté long et blanchi, bouts arrondis et nœud",[p("M-29 10Q-30 2-18-4L19-13Q29-12 29-5L23 3-20 16Q-28 19-29 10Z","#c5ba98"),oval(-4,3,4,3,"#978d70"),line("M-20 7L-9 3M4 0l17-5","#94896c",1.5)]);
+  set("item-54","Nature · champignon","Champignon doux trapu, chapeau plat brun et gros pied",[p("M-10 0L-13 21Q1 27 12 21L9 0Z","#d6c6a0"),p("M-26-2Q-19-17-2-18Q18-20 28-2Q13 10-26-2Z","#b19478"),line("M-17-5Q0-10 19-4","#d7bb99",1.7)]);
+  set("item-55","Nature · feuille","Feuille rouge automnale large à cinq lobes",leaf("M0 27L-4 13-18 18-16 8-29 2-18-4-22-17-10-12-6-26 1-19 8-29 12-12 25-19 22-5 30 0 16 8 18 18 5 13Z","#bf6d50","M0 27L3-22M1 10L-18-8M1 10L22-8M0 14L-15 11M0 14L15 12"));
+  set("item-56","Nature · pierre","Pierre plate en dalle très basse avec tranche visible",[polygon([[-28,-4],[-7,-13],[22,-9],[29,2],[13,11],[-23,10]],"#b5ac91"),p("M-28-4L-23 10 13 11 29 2 28 10 13 18-23 16-29 5Z","#8d8874"),line("M-18-1L2-6 16-3","#ddd4b4",1.8)]);
+  set("item-57","Nature · mousse","Touffe de mousse sur petit support avec pousses rondes",[p("M-26 19Q-22 9-13 9Q-16-4-4-5Q5-7 6 4Q19-6 23 5Q33 10 25 24H-24Z","#718d51"),line("M-12 13V-13M0 7V-23M13 15V-12",green,2),oval(-12,-14,3,5,"#9db36a"),oval(0,-23,4,5,"#a4b96c"),oval(13,-13,3,4,"#b3be72")]);
+  set("item-58","Nature · aiguille","Trois aiguilles de pin longues reliées par un court étui",[line("M-5 25L-23-23M-5 25L2-29M-5 25L21-20","#648248",2.3),rect(-9,20,8,9,"#9d8057",2)]);
+  set("item-59","Nature · coque","Coque vide ouverte en deux valves, intérieur concave",[p("M-26 12Q-27-13-5-19Q0-10-1 17Q-13 29-26 12Z","#bfa075"),p("M4 17Q-1-10 12-23Q31-10 26 12Q20 27 4 17Z","#cfb389"),line("M-21 10Q-19-3-7-10M9 13Q12-4 20-10","#ead7ab",3)]);
+  set("item-60","Nature · minéral","Grain de sable anguleux, trois facettes visibles",[polygon([[-18,7],[-12,-16],[5,-22],[21,-2],[15,20],[-4,24]],"#d5c5a1"),line("M-12-16L2 3 21-2M2 3L-4 24M-18 7L2 3","#f1e4bf",2)]);
+  set("item-61","Fabriqué · textile","Étoffe verte pliée avec ourlet et bord effiloché",[p("M-25-20L8-25 24-11 21 25 9 22 4 27-3 23-11 26-22 20Z","#729373"),p("M8-25L6-9 24-11Z","#9ab08a"),line("M-18-13L-16 18 15 19M-12-17L4-19","#c1cba4",1.5),line("M-12 24v5M-4 24v6M4 24v6M12 23v5","#54785d",1.5)]);
+  set("item-62","Fabriqué · bijou","Bague de cuivre en anneau épais avec chaton carré",[oval(0,8,20,19,"#b8855c"),oval(0,8,13,12,"#203c32"),rect(-8,-19,16,12,"#c5986d",2),line("M-13 0Q-18 10-10 18","#dfb186",1.8)]);
+  set("item-63","Fabriqué · médaille","Médaille ronde suspendue à un ruban fourchu, sans inscription",[polygon([[-15,-28],[-2,-28],[5,-4],[-10,0]],"#9daea0"),polygon([[2,-28],[15,-28],[10,0],[-5,-4]],"#7b9191"),oval(0,12,17,17,gold),oval(0,12,12,12,"#ddbd75"),line("M-8 8l3-4M6 20l3-3","#a88748",1.5)]);
+  set("item-64","Nature · pétale","Pétale nacré isolé en cœur asymétrique, nervures rayonnantes",[p("M-8 24Q-29 3-18-18Q-7-29 1-18Q12-28 22-14Q28 9-8 24Z","#e3cbd0"),line("M-8 24L-4-12M-8 24L13-9M-8 24L-17-4","#f4e2dc",1.6)]);
+  set("item-65","Fabriqué · bâton","Bâton de marche à poignée recourbée et grip strié",[line("M-7 28V-18Q-7-31 7-27Q19-25 14-15","#9c8057",5),line("M-10-11h6M-10-4h6M-10 3h6","#594b3d",1.6)]);
+  set("item-66","Nature · graminée","Épi sauvage vertical à grains alternés et longues barbes",[line("M0 29V-26","#ad9556",2),...[-17,-5,7].flatMap(y=>[p(`M0 ${y+9}q-16-1-13-12q12-1 13 12`,"#d1bb74"),p(`M0 ${y+6}q16-1 13-12q-12-1-13 12`,"#c7aa64"),line(`M-12 ${y-2}l-6-9M12 ${y-5}l6-9`,"#a48b50",1)])]);
+  set("item-67","Nature · eau","Larme d’orage en goutte large avec éclair intérieur",[p("M0-28Q-6-14-20 2Q-31 29 0 29Q31 29 20 2Q6-14 0-28Z","#7b9eaf"),polygon([[3,-9],[-7,8],[0,8],[-3,21],[10,2],[3,2]],"#ead598","none")]);
+  set("item-68","Céleste","Fragment d’étoile triangulaire à une pointe et cassure crantée",star([[0,-28],[8,-7],[25,-4],[12,7],[16,22],[4,16],[-2,23],[-11,10],[-23,9],[-16,-4],[-7,-8]],"#dbc177","M0-19L-5 2 11 12"));
+  set("item-69","Nature · fleur","Fleur de minuit en corolle spiralée de cinq pétales",[line("M-3 26Q4 7 0-9","#6c8677",2),p("M0-10Q-13-34-22-18Q-31-8-7-7Q-31 3-17 16Q-5 24-2 1Q0 30 15 19Q28 10 4-2Q32 3 27-14Q25-27 7-10Q19-34 2-30Q-10-29 0-10Z","#777ca6"),oval(0,-6,5,5,"#d8c9a1")]);
+  set("item-70","Fabriqué · sceau","Sceau ancien en cachet à manche et base gravée",[p("M-8-5Q-18-15-7-26Q0-31 7-26Q18-15 8-5L13 12H-13Z","#977b5a"),rect(-21,12,42,15,"#ba9866",3),line("M-13 19H13M-5 16l5 7 5-7","#735b3e",1.8)]);
+  set("item-71","Fabriqué · cloche","Cloche miniature métallique, anneau et battant",[oval(0,-24,4,5,"none"),p("M-9-17Q-16-11-15 8L-23 15Q0 25 23 15L15 8Q16-11 9-17Z",gold),oval(0,22,5,5,"#a08249"),line("M-8-12Q-12-4-10 8","#edd59c",2)]);
+  set("item-72","Fabriqué · papier","Poussière de carte en cinq fragments dont deux avec tracés",[polygon([[-26,-12],[-10,-24],[-4,-7],[-19,0]],cream),polygon([[4,-16],[22,-20],[26,-4],[9,1]],"#d7c79a"),polygon([[-14,12],[0,2],[7,21],[-8,27]],cream),polygon([[13,10],[25,8],[22,23]],"#b7a777"),polygon([[-25,9],[-20,4],[-18,16]],"#ccb987"),line("M-20-10l7-5M10-8l9-3M-8 14l5 7","#938564",1.3)]);
+  set("item-73","Fabriqué · craie","Craie blanche cylindrique couchée et bout cassé",[p("M-28 5L13-15 23-13 29-4 23 5-17 23-27 19Z","#e4e1ca"),oval(22,-4,6,8,"#c7c7b4"),line("M-23 8L10-7M-17 18L-2 12","#f8f5df",2)]);
+  set("item-74","Fabriqué · instrument","Tambourin circulaire avec membrane et quatre cymbalettes",[oval(0,0,23,23,"#a3855c"),oval(0,0,17,17,"#d9c9a5"),...[[0,-22],[22,0],[0,22],[-22,0]].map(([x,y])=>oval(x,y,5,3,"#b4b9aa")),line("M-10-8Q2-14 11-5","#c2b38e",1.4)]);
+  set("item-75","Fabriqué · bouton","Bouton de nacre ovale à deux trous, irisation et bord fin",[oval(0,0,18,24,"#ded6c5"),oval(0,0,13,18,"#c9cbd0"),oval(0,-6,3,3,"#6c7471"),oval(0,6,3,3,"#6c7471"),line("M-8-12Q-15 0-6 14","#f0e4db",2.2)]);
+  set("item-76","Nature · gemme","Gemme de source facettée en losange à large sommet",crystal([[-24,-7],[-12,-23],[14,-23],[25,-6],[0,28]],"#6daaa9","M-24-7H25M-12-23L-8-7 0 28 9-7 14-23M-8-7H9"));
+  set("item-77","Nature · rune","Rune gravée dans une pierre rectangulaire arrondie",[p("M-15-24Q-23-24-23-13V14Q-22 25-12 26H13Q23 25 22 13V-15Q22-25 12-25Z","#9da491"),line("M0-17V18M0-15L10-6 0 1-10-7M0 7l10 7","#536c5d",2.6)]);
+  set("item-78","Fabriqué · bocal","Bocal de lucioles à couvercle large, insectes et halos",[rect(-20,-19,40,46,"#9fb9b0",7),rect(-23,-25,46,8,"#927f58",2),...[[0,-4],[-10,13],[11,14]].flatMap(([x,y])=>[oval(x,y,7,7,"#e7d877","none",.28),oval(x,y,2.5,3,"#f2dc80"),line(`M${x-4} ${y-2}l3 2m2 0l3-2`,"#647d63",1)]),line("M-14-10V17","#edf0d3",2)]);
+  set("item-79","Nature · aile","Aile transparente de libellule, étirée et veinée en réseau",[p("M-24 23Q-29-6 21-27Q32-15 12 4Q-8 17-24 23Z","#b6d0c9"),line("M-24 23L23-24M-17 12L-18 0 0 6 2-13 12-6 16-21M-18 0L2-13M0 6L12-6","#719991",1.2)]);
+  set("item-80","Nature · eau","Goutte suspendue à un filament fin avec reflet courbe",[line("M0-30V-12","#c3d4b7",1),p("M0-13Q-3-4-12 10Q-19 29 0 29Q19 29 12 10Q3-4 0-13Z","#aad0d1"),line("M-6 9Q-11 18-4 23","#edf1db",2)]);
+  set("item-81","Nature · fleur","Fleur de colline à cinq pétales ronds, longue tige inclinée",[...flower(5,10,"#d9b3a0"),line("M0 23l11 5",green,2),p("M0 15Q13 1 18 11Q11 19 0 15",green)]);
+  set("item-82","Nature · arbre","Sapin miniature à trois étages triangulaires et tronc",[rect(-4,12,8,17,"#997951",1),polygon([[-25,18],[0,-12],[25,18]],"#567b59"),polygon([[-20,4],[0,-23],[20,4]],"#6b9066"),polygon([[-13,-10],[0,-30],[13,-10]],"#89a576")]);
+  set("item-83","Nature · feuille","Feuille de saule longue, étroite et retombante",leaf("M-22 25Q-10-25 25-26Q10-16 7 3Q0 25-22 25Z","#8dba79","M-22 25Q-2 10 21-23M-12 18l2-9M-2 9l2-11M5-3l5-10"));
+  set("item-84","Nature · coquille","Coquille bleue conique à trois tours et ouverture basse",[p("M-7-29Q5-22 7-12Q18-9 19 4Q30 11 21 24Q7 31-13 23Q-28 12-20 1Q-23-10-14-14Z","#84a9bb"),line("M-14-14Q-7-6 7-12M-20 1Q-5 12 19 4","#507d95",2),oval(6,20,13,6,"#4d7284")]);
+  set("item-85","Nature · pierre","Pierre chaude en bloc haut, fissures et veines orangées",rock([[-16,25],[-26,6],[-19,-19],[4,-27],[22,-14],[25,16],[10,27]],"#b09576","M-19-19L-6-4-12 12 5 23M-6-4L15-11M-12 12L-23 6"));
+  set("item-86","Nature · bois","Branche étoilée à cinq ramifications ligneuses",[line("M-3 27V-4M-3 5L-24-10M-3-4L-18-24M-3-4L9-28M-3 5L25-13M-3 15L19 23","#a68b5c",4),line("M-19-7l-4 7M16-8l8 3M-13-19l-8 1","#8d744e",2)]);
+  set("item-87","Nature · plume","Plume sombre inclinée, bord cranté et pointe effilée",feather("M-23 23Q-20-15 19-29L24-23 16-15 24-12 15-5 19-1 8 7 11 11-3 16-7 22Z","#66778a","M-25 28Q-7 4 20-24","M-13 14l-4-9M-7 7l-5-11M0 0l-4-11M-7 7l17-7M0 0l15-8"));
+  set("item-88","Nature · fruit","Baie d’hiver solitaire, calice étoilé et deux feuilles piquantes",[p("M-1-10L-24-25-20-14-28-12-19-7-23 0-5-3Z","#5e8158"),p("M5-9L18-26 18-16 27-19 23-9 29-5 13-1Z","#7f9b63"),oval(0,10,16,17,"#a66370"),polygon([[0,-8],[4,-2],[10,-5],[7,2],[0,4],[-7,2],[-10,-5],[-4,-2]],"#526e4f"),oval(-6,5,3,3,"#d7a2a1")]);
+  set("item-89","Nature · herbe","Herbe de pluie à cinq brins arqués et gouttelettes",[line("M0 27Q-26 5-23-21M0 27Q-13-5-8-28M0 27Q3-1 10-23M0 27Q22 11 25-13M0 27Q-1 0 0-16","#75977b",2.3),oval(-22,-8,3,4,"#bad7d0"),oval(14,-13,3,4,"#b5d1cf"),oval(-7,-17,2,3,"#d0e0d0")]);
+  set("item-90","Céleste","Morceau de nuage en touffe douce à base plate et petites volutes",[p("M-26 10Q-32-4-17-8Q-17-23-2-22Q11-30 18-12Q31-13 29 6Q30 18 15 20H-16Q-27 21-26 10Z","#d5ddcf"),line("M-18 8q-2-9 7-9M-2-11q9-5 12 4M5 15h12","#f1f0dc",2)]);
+  set("item-91","Nature · cristal","Cristal d’aube en bouquet de trois prismes inégaux",[...crystal([[-24,18],[-23,-5],[-14,-17],[-7,-4],[-3,25]],"#d5b5ae","M-14-17L-12 19"),...crystal([[-8,24],[-7,-19],[3,-30],[14,-17],[11,25]],"#e5c69f","M3-30L2 21"),...crystal([[7,24],[13,-7],[25,-14],[27,6],[17,26]],"#c7bdc4","M25-14L17 21")]);
+  set("item-92","Nature · fleur","Fleur solaire à dix pétales fins, cœur large et deux feuilles",[...flower(10,14,"#d8b258","#856e46"),p("M0 20L-21 10-14 25Z",green),p("M1 18L21 5 17 20Z",green)]);
+  set("item-93","Nature · graine","Graine de chemin ailée en samare avec noyau décentré",[p("M-23 15Q-17-16 26-28Q23-9 8 6L-9 21Z","#bbbf82"),oval(-13,17,10,10,"#a18352"),line("M-6 9L20-22M2 2L8-15","#e0d6a0",1.7)]);
+  set("item-94","Fabriqué · boussole","Boussole des mousses ronde avec lichen et aiguille végétale",compass("M-23 0Q-27-25 0-25Q27-25 23 0Q27 26 0 27Q-27 26-23 0Z","#718b63",[[-10,11],[4,-13],[8,15]],"M-16-8l4 4M13-9l-3 5M-5 19l3-4").concat([oval(-19,-15,6,4,"#9bae70"),oval(19,15,5,4,"#9bae70")]));
+  set("item-95","Céleste","Étoile de poche compacte à six branches dans une pochette",[p("M-21 5L-15 27H17L23 5Q0 12-21 5Z","#9ca780"),...star([[0,-28],[6,-14],[18,-20],[16,-6],[28,-2],[14,5],[16,14],[0,8],[-13,16],[-13,2],[-27,-4],[-12,-10],[-17,-23],[-4,-17]],"#e1c46b","M-4-10l6 4"),line("M-12 22H12","#617551",1.5)]);
+  set("item-96","Fabriqué · clef","Clef de racine à anneau torsadé et dents ramifiées",[p("M-10-27Q-29-26-25-7Q-20 8-5 0Q10-12-10-27ZM-11-20Q-21-20-19-10Q-14-3-7-10Q-2-18-11-20Z","#ae8e5c"),line("M-9-2L13 27M3 13l14-1M10 21l13-3M3 13l-4 8","#9a7c51",5)]);
+  set("item-97","Fabriqué · fiole","Fiole de vent haute avec base étroite et spirale intérieure",bottle("M-6-20V-11L-15-3-10 25Q0 30 10 25L15-3 6-11V-20Z","#b1cdcb",[line("M-8 15Q11 21 8 7Q6-3-5 1Q-13 6-1 8Q8 10 9-3","#f1eed5",2)],[-8,-27,16,8]));
+  set("item-98","Fabriqué · carte","Carte des lucioles pliée en accordéon, constellation tracée",[polygon([[-27,-20],[-9,-25],[9,-19],[27,-25],[27,21],[9,27],[-9,21],[-27,27]],"#859e8c"),line("M-9-25V21M9-19V27","#526f60",1.5),line("M-20 12L-11-7 2 5 18-11","#e3d89e",1.4),...[[ -20,12],[-11,-7],[2,5],[18,-11]].map(([x,y])=>oval(x,y,2.5,2.5,"#f2d97b"))]);
+  set("item-99","Fabriqué · couronne","Couronne ancienne à trois fleurons et bande gravée",crown("M-24-17L-20 24H20L24-17 13-6 0-28-13-6Z","#baa56e","M-19 14H19M-12 20h4M-2 20h4M8 20h4").concat([oval(0,-9,4,5,"#6a9690")]));
+  set("item-100","Céleste","Soleil tombé en disque fendu entouré de huit rayons courts",[...Array.from({length:8},(_,i)=>{const a=i*Math.PI/4;return line(`M${Math.round(Math.cos(a)*22)} ${Math.round(Math.sin(a)*22)}L${Math.round(Math.cos(a)*29)} ${Math.round(Math.sin(a)*29)}`,gold,3);}),oval(0,0,19,19,"#e0bc61"),line("M3-17L-3-2 6 7 2 18","#947940",2)]);
+
+  set("spring-bloom","Nature · fleur saisonnière","Fleur de printemps à quatre pétales en cœur, bourgeon latéral",[...flower(4,10,"#d69ba4",gold,true,Math.PI/4),line("M-1 15L15 4",green,2),oval(17,2,5,6,"#bc7b91")]);
+  set("summer-shell","Nature · coquillage saisonnier","Coquillage d’été spiralé très allongé, cinq tours",scallop("M-10-28L0-18 2-10 12-4 14 6 26 12 25 24Q1 33-20 19L-18 5-14-2-16-14Z","#d7bc82","M-15-13L0-18M-14-2L2-10M-18 5L12-4M-20 19L14 6M-9 26L26 12"));
+  set("autumn-maple","Nature · feuille saisonnière","Feuille d’automne palmée à sept pointes aiguës et long pétiole",leaf("M0 29L-3 14-15 19-12 7-28 4-18-5-25-15-12-14-13-25-2-18 0-30 9-20 18-25 17-11 29-12 23 0 29 6 13 8 16 18 3 14Z","#d89950","M0 29L0-24M0 12L-20-10M0 12L22-7M0 12L-12 14M0 12L12 13"));
+  set("winter-crystal","Nature · cristal saisonnier","Cristal d’hiver en flocon hexagonal ramifié",[...Array.from({length:6},(_,i)=>{const a=i*Math.PI/3,pt=(r,o=0)=>`${(Math.cos(a+o)*r).toFixed(2)} ${(Math.sin(a+o)*r).toFixed(2)}`;return line(`M0 0L${pt(27)}M${pt(17)}L${pt(23,.25)}M${pt(17)}L${pt(23,-.25)}`,"#b7d6dc",3);}),polygon([[0,-7],[6,-3],[6,3],[0,7],[-6,3],[-6,-3]],"#edf0df")]);
+  set("tree-micro-1","Nature · feuille","Feuille particulière ovale simple avec encoche latérale",leaf("M-13 23Q-27 3-13-19Q4-30 21-20L14-8 20-4Q16 16-13 23Z","#85a65f","M-13 23L16-20M-3 9l-9-7M4-3l8 2"));
+  set("tree-micro-2","Nature · graine","Graine ronde cerclée d’un sillon et ombilic",[oval(0,0,18,19,"#c6a16c"),line("M-11-12Q12-19 14 4Q12 17-8 15","#927346",2),oval(-5,-3,3,4,"#8a6b41")]);
+  set("tree-micro-3","Nature · fruit","Petit fruit doux piriforme avec queue et petite feuille",[p("M-6-15Q-18-10-21 8Q-21 29 1 27Q24 26 19 5Q15-12 5-16Z","#d3b375"),line("M0-15L-3-27","#8a714a",2.8),p("M-1-22Q12-31 18-22Q12-11-1-22",green)]);
+  set("tree-micro-4","Nature · bois","Brindille claire à trois fourches fines et bourgeon terminal",[line("M-20 27L5-22M-9 5L-24-8M0-11L20-15M2-17L-8-28","#b5a681",3),oval(6,-24,3,5,"#dad0a6")]);
+  set("rolling-micro-1","Nature · noix","Gland poli allongé avec cupule écailleuse et pédoncule",[...nut("M-11-8Q-15 12 0 28Q15 12 11-8Z","#bb965e","M-16-7Q-14-23 0-22Q14-23 16-7Z"),line("M0-22L5-29","#806443",2),line("M-10-12l4-3 4 3 4-3 4 3","#6d573e",1.5)]);
+  set("rolling-micro-2","Nature · noix","Noisette roulante couchée, cupule latérale et fissure",[p("M-15-15Q6-25 24-7Q32 15 10 24Q-10 27-21 8Z","#c49b65"),p("M-15-15Q-29-13-27 3Q-27 15-21 16L-13 10-10-6Z","#99774e"),line("M-10-3Q0-10 17 0M-1 10l10 7","#e0bf87",1.8)]);
+  set("rolling-micro-3","Nature · pierre","Galet léger presque circulaire avec trou et stries",[p("M-21-10Q-7-27 13-19Q30-11 24 12Q15 29-7 24Q-29 20-21-10Z","#b3b09a"),oval(5,0,6,7,"#61756a"),line("M-14-8l7-4M-15 9l8 6","#ded8b8",1.6)]);
+  set("rolling-micro-4","Nature · graine","Graine de chemin roulante ovale, deux ailettes et couture",[p("M-10-15Q-28-23-27-3Q-22 7-8 6M9-11Q27-23 28-6Q24 8 9 9","#c5b787"),...seed("M-7-22Q12-24 15-3Q18 19 0 27Q-19 13-16-6Z","#ac905d","M-4-16Q-12 3 2 21")]);
+  set("wild-flower","Nature · fleur de mission","Fleur sauvage à cinq pétales espacés et deux petites feuilles",[...flower(5,12,"#e7d5aa","#c39e53",true,0),p("M-1 19Q-13 12-12 23Q-6 28-1 19",green)]);
+  return Object.freeze(objects);
+})();
+
+const objectVisualPathCache = new Map();
+
+function getObjectVisual(itemOrId) {
+  const id = baseDiscoveryId(typeof itemOrId === "string" ? itemOrId : itemOrId?.id);
+  return objectVisuals[id === "flower" ? "wild-flower" : id];
+}
+
+// Passing a Canvas context paints the exact paths returned as SVG without one.
+function renderObjectVisual(itemOrId, context = null) {
+  const visual = getObjectVisual(itemOrId);
+  if (!visual) return "";
+  if (!context) {
+    return `<svg class="object-visual" viewBox="-32 -32 64 64" data-object-visual="${visual.id}" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">${visual.shapes.map(s => `<path d="${s.d}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.width}" opacity="${s.opacity}" stroke-linecap="round" stroke-linejoin="round" fill-rule="evenodd"/>`).join("")}</svg>`;
+  }
+  let paths = objectVisualPathCache.get(visual.id);
+  if (!paths) {
+    paths = visual.shapes.map(s => new Path2D(s.d));
+    objectVisualPathCache.set(visual.id, paths);
+  }
+  context.save();
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  const inheritedAlpha = context.globalAlpha;
+  visual.shapes.forEach((shape, index) => {
+    context.globalAlpha = inheritedAlpha * shape.opacity;
+    if (shape.fill !== "none") {
+      context.fillStyle = shape.fill;
+      context.fill(paths[index], "evenodd");
+    }
+    if (shape.stroke !== "none") {
+      context.strokeStyle = shape.stroke;
+      context.lineWidth = shape.width;
+      context.stroke(paths[index]);
+    }
+  });
+  context.restore();
+}
+
+
 function drawCollectibleIcon(item, index, x, y) {
-  const baseId = getItemVisualType(item);
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(1.08, 1.08);
-  const isMagic = baseId === "mushroom" || baseId === "star";
-  const glow = ctx.createRadialGradient(0, 0, 5, 0, 0, isMagic ? 48 : 34);
-  glow.addColorStop(0, isMagic ? "rgba(255, 229, 118, 0.48)" : "rgba(255, 240, 190, 0.18)");
-  glow.addColorStop(1, "rgba(255, 229, 118, 0)");
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(0, 0, isMagic ? 48 : 34, 0, Math.PI * 2);
-  ctx.fill();
   ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
   ctx.beginPath();
-  ctx.ellipse(0, 22, 22, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 28, 22, 5, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.lineWidth = 2.5;
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  ctx.strokeStyle = "rgba(46, 38, 25, 0.18)";
-  if (baseId === "leaf") {
-    ctx.save();
-    ctx.rotate(-0.52);
-    ctx.fillStyle = "#9cab3c";
-    ctx.beginPath();
-    ctx.moveTo(-22, 10);
-    ctx.bezierCurveTo(-14, -12, 10, -20, 24, -8);
-    ctx.bezierCurveTo(15, 10, -4, 20, -22, 10);
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = "#62742c";
-    ctx.lineWidth = 2.3;
-    ctx.beginPath();
-    ctx.moveTo(-22, 10);
-    ctx.lineTo(21, -7);
-    ctx.moveTo(-2, 2);
-    ctx.lineTo(0, 11);
-    ctx.moveTo(8, -2);
-    ctx.lineTo(13, 5);
-    ctx.stroke();
-    ctx.restore();
-  } else if (baseId === "stone") {
-    ctx.save();
-    ctx.rotate(-0.1);
-    drawEllipse(0, 1, 25, 15, "#a59c83");
-    ctx.stroke();
-    drawEllipse(-8, -4, 10, 4, "rgba(255,255,255,0.24)");
-    drawEllipse(8, 5, 7, 3, "rgba(72,58,41,0.13)");
-    ctx.restore();
-  } else if (baseId === "feather") {
-    ctx.save();
-    ctx.rotate(0.52);
-    ctx.fillStyle = "#f4e7bf";
-    ctx.beginPath();
-    ctx.moveTo(0, -29);
-    ctx.bezierCurveTo(18, -19, 14, 12, 0, 27);
-    ctx.bezierCurveTo(-14, 10, -17, -18, 0, -29);
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = "#d8bd7c";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, -27);
-    ctx.lineTo(0, 30);
-    for (let i = -18; i <= 15; i += 8) {
-      ctx.moveTo(0, i);
-      ctx.lineTo(i < 0 ? -9 : 9, i + 7);
-    }
-    ctx.stroke();
-    ctx.restore();
-  } else if (baseId === "shell") {
-    ctx.fillStyle = "#e9ad79";
-    ctx.beginPath();
-    ctx.moveTo(-27, 12);
-    ctx.quadraticCurveTo(-23, -11, 0, -21);
-    ctx.quadraticCurveTo(23, -11, 27, 12);
-    ctx.quadraticCurveTo(5, 20, -27, 12);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = "#c88362";
-    ctx.lineWidth = 2;
-    for (let i = -3; i <= 3; i += 1) {
-      ctx.beginPath();
-      ctx.moveTo(0, 13);
-      ctx.quadraticCurveTo(i * 4, -4, i * 8, -15 + Math.abs(i) * 2);
-      ctx.stroke();
-    }
-    drawEllipse(0, 8, 24, 5, "rgba(255, 227, 174, 0.22)");
-  } else if (baseId === "cone") {
-    ctx.save();
-    ctx.fillStyle = "#4c8398";
-    ctx.beginPath();
-    ctx.moveTo(0, -27);
-    ctx.bezierCurveTo(23, -13, 25, 15, 0, 28);
-    ctx.bezierCurveTo(-25, 15, -23, -13, 0, -27);
-    ctx.fill();
-    ctx.stroke();
-    const rows = [
-      [-8, -14, 8],
-      [-14, -6, 10],
-      [0, -5, 10],
-      [14, -6, 10],
-      [-10, 4, 11],
-      [8, 5, 11],
-      [-4, 15, 12],
-      [9, 17, 9]
-    ];
-    for (const [px, py, r] of rows) {
-      drawEllipse(px, py, r, 6, "#396b83");
-      drawEllipse(px - 2, py - 2, r * 0.55, 2.4, "rgba(128, 174, 190, 0.32)");
-    }
-    ctx.restore();
-  } else if (baseId === "mushroom") {
-    ctx.fillStyle = "#fff1b6";
-    roundedRect(-9, -2, 18, 27, 8);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#f1c754";
-    ctx.beginPath();
-    ctx.moveTo(-27, -4);
-    ctx.quadraticCurveTo(-16, -27, 1, -29);
-    ctx.quadraticCurveTo(21, -27, 29, -4);
-    ctx.quadraticCurveTo(10, 6, -27, -4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    drawEllipse(-11, -12, 4, 4, "#fff5c8");
-    drawEllipse(3, -18, 3.5, 3.5, "#fff5c8");
-    drawEllipse(15, -8, 3, 3, "#fff5c8");
-  } else if (baseId === "star") {
-    ctx.fillStyle = "#f6cf36";
-    ctx.beginPath();
-    for (let point = 0; point < 10; point += 1) {
-      const radius = point % 2 === 0 ? 28 : 12;
-      const angle = -Math.PI / 2 + point * Math.PI / 5;
-      const px = Math.cos(angle) * radius;
-      const py = Math.sin(angle) * radius;
-      if (point === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "rgba(255, 245, 154, 0.38)";
-    ctx.beginPath();
-    ctx.moveTo(0, -18);
-    ctx.lineTo(5, -4);
-    ctx.lineTo(17, -3);
-    ctx.lineTo(7, 5);
-    ctx.lineTo(11, 18);
-    ctx.lineTo(0, 10);
-    ctx.closePath();
-    ctx.fill();
-  } else if (baseId === "flower") {
-    ctx.strokeStyle = "#6a7b39";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(0, 24);
-    ctx.quadraticCurveTo(-4, 2, 0, -11);
-    ctx.stroke();
-    ["#e8d49a", "#f0bd6c", "#ce6f75", "#f7f3df"].forEach((color, petal) => {
-      const angle = petal * Math.PI / 2;
-      drawEllipse(Math.cos(angle) * 10, -18 + Math.sin(angle) * 8, 8, 12, color);
-    });
-    drawEllipse(0, -18, 6, 6, "#8b6840");
-  } else if (baseId === "paper") {
-    ctx.save();
-    ctx.rotate(-0.16);
-    ctx.fillStyle = "#ead68d";
-    roundedRect(-18, -24, 36, 45, 4);
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = "#8b6840";
-    ctx.lineWidth = 2;
-    for (let line = -12; line <= 8; line += 10) {
-      ctx.beginPath();
-      ctx.moveTo(-10, line);
-      ctx.lineTo(10, line - 2);
-      ctx.stroke();
-    }
-    ctx.restore();
-  } else if (baseId === "tool") {
-    ctx.strokeStyle = "#d8bd7c";
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(-18, 18);
-    ctx.lineTo(18, -18);
-    ctx.stroke();
-    drawEllipse(18, -18, 10, 10, "#f0bd6c");
-    drawEllipse(-18, 18, 8, 8, "#67b4c8");
-  } else if (baseId === "rare") {
-    ctx.fillStyle = "#67b4c8";
-    ctx.beginPath();
-    ctx.moveTo(0, -28);
-    ctx.lineTo(24, -7);
-    ctx.lineTo(14, 24);
-    ctx.lineTo(-14, 24);
-    ctx.lineTo(-24, -7);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "rgba(247, 243, 223, 0.36)";
-    ctx.beginPath();
-    ctx.moveTo(0, -21);
-    ctx.lineTo(10, -6);
-    ctx.lineTo(4, 15);
-    ctx.lineTo(-8, 7);
-    ctx.closePath();
-    ctx.fill();
-  } else {
-    ctx.save();
-    ctx.rotate(0.7);
-    ctx.fillStyle = ["#f0bd6c", "#67b4c8", "#f7f3df", "#8ebf76", "#ce6f75"][index % 5];
-    roundedRect(-12, -18, 24, 36, 7);
-    ctx.fill();
-    ctx.stroke();
-    drawEllipse(0, -4, 5, 5, "rgba(20,34,33,0.22)");
-    ctx.restore();
-  }
+  renderObjectVisual(item, ctx);
   ctx.restore();
 }
 
@@ -4259,12 +4441,7 @@ function getItemConditionHint(itemOrId) {
 }
 
 function getItemIcon(item, extraClass = "") {
-  const type = getItemVisualType(item);
-  return `<span class="item-icon item-icon-${type} ${extraClass}" aria-hidden="true">
-    <span class="item-shape item-shape-main"></span>
-    <span class="item-shape item-shape-detail"></span>
-    <span class="item-shape item-shape-accent"></span>
-  </span>`;
+  return `<span class="item-icon item-icon-vector ${extraClass}" aria-hidden="true">${renderObjectVisual(item)}</span>`;
 }
 
 function getUnknownItemIcon() {
@@ -4864,6 +5041,15 @@ function spawnDiscoveryBurst(item) {
   const rarity = item.rarity || "Commun";
   const color = rarity === "Legendaire" ? "#f6cf36" : rarity === "Rare" ? "#b9a1e3" : "#f7e5a5";
   const count = rarity === "Commun" ? 7 : 12;
+  // Keep the collected object's identity while it rises and fades with the burst.
+  discoveryBursts.push({
+    objectId: baseDiscoveryId(item.id),
+    x: item.x,
+    y: (Number.isFinite(item.y) ? item.y : world.ground - 20)
+      + (getWalkSurfaceY(item.x) - world.ground) + (item.groundOffset || 0),
+    vx: 0, vy: -44, size: 1, alpha: 1,
+    startedAt: state.time, duration: 0.62
+  });
   for (let index = 0; index < count; index += 1) {
     const angle = (Math.PI * 2 * index) / count + hashNumber(item.x + index * 13) * 0.36;
     const distance = 24 + hashNumber(item.x + index * 41) * 34;
@@ -5817,8 +6003,10 @@ function renderQuestCard(compact = false) {
   if (!quest) return `<article class="quest-card"><strong>Aucune mission active</strong><p>Une enveloppe pourra apparaitre sur le chemin.</p></article>`;
   const percent = Math.round((quest.progress / quest.target) * 100);
   const remaining = Math.max(0, quest.target - quest.progress);
+  const targetItem = quest.itemId ? getMissionCatalogItem(quest.itemId) : null;
   return `<article class="quest-card ${compact ? "is-wide" : ""}">
     <strong>${quest.title || quest.label}</strong>
+    ${targetItem ? getItemIcon(targetItem, "small") : ""}
     <p>${quest.description}</p>
     <p>${quest.objective}</p>
     <p>${getQuestHint(quest)}</p>
@@ -6024,6 +6212,8 @@ function pauseGame() {
 function resetGame() {
   state.player.x = 380;
   state.player.vx = 0;
+  state.player.action = "";
+  state.player.actionUntil = 0;
   state.discoveries = [];
   state.inventory = {};
   state.discoveryDates = {};
@@ -7141,8 +7331,19 @@ function isKeyboardShortcutBlocked(target) {
   return Boolean(target?.matches?.("input, textarea, select, [contenteditable='true']"));
 }
 
+function setControlInputMode(mode) {
+  if (document.body.dataset.controlInput === mode) return;
+  if (mode === "desktop") resetTouchControls();
+  document.body.dataset.controlInput = mode;
+}
+
+document.addEventListener("pointerdown", (event) => {
+  setControlInputMode(event.pointerType === "touch" || event.pointerType === "pen" ? "touch" : "desktop");
+}, true);
+
 window.addEventListener("keydown", (event) => {
   if (isKeyboardShortcutBlocked(event.target)) return;
+  if (running && !isModalOpen()) setControlInputMode("desktop");
   if (event.key === "Escape" && running && !isModalOpen()) {
     event.preventDefault();
     pauseGame();
@@ -7168,7 +7369,7 @@ window.addEventListener("keydown", (event) => {
     if (running) interact();
   } else if (event.key === " " || event.key === "ArrowUp" || event.key === "w" || event.key === "W" || event.key === "z" || event.key === "Z") {
     event.preventDefault();
-    triggerPlayerHop();
+    if (!event.repeat) triggerPlayerHop();
   }
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key));
@@ -7393,6 +7594,7 @@ ui.resetDiscoveryTipsButton.addEventListener("click", () => {
 });
 
 loadPlayerProfile();
+setControlInputMode(window.matchMedia("(pointer: coarse)").matches ? "touch" : "desktop");
 loadOptions();
 preloadMainMusic()?.catch((error) => reportAudioError("Prechargement initial de la musique impossible.", error));
 const hasSave = loadGame();
