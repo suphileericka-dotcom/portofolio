@@ -351,6 +351,13 @@ const state = {
   activeSecretPortal: null,
   friendlyChallenge: null,
   friendlyChallengeCooldowns: {},
+  shelter: null,
+  weatherCycleOffset: 0,
+  nextWeatherChangeAt: 150,
+  villageActivity: null,
+  villageActivityCooldowns: {},
+  villageActivityLastSpot: {},
+  nextVillageActivityAt: 90,
   itemEffects: { scoutUntil: 0, scoutTargetId: "", strideUntil: 0, glowUntil: 0, compassUntil: 0, compassTargetX: 0, compassLabel: "" },
   equipment: { lanternOn: false },
   activeSecretWorld: null,
@@ -653,6 +660,191 @@ function rememberVillagerConversation(villager, conversationId) {
   memory.lastConversationAt = state.time;
 }
 
+function getVillageActivitySpots(village) {
+  const layout = getVillagePrototypeLayout(village);
+  const candidates = layout ? [
+    {id:"garden",x:layout.gardenX+12,label:"près du petit jardin",kind:"garden"},
+    {id:"tree",x:layout.commonX-8,label:"près du grand arbre",kind:"tree"},
+    {id:"workshop",x:layout.houses[2].x-44,label:"près de l'auvent de l'atelier",kind:"house"}
+  ] : [0,1,3].map(index=>({id:`house-${index}`,x:village.x+index*86+26,label:"près d'une maison du village",kind:"house"}));
+  return candidates.filter(spot=>!isRiverGap(spot.x,40) && Math.abs(spot.x-village.x)<1000);
+}
+
+function getVillageForResident(villager) {
+  return getProceduralVillages().find(village=>getVillageIdFromX(village.x)===villager.villageId);
+}
+
+function canOfferVillageActivity(villager) {
+  return Boolean(villager && !state.shelter && !state.villageActivity && !state.activeQuest && !state.pendingQuestReward
+    && !state.friendlyChallenge && !getChallengeRunnerForVillage(villager.villageId)
+    && !isInSecretWorld() && state.time>=state.nextVillageActivityAt
+    && state.time>=(state.villageActivityCooldowns[villager.villageId]||0));
+}
+
+function createVillageActivityOffer(villager) {
+  if(!canOfferVillageActivity(villager))return null;
+  state.nextVillageActivityAt=state.time+150;
+  if(Math.random()>.16)return null;
+  const village=getVillageForResident(villager);
+  if(!village)return null;
+  const spots=getVillageActivitySpots(village);
+  const fresh=spots.filter(spot=>spot.id!==state.villageActivityLastSpot[villager.villageId]);
+  const pool=fresh.length?fresh:spots;
+  if(!pool.length)return null;
+  const spot=pool[Math.floor(Math.random()*pool.length)];
+  if(Math.random()>=.5)return createLostVillageActivityOffer(villager,village,spot);
+  return {id:"hide-and-seek",activityOffer:{kind:"hide",villageId:villager.villageId,villageX:village.x,homeX:villager.homeX,spot},
+    prompt:"Ça te dit de jouer à cache-cache ? Je reste tout près du village.",
+    choices:[{id:"accept",text:"Oui, je vais te chercher."},{id:"refuse",text:"Une autre fois, merci."}]};
+}
+
+function handleVillageActivityChoice(villager,conversation,choice) {
+  if(conversation.activityReturn) {
+    pendingVillagerConversation=null;pendingVillagerHelp=null;closeDialog(ui.villagerDialog);
+    if(choice.id==="return" && state.villageActivity?.kind==="lost" && state.villageActivity.stage==="carried"
+      && state.villageActivity.villageId===villager.villageId && Math.abs(state.player.x-villager.x)<interactionRanges.villager) {
+      getVillagerMemory(villager).relation+=.5;
+      rememberJournalEvent("J'ai retrouvé et rendu l'étoffe d'un habitant.");
+      finishVillageActivity();showVillagerBubble(villager,"Mon étoffe ! Merci d'avoir pris le temps.",{cooldown:20,force:true});playSoftPing();
+    }
+    saveGame();return true;
+  }
+  if(conversation.activityStatus) {
+    pendingVillagerConversation=null;pendingVillagerHelp=null;closeDialog(ui.villagerDialog);
+    if(choice.id==="abandon")finishVillageActivity("Une autre fois. L'habitant reste au village.");
+    return true;
+  }
+  const offer=conversation.activityOffer;
+  if(!offer)return false;
+  pendingVillagerConversation=null;
+  pendingVillagerHelp=null;
+  closeDialog(ui.villagerDialog);
+  state.villageActivityCooldowns[villager.villageId]=state.time+600;
+  state.nextVillageActivityAt=state.time+240;
+  if(choice.id==="accept" && !state.villageActivity && !state.friendlyChallenge && !state.activeQuest) {
+    state.villageActivity={...offer,stage:offer.kind==="hide"?"preparing":"searching",x:offer.homeX,readyAt:state.time+2.5,expiresAt:state.time+(offer.kind==="hide"?240:600)};
+    state.villageActivityLastSpot[villager.villageId]=offer.spot.id;
+    showMessageFor(offer.kind==="hide"?"Ferme les yeux un instant…":"Merci. Reviens me voir quand tu l'auras retrouvée.",2200);
+  } else showMessageFor("Une autre fois, sans souci.",1800);
+  updateVillageActivityControls();
+  saveGame();
+  return true;
+}
+
+function updateVillageActivityControls() {
+  const button=document.getElementById("abandonVillageActivityButton");
+  if(button)button.hidden=!state.villageActivity;
+}
+
+function finishVillageActivity(message="") {
+  state.villageActivity=null;
+  updateVillageActivityControls();
+  if(message)showMessageFor(message,2200);
+  saveGame();
+}
+
+function updateVillageActivity(dt) {
+  const activity=state.villageActivity;
+  if(!activity)return;
+  if(isInSecretWorld() || Math.abs(state.player.x-activity.villageX)>1300
+    || state.time>activity.expiresAt || state.activeQuest || state.friendlyChallenge) {
+    finishVillageActivity("La petite activité se termine. L'habitant rentre au village.");return;
+  }
+  if(activity.stage==="preparing" && state.time>=activity.readyAt) {
+    activity.stage="searching";activity.x=activity.spot.x;
+    saveGame();
+  }
+  if(activity.stage==="returning") {
+    const dx=activity.homeX-activity.x;
+    activity.x+=Math.sign(dx)*Math.min(Math.abs(dx),dt*100);
+    if(Math.abs(dx)<1)finishVillageActivity();
+  }
+}
+
+function findHiddenResident(villager) {
+  const activity=state.villageActivity;
+  if(activity?.kind!=="hide" || activity.stage!=="searching" || Math.abs(state.player.x-activity.x)>48)return;
+  activity.stage="returning";
+  getVillagerMemory(villager).relation+=.4;
+  showVillagerBubble({...villager,concealed:false},"Tu m'as trouvé ! Bien observé.",{cooldown:20,force:true});
+  playSoftPing();saveGame();
+}
+
+function drawHiddenResidentClue(villager) {
+  // A crouching hat peeks out intermittently at the actual, reachable hiding place.
+  const wave=Math.sin(state.time*2.3);
+  if(wave<.35)return;
+  const y=getWalkSurfaceY(villager.x)-43;
+  ctx.save();ctx.globalAlpha=.55;
+  drawEllipse(villager.x,y,5,3,"#a58a61");
+  ctx.strokeStyle="#74905a";ctx.lineWidth=1.3;
+  ctx.beginPath();ctx.moveTo(villager.x-10,y+8);ctx.quadraticCurveTo(villager.x-5,y+2+wave*2,villager.x-1,y+8);ctx.stroke();
+  ctx.restore();
+}
+
+function restoreVillageActivity(payload) {
+  state.villageActivity=null;
+  state.villageActivityCooldowns=payload.villageActivityCooldowns && typeof payload.villageActivityCooldowns==="object"
+    ? Object.fromEntries(Object.entries(payload.villageActivityCooldowns).filter(([,until])=>Number.isFinite(until))) : {};
+  state.villageActivityLastSpot=payload.villageActivityLastSpot && typeof payload.villageActivityLastSpot==="object" ? payload.villageActivityLastSpot : {};
+  state.nextVillageActivityAt=Number.isFinite(payload.nextVillageActivityAt)?payload.nextVillageActivityAt:state.time+90;
+  const activity=payload.villageActivity;
+  if(activity?.kind==="lost" && ["searching","carried"].includes(activity.stage)
+    && Number.isFinite(activity.villageX) && Number.isFinite(activity.expiresAt) && activity.expiresAt>state.time
+    && !state.activeSecretWorld && !state.friendlyChallenge && !state.activeQuest && Math.abs(state.player.x-activity.villageX)<1300) {
+    const index=(activity.villageX-world.firstRouteEnd-520)/villageSpacing;
+    const village=Number.isInteger(index)&&index>=0?getVillageByIndex(index):null;
+    const spot=village && getVillageActivitySpots(village).find(s=>s.id===activity.spot?.id);
+    if(spot && activity.villageId===getVillageIdFromX(village.x) && activity.lostItem?.visualId==="item-61") {
+      state.villageActivity={...activity,spot,homeX:village.x+410,lostItem:{visualId:"item-61",x:spot.x,groundOffset:-28}};
+    }
+  }
+  // Interrupted hide-and-seek ends on reload; the original resident is immediately home.
+  updateVillageActivityControls();
+}
+
+function createLostVillageActivityOffer(villager,village,spot) {
+  // The object placement exists first; the sentence is derived from that placement.
+  const placement=getVillageActivitySpots(village).find(candidate=>candidate.id===spot.id);
+  if(!placement)return null;
+  const lostItem={visualId:"item-61",x:placement.x,groundOffset:-28};
+  return {id:"lost-cloth",activityOffer:{kind:"lost",villageId:villager.villageId,villageX:village.x,homeX:villager.homeX,spot:placement,lostItem},
+    prompt:`J'ai perdu mon étoffe ${placement.label}. Tu veux m'aider à la retrouver ?`,
+    choices:[{id:"accept",text:"Oui, je vais chercher."},{id:"refuse",text:"Pas maintenant, merci."}]};
+}
+
+function drawLostVillageObject() {
+  const activity=state.villageActivity;
+  if(activity?.kind!=="lost" || activity.stage!=="searching")return;
+  const item=activity.lostItem;
+  ctx.save();ctx.translate(item.x,getWalkSurfaceY(item.x)+item.groundOffset);ctx.scale(.58,.58);
+  renderObjectVisual(item.visualId,ctx);
+  // A small tied name tag distinguishes this belonging from ordinary cloth collectibles.
+  ctx.strokeStyle="#cabb92";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(20,-12);ctx.lineTo(27,-20);ctx.stroke();
+  ctx.fillStyle="#ede1b9";roundedRect(22,-25,10,8,2);ctx.fill();ctx.restore();
+}
+
+function collectLostVillageObject() {
+  const activity=state.villageActivity;
+  if(activity?.kind!=="lost" || activity.stage!=="searching" || Math.abs(state.player.x-activity.lostItem.x)>52)return;
+  activity.stage="carried";activity.expiresAt=state.time+900;
+  setPlayerAction("pickup",.7);playSoftPing();
+  showMessageFor("Étoffe retrouvée. Rapporte-la à son propriétaire.",2600);saveGame();
+}
+
+function openVillageActivityDialogue(villager) {
+  const activity=state.villageActivity;
+  if(!activity || activity.villageId!==villager.villageId)return false;
+  const conversation=activity.kind==="lost" && activity.stage==="carried"
+    ? {id:"return-cloth",activityReturn:true,prompt:"Tu as retrouvé mon étoffe ?",choices:[{id:"return",text:"Oui, la voici."},{id:"later",text:"Je repasserai."}]}
+    : {id:"activity-status",activityStatus:true,prompt:activity.kind==="lost"?`Mon étoffe est toujours ${activity.spot.label}.` : "On continue notre petite partie ?",
+      choices:[{id:"continue",text:"Je continue à chercher."},{id:"abandon",text:"Arrêtons pour aujourd'hui."}]};
+  ui.villagerTitle.textContent=villager.role;ui.villagerText.textContent=conversation.prompt;
+  pendingVillagerHelp=villager;pendingVillagerConversation={villager,conversation};
+  renderVillagerChoices(conversation);openDialog(ui.villagerDialog);return true;
+}
+
+
 function getResidentForVillage(village) {
   const chapterIndex = Number.isFinite(village.chapterIndex)
     ? village.chapterIndex
@@ -661,9 +853,12 @@ function getResidentForVillage(village) {
   const villager = village.villager || villagers[chapterIndex % villagers.length];
   const homeX = village.x + 410;
   const challengeRunner = getChallengeRunnerForVillage(villageId);
+  const activity = state.villageActivity?.villageId === villageId ? state.villageActivity : null;
   return {
     ...villager,
-    x: Number.isFinite(challengeRunner?.x) ? challengeRunner.x : homeX,
+    x: activity?.kind === "hide" ? activity.x : Number.isFinite(challengeRunner?.x) ? challengeRunner.x : homeX,
+    concealed: activity?.kind === "hide" && activity.stage === "searching",
+    villageActivityActor: activity?.kind === "hide",
     homeX,
     raceActor: challengeRunner || null,
     villageId,
@@ -737,6 +932,7 @@ function wrapCanvasText(text, maxWidth) {
 }
 
 function drawVillagerBubble(villager) {
+  if(villager.concealed)return;
   const bubble = villagerBubbles[getVillagerKey(villager)];
   if (!bubble) return;
   if (state.time >= bubble.endsAt) {
@@ -778,6 +974,7 @@ function updateVillagerAwareness(dt, input = 0) {
   if (!running || isModalOpen()) return;
   const seenKeys = new Set();
   getVisibleVillageResidents().forEach((villager) => {
+    if(villager.concealed)return;
     const key = getVillagerKey(villager);
     seenKeys.add(key);
     const memory = getVillagerMemory(villager);
@@ -850,6 +1047,7 @@ function updateVillagerAwareness(dt, input = 0) {
 }
 
 function triggerPlayerHop() {
+  if(state.shelter)return;
   if (!running || isModalOpen()) return;
   state.player.action = "hop";
   state.player.actionUntil = state.time + hopDurationSeconds;
@@ -882,10 +1080,96 @@ function getChapter(x = state.player.x) {
   return Math.max(4, Math.floor((x - world.firstRouteEnd) / world.chapterSize) + 4);
 }
 
+function getVillageShelter(village) {
+  const layout=getVillagePrototypeLayout(village);
+  const house=layout?.houses[0] || {x:village.x,width:64,height:48,setback:18};
+  return {id:`village-shelter-${village.chapterIndex}`,villageIndex:village.chapterIndex,
+    x:house.x,width:house.width,height:house.height,setback:house.setback};
+}
+
+function getShelterById(id) {
+  const match=/^village-shelter-(\d+)$/.exec(id||"");
+  if(!match)return null;
+  const index=Number(match[1]);
+  return Number.isSafeInteger(index)&&index>=0?getVillageShelter(getVillageByIndex(index)):null;
+}
+
+function updateWeatherClock() {
+  if(!isExpandedWorld() || isInSecretWorld()) {state.nextWeatherChangeAt=state.time+150;return;}
+  if(state.time>=state.nextWeatherChangeAt) {
+    state.weatherCycleOffset=(state.weatherCycleOffset+1)%weatherSchedule.length;
+    state.nextWeatherChangeAt=state.time+150;
+  }
+}
+
+function isStrongShelterWeather() {
+  const weather=getWeatherForChapter();
+  return weather.id==="wind" || (weather.id==="rain" && getRainTargetIntensity(weather,false)>=.68);
+}
+
+function enterWeatherShelter(shelter) {
+  const actual=getShelterById(shelter?.id);
+  if(!actual || state.shelter || state.friendlyChallenge || isInSecretWorld()
+    || Math.abs(state.player.x-actual.x)>56)return;
+  if(state.villageActivity)finishVillageActivity();
+  clearMovementIntent();state.player.rest=0;state.player.action="";state.player.actionUntil=0;
+  state.shelter={id:actual.id,x:actual.x,fromX:state.player.x,stage:"entering",enteredAt:state.time,
+    wasStrong:isStrongShelterWeather(),calmSignalled:false};
+  showMessageFor("À l'abri.",1600);saveGame();
+}
+
+function leaveWeatherShelter(silent=false) {
+  const shelter=state.shelter;
+  if(!shelter)return;
+  const x=shelter.x;
+  state.shelter=null;clearMovementIntent();state.player.x=x+36;state.player.y=getWalkSurfaceY(state.player.x);
+  if(state.companion.unlocked && state.companion.present!==false) {
+    state.companion.x=state.player.x-state.player.face*78;
+    state.companion.y=getWalkSurfaceY(state.companion.x);state.companion.transitionUntil=state.time+.5;
+  }
+  if(!silent)showMessageFor("De retour sur le chemin.",1600);
+  saveGame();
+}
+
+function updateWeatherShelter() {
+  const shelter=state.shelter;
+  if(!shelter)return;
+  const actual=getShelterById(shelter.id);
+  if(!actual || isInSecretWorld() || state.friendlyChallenge) {leaveWeatherShelter(true);return;}
+  const progress=Math.min(1,Math.max(0,(state.time-shelter.enteredAt)/.7));
+  state.player.x=shelter.stage==="entering"?shelter.fromX+(actual.x-shelter.fromX)*progress:actual.x;
+  state.player.vx=0;
+  if(progress>=1 && shelter.stage==="entering") {shelter.stage="inside";saveGame();}
+  const strong=isStrongShelterWeather();
+  if(strong) {shelter.wasStrong=true;shelter.calmSignalled=false;}
+  if(shelter.stage==="inside" && shelter.wasStrong && !strong && weatherVisual.rain<.15 && !shelter.calmSignalled) {
+    shelter.calmSignalled=true;playSoftPing();showMessageFor("Le temps s'apaise dehors.",1800);saveGame();
+  }
+}
+
+function getShelterFade() {
+  if(!state.shelter)return 1;
+  if(state.shelter.stage==="inside")return 0;
+  return 1-Math.min(1,Math.max(0,(state.time-state.shelter.enteredAt)/.7));
+}
+
+function restoreWeatherShelter(payload) {
+  state.weatherCycleOffset=Number.isFinite(payload.weatherCycleOffset)?Math.max(0,Math.floor(payload.weatherCycleOffset))%weatherSchedule.length:0;
+  state.nextWeatherChangeAt=Number.isFinite(payload.nextWeatherChangeAt)&&payload.nextWeatherChangeAt>state.time?payload.nextWeatherChangeAt:state.time+150;
+  state.shelter=null;
+  const actual=getShelterById(payload.shelter?.id);
+  if(actual && !state.activeSecretWorld && !state.friendlyChallenge && Math.abs(state.player.x-actual.x)<80) {
+    state.shelter={id:actual.id,x:actual.x,fromX:actual.x,stage:"inside",enteredAt:state.time-1,
+      wasStrong:Boolean(payload.shelter.wasStrong),calmSignalled:Boolean(payload.shelter.calmSignalled)};
+    state.player.x=actual.x;state.player.vx=0;state.villageActivity=null;
+  }
+}
+
+
 function getWeatherForChapter(chapter = state.chapter) {
   if (isInSecretWorld()) return weatherTypes.find((weather) => weather.id === "mist") || weatherTypes[0];
   if (!isExpandedWorld()) return weatherTypes[0];
-  const index = ((chapter - 4) % weatherSchedule.length + weatherSchedule.length) % weatherSchedule.length;
+  const index = ((chapter - 4 + state.weatherCycleOffset) % weatherSchedule.length + weatherSchedule.length) % weatherSchedule.length;
   return weatherTypes.find((weather) => weather.id === weatherSchedule[index]) || weatherTypes[0];
 }
 
@@ -1376,7 +1660,7 @@ function getProceduralSecretLocations() {
 
 function getProceduralLetters() {
   if (isInSecretWorld()) return [];
-  if (state.activeQuest || state.pendingQuestReward || state.friendlyChallenge || state.time < state.nextLetterAt) return [];
+  if (state.activeQuest || state.pendingQuestReward || state.friendlyChallenge || state.villageActivity || state.time < state.nextLetterAt) return [];
   if (!isExpandedWorld()) {
     return [{ id: "ancient-letter-start", x: 1240 }];
   }
@@ -1470,6 +1754,10 @@ function getProceduralTrailMarkers() {
   });
 }
 
+function getVillageByIndex(villageIndex) {
+  return {x:world.firstRouteEnd+520+villageIndex*villageSpacing,name:`Village ${villageIndex+1}`,chapterIndex:villageIndex,villager:villagers[villageIndex%villagers.length]};
+}
+
 function getProceduralVillages() {
   if (isInSecretWorld()) return [];
   if (!isExpandedWorld()) return [];
@@ -1478,12 +1766,7 @@ function getProceduralVillages() {
   const end = Math.max(start, Math.floor((state.camera.x + window.innerWidth + 1200 - firstVillageX) / villageSpacing));
   const items = [];
   for (let villageIndex = start; villageIndex <= end; villageIndex += 1) {
-    items.push({
-      x: firstVillageX + villageIndex * villageSpacing,
-      name: `Village ${villageIndex + 1}`,
-      chapterIndex: villageIndex,
-      villager: villagers[villageIndex % villagers.length]
-    });
+    items.push(getVillageByIndex(villageIndex));
   }
   return items;
 }
@@ -1960,6 +2243,7 @@ function drawWorldObjects() {
     drawCollectibleIcon(drop.item, index + 20, drop.x, drop.y);
   });
 
+  drawLostVillageObject();
   drawDiscoveryBursts();
 
   getProceduralLetters().forEach((letter, index) => {
@@ -2522,6 +2806,7 @@ function drawSecretLocation(secret) {
 }
 
 function drawCompanion() {
+  if(getShelterFade()<=0)return;
   if (!state.companion.unlocked || !state.companion.present) return;
   const p = state.player;
   const moving = Math.abs(state.companion.pace || 0) > 18;
@@ -2531,7 +2816,7 @@ function drawCompanion() {
   const face = Math.sign(p.x - x) || p.face;
   const fade = state.companion.transitionUntil > state.time ? Math.min(1, Math.max(0.25, 1 - (state.companion.transitionUntil - state.time) / 1.2)) : 1;
   ctx.save();
-  ctx.globalAlpha = fade;
+  ctx.globalAlpha *= fade * getShelterFade();
   ctx.translate(x, y);
   ctx.scale(face, 1);
   drawCompanionAnimal(state.companion, moving, sleeping);
@@ -3144,6 +3429,7 @@ function getVisibleRiverX() {
 }
 
 function drawVillager(x, villager) {
+  if(villager.concealed){drawHiddenResidentClue(villager);return;}
   const y = getWalkSurfaceY(x);
   if (villager.raceActor) {
     const seed = Math.abs(hashNumber(villager.role.length + villager.homeX));
@@ -3168,7 +3454,8 @@ function drawVillager(x, villager) {
 }
 
 function drawVillagerCharacter(x, y, villager) {
-  const seed = Math.abs(hashNumber(villager.role.length + x));
+  const seed = Math.abs(hashNumber(villager.role.length + (villager.villageActivityActor ? villager.homeX : x)));
+  const walk = villager.villageActivityActor && state.villageActivity?.stage === "returning" ? Math.sin(state.time * 8) * 9 : 0;
   const bodyColors = ["#6a8a80", "#8b6840", "#6f7f4f", "#4f7f99", "#7f6a8a"];
   const body = villager.specialCompanionGiver ? "#6f7f4f" : bodyColors[Math.floor(seed * bodyColors.length) % bodyColors.length];
   const skin = "#e5b878";
@@ -3184,9 +3471,9 @@ function drawVillagerCharacter(x, y, villager) {
   ctx.lineCap = "round";
   ctx.beginPath();
   ctx.moveTo(-7, 31);
-  ctx.lineTo(-15, 55);
+  ctx.lineTo(-15 + walk, 55);
   ctx.moveTo(8, 31);
-  ctx.lineTo(14, 55);
+  ctx.lineTo(14 - walk, 55);
   ctx.stroke();
   ctx.fillStyle = body;
   ctx.beginPath();
@@ -3215,9 +3502,9 @@ function drawVillagerCharacter(x, y, villager) {
   ctx.lineWidth = 6;
   ctx.beginPath();
   ctx.moveTo(-16, 14);
-  ctx.lineTo(-23, 25);
+  ctx.lineTo(-23 - walk * .5, 25);
   ctx.moveTo(16, 14);
-  ctx.lineTo(24, 24);
+  ctx.lineTo(24 + walk * .5, 24);
   ctx.stroke();
   ctx.restore();
 }
@@ -3226,7 +3513,7 @@ function drawWeather() {
   const weather = getWeatherForChapter();
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const protectedFromWeather = getWeatherProtection(weather.id);
+  const protectedFromWeather = !state.shelter && getWeatherProtection(weather.id);
   ctx.save();
   if (weatherVisual.rain > 0.01) drawRainWeather(weatherVisual.rain, protectedFromWeather);
   if (weather.id === "mist") {
@@ -3261,9 +3548,9 @@ function drawWeather() {
   ctx.restore();
 }
 
-function getRainTargetIntensity(weather = getWeatherForChapter()) {
+function getRainTargetIntensity(weather = getWeatherForChapter(), respectProtection = true) {
   if (weather.id !== "rain") return 0;
-  if (getWeatherProtection("rain")) return 0.36;
+  if (respectProtection && getWeatherProtection("rain")) return 0.36;
   const seed = hashNumber(state.chapter * 19 + Math.floor(state.player.x / 900));
   if (seed > 0.72) return 0.95;
   if (seed > 0.34) return 0.68;
@@ -3271,7 +3558,7 @@ function getRainTargetIntensity(weather = getWeatherForChapter()) {
 }
 
 function updateWeatherVisual(dt) {
-  weatherVisual.targetRain = getRainTargetIntensity();
+  weatherVisual.targetRain = getRainTargetIntensity(getWeatherForChapter(), !state.shelter);
   weatherVisual.rain += (weatherVisual.targetRain - weatherVisual.rain) * Math.min(1, dt * 0.75);
   if (weatherVisual.targetRain <= 0.01 && weatherVisual.rain < 0.012) weatherVisual.rain = 0;
   weatherVisual.rainMood += (weatherVisual.rain - weatherVisual.rainMood) * Math.min(1, dt * 0.45);
@@ -3347,13 +3634,16 @@ function drawPrompt(x, y, text) {
 }
 
 function drawPlayer() {
+  const shelterFade=getShelterFade();
+  if(shelterFade<=0)return;
+  ctx.save();ctx.globalAlpha*=shelterFade;
   const p = state.player;
   const appearance = getPlayerAppearance();
   const hopTimeLeft = p.action === "hop" ? Math.max(0, p.actionUntil - state.time) : 0;
   const hopOffset = hopTimeLeft > 0 ? Math.sin((1 - hopTimeLeft / hopDurationSeconds) * Math.PI) * hopHeight : 0;
   drawCharacter({
     x: p.x,
-    y: getWalkSurfaceY(p.x) - hopOffset,
+    y: getWalkSurfaceY(p.x) - hopOffset - (state.shelter ? getShelterById(state.shelter.id).setback*(1-shelterFade) : 0),
     face: p.face,
     velocity: p.vx,
     body: appearance.body,
@@ -3364,6 +3654,7 @@ function drawPlayer() {
     seated: p.rest > 0.2,
     action: p.actionUntil > state.time && p.action !== "hop" ? p.action : ""
   });
+  ctx.restore();
 }
 
 function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = "#f0bd6c", hair = "#22322c", accessory = "", label = "", seated = false, action = "" }) {
@@ -3543,6 +3834,10 @@ function drawScoutHint() {
 
 function getInteractionLabel(target) {
   if (!target) return "";
+  if(target.kind === "shelter")return "Se réfugier";
+  if(target.kind === "shelter-exit")return "Sortir du refuge";
+  if(target.kind === "hidden-resident")return "Appeler doucement";
+  if(target.kind === "lost-item")return "Objet perdu - Ramasser";
   if (target.kind === "item") return `${target.entry.label || "Objet"} • Ramasser`;
   if (target.kind === "letter") return "Enveloppe • Lire";
   if (target.kind === "villager" || target.kind === "companion") return `${target.entry.role} • Parler`;
@@ -3838,6 +4133,11 @@ function toggleMoveMode() {
 }
 
 function getInteractionTarget(visibleDiscoveries = getVisibleWorldDiscoveries(), visibleResidents = getVisibleVillageResidents()) {
+  if(state.shelter)return {kind:"shelter-exit",entry:getShelterById(state.shelter.id)};
+  const hidden = visibleResidents.find(resident=>resident.concealed && Math.abs(resident.x-state.player.x)<48);
+  if(hidden)return {kind:"hidden-resident",entry:hidden};
+  const lost=state.villageActivity;
+  if(lost?.kind === "lost" && lost.stage === "searching" && Math.abs(lost.lostItem.x-state.player.x)<52)return {kind:"lost-item",entry:lost.lostItem};
   const p = state.player;
   const inRange = (entry, range) => Math.abs(entry.x - p.x) < range;
   const byAim = (a, b) => {
@@ -3863,12 +4163,15 @@ function getInteractionTarget(visibleDiscoveries = getVisibleWorldDiscoveries(),
   if (companionGiver && inRange(companionGiver, interactionRanges.companion)) return { kind: "companion", entry: companionGiver };
 
   const village = visibleResidents
-    .filter((entry) => inRange(entry, interactionRanges.villager))
+    .filter((entry) => !entry.concealed && inRange(entry, interactionRanges.villager))
     .sort(byAim)[0];
   if (village) return { kind: "villager", entry: village };
 
   const landmark = getProceduralLandmarks().filter((entry) => inRange(entry, 112)).sort(byAim)[0];
   if (landmark) return { kind: "landmark", entry: landmark };
+
+  const shelter = !state.friendlyChallenge && !isInSecretWorld() && getProceduralVillages().map(getVillageShelter).find(entry=>inRange(entry,54));
+  if(shelter)return {kind:"shelter",entry:shelter};
 
   const trailMarker = getProceduralTrailMarkers().filter((entry) => inRange(entry, 92)).sort(byAim)[0];
   if (trailMarker) return { kind: "trail-marker", entry: trailMarker };
@@ -3895,6 +4198,7 @@ function update(dt) {
     return;
   }
   state.time += dt;
+  updateWeatherClock();
   let input = 0;
   if (keys.has("ArrowLeft") || keys.has("q") || keys.has("Q") || keys.has("a") || keys.has("A")) input -= 1;
   if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) input += 1;
@@ -3906,6 +4210,7 @@ function update(dt) {
     p.vx = 0;
   }
 
+  if(state.shelter){input=0;p.vx=0;}
   const weather = getWeatherForChapter();
   const runTarget = isRunInput(input) && Math.abs(input) > 0.12 && p.rest <= 0.15 ? 1 : 0;
   p.runBlend += (runTarget - p.runBlend) * Math.min(1, dt * 3.8);
@@ -3933,8 +4238,10 @@ function update(dt) {
     advanceQuest("weather", 1);
   }
   updateWeatherVisual(dt);
+  updateWeatherShelter();
   updateReturningChallengeRunners(dt);
   updateFriendlyChallenge(dt);
+  updateVillageActivity(dt);
   updateVillagerAwareness(dt, input);
   updateCompanion(dt);
   updateMobilePadCompanionState();
@@ -3962,6 +4269,10 @@ function interact() {
   clearMovementIntent();
   const p = state.player;
   const target = getInteractionTarget();
+  if(target?.kind === "shelter"){enterWeatherShelter(target.entry);return;}
+  if(target?.kind === "shelter-exit"){leaveWeatherShelter();return;}
+  if(target?.kind === "hidden-resident"){findHiddenResident(target.entry);return;}
+  if(target?.kind === "lost-item"){collectLostVillageObject();return;}
   if (target?.kind === "item") {
     collectDiscovery(target.entry);
     saveGame();
@@ -4552,6 +4863,7 @@ function updateAchievements() {
 }
 
 function updateCompanion(dt) {
+  if(state.shelter)return;
   if (!state.companion.unlocked) return;
   updateCompanionMovement(dt);
   if (state.time < state.companion.nextHelpAt) return;
@@ -4650,6 +4962,8 @@ function openCompanionPopup() {
 }
 
 function enterSecretWorld(secret) {
+  if(state.shelter)leaveWeatherShelter(true);
+  if(state.villageActivity)finishVillageActivity();
   if (isInSecretWorld()) return;
   const secretWorld = pickSecretWorldConfig();
   const firstOpen = !state.openedSecrets.includes(secret.id);
@@ -5501,7 +5815,7 @@ function isFriendlyChallengeHost(villager) {
 }
 
 function canStartFriendlyChallenge(villager) {
-  if (!villager || !isFriendlyChallengeHost(villager) || isInSecretWorld() || state.pendingQuestReward || state.friendlyChallenge) return false;
+  if (!villager || !isFriendlyChallengeHost(villager) || isInSecretWorld() || state.pendingQuestReward || state.friendlyChallenge || state.villageActivity) return false;
   return state.time >= (state.friendlyChallengeCooldowns[villager.villageId] || 0);
 }
 
@@ -5704,6 +6018,7 @@ function handleVillagerChoice(index) {
   const { villager, conversation, alreadyHelped, baseLine } = pendingVillagerConversation;
   const choice = conversation.choices[index];
   if (!choice) return;
+  if(handleVillageActivityChoice(villager,conversation,choice))return;
   const memory = getVillagerMemory(villager);
   rememberVillagerChoice(villager, choice.id);
   memory.relation += Number.isFinite(choice.relation) ? choice.relation : 0.25;
@@ -5720,6 +6035,7 @@ function handleVillagerChoice(index) {
 }
 
 function openVillagerHelp(villager) {
+  if(openVillageActivityDialogue(villager))return;
   if (ui.villagerDialog.open && pendingVillagerConversation) return;
   setPlayerAction("talk", 1.4);
   const alreadyHelped = state.helpedVillagers.includes(villager.villageId);
@@ -5748,7 +6064,7 @@ function openVillagerHelp(villager) {
   const meetings = memory.visits;
   const relationLine = getVillagerRelationLine(villager, meetings, memory);
   const requestLine = getVillagerRequestLine(villager, alreadyHelped);
-  const conversation = getVillagerConversation(villager, memory, alreadyHelped, previousLastSeen);
+  const conversation = createVillageActivityOffer(villager) || getVillagerConversation(villager, memory, alreadyHelped, previousLastSeen);
   ui.villagerTitle.textContent = villager.role;
   const available = getAvailableItemQuantity(villager.need.itemId);
   const required = villager.need.amount || 1;
@@ -6246,6 +6562,14 @@ function resetGame() {
   state.activeSecretPortal = null;
   state.friendlyChallenge = null;
   state.friendlyChallengeCooldowns = {};
+  state.shelter = null;
+  state.weatherCycleOffset = 0;
+  state.nextWeatherChangeAt = 150;
+  state.villageActivity = null;
+  state.villageActivityCooldowns = {};
+  state.villageActivityLastSpot = {};
+  state.nextVillageActivityAt = 90;
+  updateVillageActivityControls();
   state.itemEffects = { scoutUntil: 0, scoutTargetId: "", strideUntil: 0, glowUntil: 0, compassUntil: 0, compassTargetX: 0, compassLabel: "" };
   state.equipment = { lanternOn: false };
   state.activeSecretWorld = null;
@@ -6311,6 +6635,13 @@ function saveGame() {
     activeSecretPortal: state.activeSecretPortal,
     friendlyChallenge: state.friendlyChallenge,
     friendlyChallengeCooldowns: state.friendlyChallengeCooldowns,
+    shelter: state.shelter,
+    weatherCycleOffset: state.weatherCycleOffset,
+    nextWeatherChangeAt: state.nextWeatherChangeAt,
+    villageActivity: state.villageActivity,
+    villageActivityCooldowns: state.villageActivityCooldowns,
+    villageActivityLastSpot: state.villageActivityLastSpot,
+    nextVillageActivityAt: state.nextVillageActivityAt,
     itemEffects: state.itemEffects,
     equipment: state.equipment,
     activeSecretWorld: state.activeSecretWorld,
@@ -6439,6 +6770,8 @@ function loadGame() {
         if (item.x - previous.x < minDiscoverySpacing) item.x = previous.x + minDiscoverySpacing;
       }
     }
+    restoreVillageActivity(payload);
+    restoreWeatherShelter(payload);
     if (payload.nickname) state.playerProfile.nickname = payload.nickname;
     return true;
   } catch {
@@ -7366,7 +7699,7 @@ window.addEventListener("keydown", (event) => {
   keys.add(event.key);
   if (event.key === "e" || event.key === "E") {
     event.preventDefault();
-    if (running) interact();
+    if (running && !event.repeat) interact();
   } else if (event.key === " " || event.key === "ArrowUp" || event.key === "w" || event.key === "W" || event.key === "z" || event.key === "Z") {
     event.preventDefault();
     if (!event.repeat) triggerPlayerHop();
@@ -7469,6 +7802,7 @@ ui.customizeDialog.addEventListener("close", cancelAppearanceChanges);
 ui.giveItemButton.addEventListener("click", givePendingItem);
 ui.challengeButton.addEventListener("click", startFriendlyChallenge);
 ui.refuseHelpButton.addEventListener("click", refusePendingHelp);
+document.getElementById("abandonVillageActivityButton").addEventListener("click",()=>finishVillageActivity("Activité terminée. L'habitant est de retour au village."));
 ui.villagerChoices.addEventListener("click", (event) => {
   const button = event.target.closest(".dialog-choice-button");
   if (!button) return;

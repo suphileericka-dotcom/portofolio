@@ -1,0 +1,175 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const http=require('node:http');
+const path=require('node:path');
+const {chromium}=require('playwright');
+
+async function main(){
+  const root=path.resolve(__dirname,'..');
+  const server=http.createServer((req,res)=>{
+    const file=path.resolve(root,'.'+(req.url.split('?')[0]==='/'?'/index.html':req.url.split('?')[0]));
+    if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
+    fs.readFile(file,(error,data)=>{res.writeHead(error?404:200,{'Content-Type':{'.js':'text/javascript','.css':'text/css','.html':'text/html','.mp3':'audio/mpeg'}[path.extname(file)]||'application/octet-stream'});res.end(error?'':data);});
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const browser=await chromium.launch({headless:true});
+  try{
+    for(const viewport of [{width:1280,height:800},{width:390,height:844},{width:844,height:390}]){
+      const context=await browser.newContext({viewport,isMobile:viewport.width<900,hasTouch:viewport.width<900,serviceWorkers:'block'});
+      const page=await context.newPage(),errors=[];
+      page.on('pageerror',e=>errors.push(e.message));
+      await page.route('https://**/*',route=>route.abort());
+      await page.goto(`http://127.0.0.1:${server.address().port}/`);
+      await page.locator('#startButton')[viewport.width<900?'tap':'click']();
+      await page.waitForTimeout(600);
+      const result=await page.evaluate(()=>{
+        running=false;
+        const villageX=world.firstRouteEnd+520;
+        state.player.x=villageX+410;state.camera.x=villageX-200;state.chapter=4;state.time=100;state.cinematicPlayed=true;
+        state.activeQuest=null;state.pendingQuestReward=null;state.friendlyChallenge=null;
+        const village=getProceduralVillages().find(v=>v.chapterIndex===0),host=getResidentForVillage(village);
+        const realRandom=Math.random;Math.random=()=>0;
+        state.nextVillageActivityAt=0;
+        openVillagerHelp(host);
+        Math.random=realRandom;
+        const actualOffer=pendingVillagerConversation?.conversation;
+        if(!actualOffer?.activityOffer)throw Error('No real offer in resident dialogue');
+        handleVillagerChoice(0);
+        const preparing=state.villageActivity?.stage==='preparing';
+        state.time+=3;updateVillageActivity(.1);
+        const hidden=getResidentForVillage(village);
+        const relocated=hidden.concealed && hidden.x!==hidden.homeX;
+        state.player.x=hidden.x+100;findHiddenResident(hidden);
+        const notAuto=state.villageActivity?.stage==='searching';
+        state.player.x=hidden.x;
+        const target=getInteractionTarget([],getVisibleVillageResidents());
+        interact();
+        const returning=state.villageActivity?.stage==='returning';
+        for(let i=0;i<900;i++){state.time+=1/60;updateVillageActivity(1/60);}
+        const home=!state.villageActivity && getResidentForVillage(village).x===host.homeX;
+        const cooldown=!canOfferVillageActivity(host);
+        state.nextVillageActivityAt=0;state.villageActivityCooldowns={};
+        Math.random=()=>0;const first=createVillageActivityOffer(host);Math.random=realRandom;
+        const anotherSpot=first.activityOffer.spot.id!==actualOffer.activityOffer.spot.id;
+        handleVillageActivityChoice(host,first,first.choices[0]);
+        state.time+=3;updateVillageActivity(.1);saveGame();
+        loadGame();
+        const reloadSafe=!state.villageActivity && getResidentForVillage(village).x===host.homeX;
+        state.nextVillageActivityAt=0;state.villageActivityCooldowns={};
+        Math.random=()=>0;const second=createVillageActivityOffer(host);Math.random=realRandom;
+        handleVillageActivityChoice(host,second,second.choices[0]);
+        pauseGame();const paused=state.villageActivity?.stage==='preparing';
+        ui.startScreen.classList.add('is-hidden');
+        state.player.x=villageX+1500;updateVillageActivity(.1);const departureSafe=!state.villageActivity;
+        state.player.x=host.homeX;state.nextVillageActivityAt=0;state.villageActivityCooldowns={};state.activeQuest={type:'collectAny'};
+        const questPriority=!canOfferVillageActivity(host);state.activeQuest=null;
+        state.friendlyChallenge={villageId:host.villageId};const challengePriority=!canOfferVillageActivity(host);state.friendlyChallenge=null;
+        state.nextVillageActivityAt=0;Math.random=()=>0;const refused=createVillageActivityOffer(host);Math.random=realRandom;
+        handleVillageActivityChoice(host,refused,refused.choices[1]);
+        const refusedSafe=!state.villageActivity && !canOfferVillageActivity(host);
+        state.player.x=host.homeX;draw();
+        return {preparing,relocated,notAuto,returning,home,cooldown,anotherSpot,reloadSafe,paused,departureSafe,questPriority,challengePriority,refusedSafe,target:target?.kind};
+      });
+      assert.equal(result.target,'hidden-resident');
+      for(const [key,value]of Object.entries(result))if(key!=='target')assert.equal(value,true,key);
+      const lost=await page.evaluate(()=>{
+        state.player.x=world.firstRouteEnd+520+410;state.camera.x=world.firstRouteEnd+320;state.chapter=4;
+        state.activeQuest=null;state.pendingQuestReward=null;state.friendlyChallenge=null;
+        const village=getVillageByIndex(0),host=getResidentForVillage(village),spots=getVillageActivitySpots(village);
+        const inventory=JSON.stringify(state.inventory),respawns=JSON.stringify(state.discoveryRespawns);
+        const offer=createLostVillageActivityOffer(host,village,spots[0]);
+        const truthful=offer.prompt.includes(offer.activityOffer.spot.label) && offer.activityOffer.lostItem.x===spots[0].x;
+        handleVillageActivityChoice(host,offer,offer.choices[0]);
+        drawLostVillageObject();
+        state.player.x=offer.activityOffer.lostItem.x;
+        const target=getInteractionTarget([],[]);
+        interact();
+        const carried=state.villageActivity?.stage==='carried';
+        collectLostVillageObject();
+        const separate=JSON.stringify(state.inventory)===inventory && JSON.stringify(state.discoveryRespawns)===respawns;
+        const noRespawn=getInteractionTarget([],[])?.kind!=='lost-item';
+        saveGame();loadGame();const restored=state.villageActivity?.stage==='carried';
+        state.player.x=host.homeX;
+        openVillagerHelp(getResidentForVillage(village));
+        const returnChoice=pendingVillagerConversation?.conversation.activityReturn===true;
+        const relation=getVillagerMemory(host).relation;
+        handleVillagerChoice(0);
+        const returned=!state.villageActivity && getVillagerMemory(host).relation===relation+.5;
+        const afterReturn=JSON.stringify(state.inventory)===inventory;
+        const validAll=spots.every(spot=>{
+          const o=createLostVillageActivityOffer(host,village,spot);
+          return o.activityOffer.lostItem.x===spot.x && o.prompt.includes(spot.label);
+        });
+        const searchingOffer=createLostVillageActivityOffer(host,village,spots[1]);
+        handleVillageActivityChoice(host,searchingOffer,searchingOffer.choices[0]);
+        saveGame();loadGame();const searchRestored=state.villageActivity?.stage==='searching' && state.villageActivity.lostItem.x===spots[1].x;
+        finishVillageActivity();const abandoned=!state.villageActivity;
+        draw();
+        return {truthful,carried,separate,noRespawn,restored,returnChoice,returned,afterReturn,validAll,searchRestored,abandoned,target:target?.kind};
+      });
+      assert.equal(lost.target,'lost-item');
+      for(const [key,value]of Object.entries(lost))if(key!=='target')assert.equal(value,true,`lost: ${key}`);
+      const shelter=await page.evaluate(()=>{
+        state.player.x=world.firstRouteEnd+480;state.chapter=4;state.cinematicPlayed=true;
+        state.weatherCycleOffset=5;state.nextWeatherChangeAt=state.time+3;state.weather='wind';
+        state.activeQuest=null;state.pendingQuestReward=null;state.friendlyChallenge=null;
+        state.companion.unlocked=true;state.companion.present=true;
+        const companion=state.companion.species,refuge=getVillageShelter(getVillageByIndex(0));
+        const target=getInteractionTarget([],[]);
+        enterWeatherShelter(refuge);
+        const entering=state.shelter?.stage==='entering';
+        state.time+=.35;updateWeatherShelter();
+        const animated=getShelterFade()>0 && getShelterFade()<1;
+        state.time+=.4;updateWeatherShelter();
+        const inside=state.shelter?.stage==='inside' && getShelterFade()===0;
+        ctx.clearRect(0,0,canvas.width,canvas.height);drawPlayer();drawCompanion();
+        const invisible=!ctx.getImageData(0,0,canvas.width,canvas.height).data.some((value,index)=>index%4===3&&value);
+        const time=state.time,x=state.player.x;keys.add('ArrowRight');joystick.active=true;joystick.x=1;
+        for(let i=0;i<180;i++)update(1/60);
+        clearMovementIntent();
+        const worldContinues=state.time>time+2 && state.player.x===x;
+        const calm=getWeatherForChapter().id==='clear' && state.shelter?.calmSignalled===true;
+        const voluntary=state.shelter?.stage==='inside';
+        triggerPlayerHop();const noHop=state.player.action!=='hop';
+        saveGame();loadGame();const restored=state.shelter?.stage==='inside' && getShelterFade()===0;
+        pauseGame();const pauseSafe=state.shelter?.stage==='inside';ui.startScreen.classList.add('is-hidden');
+        interact();const exit=!state.shelter && state.player.x===refuge.x+36;
+        const sameCompanion=state.companion.present && state.companion.species===companion;
+        enterWeatherShelter(refuge);const reenter=Boolean(state.shelter);leaveWeatherShelter(true);
+        restoreWeatherShelter({shelter:{id:'invalid'}});const invalidSafe=!state.shelter;
+        state.friendlyChallenge={villageId:'busy'};enterWeatherShelter(refuge);const challengePriority=!state.shelter;state.friendlyChallenge=null;
+        draw();
+        return {target:target?.kind,entering,animated,inside,invisible,worldContinues,calm,voluntary,noHop,restored,pauseSafe,exit,sameCompanion,reenter,invalidSafe,challengePriority};
+      });
+      assert.equal(shelter.target,'shelter');
+      for(const [key,value]of Object.entries(shelter))if(key!=='target')assert.equal(value,true,`shelter: ${key}`);
+      const door=await page.evaluate(()=>{
+        const refuge=getVillageShelter(getVillageByIndex(0));
+        enterWeatherShelter(refuge);state.time+=1;updateWeatherShelter();
+        state.camera.x=refuge.x-window.innerWidth*.45;running=true;draw();
+        return {x:refuge.x-state.camera.x,y:getWalkSurfaceY(refuge.x)-40};
+      });
+      if(viewport.width<900)await page.touchscreen.tap(door.x,door.y);
+      else await page.keyboard.press('e');
+      assert.equal(await page.evaluate(()=>state.shelter),null,'real touch/keyboard exit');
+      const portal=await page.evaluate(()=>{
+        running=false;const village=getVillageByIndex(0),host=getResidentForVillage(village);
+        const offer=createLostVillageActivityOffer(host,village,getVillageActivitySpots(village)[0]);
+        handleVillageActivityChoice(host,offer,offer.choices[0]);
+        enterSecretWorld({id:'test-activity-portal',name:'Passage',source:'manual'});
+        const activitySafe=!state.villageActivity;leaveSecretWorld('manual');
+        state.player.x=getVillageShelter(village).x;enterWeatherShelter(getVillageShelter(village));
+        enterSecretWorld({id:'test-shelter-portal',name:'Passage',source:'manual'});
+        const shelterSafe=!state.shelter;leaveSecretWorld('manual');
+        return activitySafe && shelterSafe && getResidentForVillage(village).x===host.homeX;
+      });
+      assert.equal(portal,true,'portal safely clears activities and refuge');
+      assert.deepEqual(errors,[]);
+      console.log(`${viewport.width}x${viewport.height}: hide-and-seek proposal, real relocation, proximity, return, varied spots, cooldown, refusal, mission/challenge priority, pause, departure and reload passed`);
+      console.log(`${viewport.width}x${viewport.height}: lost object truthful placement, separate pickup, no respawn, handover, relation and search/carried reload passed`);
+      console.log(`${viewport.width}x${viewport.height}: shelter entry animation, hidden actors, continuing weather, calm signal, voluntary exit, companion, pause and reload passed`);
+      await context.close();
+    }
+  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+}
+main().catch(error=>{console.error(error);process.exitCode=1;});
