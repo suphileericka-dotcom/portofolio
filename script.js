@@ -694,7 +694,7 @@ function createVillageActivityOffer(villager) {
   const spot=pool[Math.floor(Math.random()*pool.length)];
   if(Math.random()>=.5)return createLostVillageActivityOffer(villager,village,spot);
   return {id:"hide-and-seek",activityOffer:{kind:"hide",villageId:villager.villageId,villageX:village.x,homeX:villager.homeX,spot},
-    prompt:"Ça te dit de jouer à cache-cache ? Je reste tout près du village.",
+    prompt:"Ça te dit de jouer à cache-cache ? Je reste tout près du village. Observe les feuilles qui remuent et ma tête qui dépasse parfois. Approche-toi, puis touche « Appeler doucement » ou appuie sur E pour me trouver.",
     choices:[{id:"accept",text:"Oui, je vais te chercher."},{id:"refuse",text:"Une autre fois, merci."}]};
 }
 
@@ -752,6 +752,7 @@ function updateVillageActivity(dt) {
   }
   if(activity.stage==="preparing" && state.time>=activity.readyAt) {
     activity.stage="searching";activity.x=activity.spot.x;
+    showMessageFor("À toi de chercher autour du village : observe les feuilles et la tête qui dépasse parfois.",4200);
     saveGame();
   }
   if(activity.stage==="returning") {
@@ -771,14 +772,17 @@ function findHiddenResident(villager) {
 }
 
 function drawHiddenResidentClue(villager) {
-  // A crouching hat peeks out intermittently at the actual, reachable hiding place.
+  // A head briefly peeks out at the real hiding place; no directional marker.
   const wave=Math.sin(state.time*2.3);
   if(wave<.35)return;
   const y=getWalkSurfaceY(villager.x)-43;
-  ctx.save();ctx.globalAlpha=.55;
-  drawEllipse(villager.x,y,5,3,"#a58a61");
-  ctx.strokeStyle="#74905a";ctx.lineWidth=1.3;
-  ctx.beginPath();ctx.moveTo(villager.x-10,y+8);ctx.quadraticCurveTo(villager.x-5,y+2+wave*2,villager.x-1,y+8);ctx.stroke();
+  ctx.save();ctx.globalAlpha=.85;
+  drawEllipse(villager.x,y-wave*3,8,7,"#e5b878");
+  drawEllipse(villager.x-2,y-5-wave*3,9,4,"#4a3632");
+  drawEllipse(villager.x+3,y-1-wave*3,1.3,1.3,"#28312e");
+  ctx.strokeStyle="#74905a";ctx.lineWidth=1.8;
+  ctx.beginPath();ctx.moveTo(villager.x-15,y+9);ctx.quadraticCurveTo(villager.x-8,y+1+wave*4,villager.x-1,y+9);ctx.stroke();
+  for(let i=0;i<3;i++)drawEllipse(villager.x-13+i*11,y+7+Math.sin(state.time*3+i)*2,5,2.5,"#74905a");
   ctx.restore();
 }
 
@@ -1202,10 +1206,14 @@ function createSecretPortal(source = "natural") {
     source
   };
   playSoftPing();
+  if (source === "natural") showMessageFor("Un portail s'est ouvert " + (direction < 0 ? "à gauche." : "à droite."), 3400);
 }
 
-function updateSecretPortal() {
-  if (!running || isInSecretWorld() || state.activeSecretPortal) return;
+function updateSecretPortal(elapsedCorrection = 0) {
+  if (!running || isInSecretWorld()) return;
+  // Physics caps each frame; the portal still counts actual active play time.
+  state.nextSecretAt = Math.max(state.time, state.nextSecretAt - Math.max(0, elapsedCorrection));
+  if (state.activeSecretPortal) return;
   if (state.time >= state.nextSecretAt) createSecretPortal("natural");
 }
 
@@ -3871,10 +3879,15 @@ function getInteractionLabel(target) {
 
 function drawContextualInteraction() {
   if (!running || isModalOpen()) return;
-  const label = getInteractionLabel(getInteractionTarget());
+  const target = getInteractionTarget();
+  const portal = state.activeSecretPortal;
+  const portalScreenX = portal ? portal.x - state.camera.x : 0;
+  const portalHint = portal && !isInSecretWorld() && (portalScreenX < 0 || portalScreenX > window.innerWidth)
+    ? (portalScreenX < 0 ? "← Portail" : "Portail →") : "";
+  const label = getInteractionLabel(target) || portalHint;
   if (!label) return;
   const mobile = window.matchMedia("(pointer: coarse)").matches;
-  const text = mobile ? label : `${label}  •  E`;
+  const text = mobile || !target ? label : `${label}  •  E`;
   ctx.save();
   ctx.font = "800 12px Nunito";
   const width = Math.min(window.innerWidth - 32, ctx.measureText(text).width + 34);
@@ -4208,7 +4221,7 @@ function getInteractionTarget(visibleDiscoveries = getVisibleWorldDiscoveries(),
   return null;
 }
 
-function update(dt) {
+function update(dt, elapsed = dt) {
   const p = state.player;
   if (isModalOpen()) {
     clearMovementIntent();
@@ -4271,7 +4284,7 @@ function update(dt) {
   updateDiscoveryBursts();
   updateMicroEvents(dt);
   updateSecretWorld(dt, input, beforeMoveX);
-  updateSecretPortal();
+  updateSecretPortal(Math.max(0, elapsed - dt));
   p.y = getWalkSurfaceY(p.x);
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
@@ -4347,9 +4360,10 @@ function interact() {
 }
 
 function loop(now) {
-  const dt = Math.min(0.033, (now - lastTime) / 1000 || 0);
+  const elapsed = Math.max(0, (now - lastTime) / 1000 || 0);
+  const dt = Math.min(0.033, elapsed);
   lastTime = now;
-  if (running) update(dt);
+  if (running && !document.hidden) update(dt, elapsed);
   draw();
   requestAnimationFrame(loop);
 }
@@ -7664,6 +7678,7 @@ window.addEventListener("pageshow", () => {
   resumeAudioAfterMobileInterruption();
 });
 document.addEventListener("visibilitychange", () => {
+  lastTime = performance.now();
   if (document.hidden) {
     pauseAudioForPageHide();
   } else {
