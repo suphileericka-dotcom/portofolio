@@ -24,7 +24,7 @@ async function main(){
       await page.waitForTimeout(600);
 
       const result=await page.evaluate(()=>{
-        running=false;state.player.x=10000;state.camera.x=9500;state.player.face=1;
+        running=false;state.player.x=10000;state.camera.x=9500;state.player.face=-1;
         state.cinematicPlayed=true;state.chapter=getChapter();state.time=899;state.nextSecretAt=900;
         state.activeSecretPortal=null;state.activeSecretWorld=null;running=true;
         updateSecretPortal();const before=!state.activeSecretPortal;
@@ -64,9 +64,15 @@ async function main(){
         state.activeSecretPortal=null;state.nextSecretAt=state.time+900;
         const before=state.nextSecretAt;openDialog(ui.optionsDialog);update(.033,20);
         const pauseSafe=state.nextSecretAt===before;closeDialog(ui.optionsDialog);
-        state.inventory.star=1;invokePortalFromItem();
-        const manual=state.activeSecretPortal?.source==='manual' && state.inventory.star===0;
-        return {notEarly,onTime,saved,hints,pauseSafe,manual};
+        state.player.face=-1;state.inventory.star=1;invokePortalFromItem();
+        const manual=state.activeSecretPortal?.source==='manual' && state.inventory.star===0
+          && state.activeSecretPortal.x===state.player.x+460;
+        const id=state.activeSecretPortal.id;
+        state.player.x=state.activeSecretPortal.x+interactionRanges.secret+1;updateSecretPortal();
+        const staysAhead=state.activeSecretPortal.id===id && state.activeSecretPortal.x===state.player.x+460;
+        state.player.x=state.activeSecretPortal.x;updateSecretPortal();
+        const reachable=state.activeSecretPortal.x===state.player.x;
+        return {notEarly,onTime,saved,hints,pauseSafe,manual,staysAhead,reachable};
       });
       for(const [key,value]of Object.entries(timing))assert.equal(value,true,key);
       assert.deepEqual(errors,[]);

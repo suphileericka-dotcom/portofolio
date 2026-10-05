@@ -1196,8 +1196,7 @@ function scheduleNextSecretPortal() {
 
 function createSecretPortal(source = "natural") {
   if (state.activeSecretPortal || isInSecretWorld()) return;
-  const direction = state.player.face || 1;
-  const x = clampToPlayableWorldX(state.player.x + direction * 460);
+  const x = clampToPlayableWorldX(state.player.x + 460);
   state.activeSecretPortal = {
     id: makeId("portal", Math.floor(state.time * 10)),
     x,
@@ -1206,14 +1205,20 @@ function createSecretPortal(source = "natural") {
     source
   };
   playSoftPing();
-  if (source === "natural") showMessageFor("Un portail s'est ouvert " + (direction < 0 ? "à gauche." : "à droite."), 3400);
+  if (source === "natural") showMessageFor("Un portail s'est ouvert devant toi, à droite.", 3400);
 }
 
 function updateSecretPortal(elapsedCorrection = 0) {
   if (!running || isInSecretWorld()) return;
   // Physics caps each frame; the portal still counts actual active play time.
   state.nextSecretAt = Math.max(state.time, state.nextSecretAt - Math.max(0, elapsedCorrection));
-  if (state.activeSecretPortal) return;
+  if (state.activeSecretPortal) {
+    // Keep an unentered passage ahead once it has been passed and is out of reach.
+    if (state.activeSecretPortal.x < state.player.x - interactionRanges.secret) {
+      state.activeSecretPortal.x = clampToPlayableWorldX(state.player.x + 460);
+    }
+    return;
+  }
   if (state.time >= state.nextSecretAt) createSecretPortal("natural");
 }
 
