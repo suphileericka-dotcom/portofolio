@@ -341,7 +341,6 @@ const state = {
   pendingQuestReward: null,
   nextLetterAt: 0,
   completedQuests: 0,
-  journey: null,
   rewards: [],
   worldDiscoveries: {},
   discoveryRespawns: {},
@@ -4299,7 +4298,6 @@ function update(dt, elapsed = dt) {
   updateMicroEvents(dt);
   updateSecretWorld(dt, input, beforeMoveX);
   updateSecretPortal(Math.max(0, elapsed - dt));
-  updateJourneyProgress();
   p.y = getWalkSurfaceY(p.x);
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
@@ -5650,94 +5648,10 @@ function claimQuestReward() {
   showMessage("Recompense recue.");
 }
 
-const journeyChapters = [
-  {title:"Les chemins nouveaux",kind:"village"},
-  {title:"Une rencontre",kind:"talk"},
-  {title:"Petites trouvailles",kind:"collect"},
-  {title:"La promenade",kind:"walk"},
-  {title:"Le prochain village",kind:"village"}
-];
-
-function normalizeJourneyProgress(value) {
-  if(!value || !Number.isSafeInteger(value.voyage) || value.voyage<1
-    || !Number.isInteger(value.chapter) || value.chapter<0 || value.chapter>=journeyChapters.length
-    || !Number.isFinite(value.progress) || value.progress<0 || !Number.isFinite(value.target) || value.target<=0
-    || !Number.isFinite(value.targetX) || value.targetX<0)return null;
-  return {voyage:value.voyage,chapter:value.chapter,progress:Math.min(value.progress,value.target),
-    target:value.target,targetX:value.targetX};
-}
-
-function initializeJourneyChapter(voyage,chapter) {
-  const x=isInSecretWorld()?state.activeSecretWorld.returnX:state.player.x;
-  const first=world.firstRouteEnd+520;
-  const index=Math.max(0,Math.floor((x-first)/villageSpacing)+1);
-  const kind=journeyChapters[chapter].kind;
-  state.journey={voyage,chapter,progress:0,target:kind==="collect"?3+(voyage-1)%3:kind==="walk"?4200+(voyage-1)%3*400:1,
-    targetX:getVillageByIndex(index).x+410};
-  return state.journey;
-}
-
-function ensureJourneyProgress() {
-  return state.journey || initializeJourneyChapter(1,0);
-}
-
-function getJourneyObjective() {
-  const journey=ensureJourneyProgress(),kind=journeyChapters[journey.chapter].kind;
-  if(kind==="village") {
-    const index=Math.round((journey.targetX-410-world.firstRouteEnd-520)/villageSpacing);
-    const x=isInSecretWorld()?state.activeSecretWorld.returnX:state.player.x;
-    return `Rejoindre le village ${index+1} · ${Math.max(0,Math.ceil((journey.targetX-x)/1000))} km`;
-  }
-  if(kind==="talk")return "Parler à un habitant du village.";
-  if(kind==="collect")return `Ramasser des trouvailles · ${journey.progress}/${journey.target}`;
-  return `Explorer le chemin · ${Math.min(100,Math.floor(journey.progress/journey.target*100))} %`;
-}
-
-function updateJourneyResume() {
-  const journey=ensureJourneyProgress();
-  ui.continueButton.textContent=`Continuer — Voyage ${journey.voyage}, chapitre ${journey.chapter+1}`;
-}
-
-function finishJourneyChapter() {
-  const previous=ensureJourneyProgress(),finishedVoyage=previous.chapter===journeyChapters.length-1;
-  rememberJournalEvent(`Voyage ${previous.voyage}, chapitre ${previous.chapter+1} terminé : ${journeyChapters[previous.chapter].title}.`);
-  initializeJourneyChapter(previous.voyage+(finishedVoyage?1:0),finishedVoyage?0:previous.chapter+1);
-  // Chapters never reset the world, the player position or the portal schedule.
-  showMessageFor(finishedVoyage?`Voyage ${previous.voyage} accompli ! Le voyage ${state.journey.voyage} commence.`
-    :`Chapitre ${previous.chapter+1} terminé ! ${getJourneyObjective()}`,4500);
-  playSoftPing();updateJourneyResume();saveGame();
-}
-
-function recordJourneyEvent(kind) {
-  const journey=ensureJourneyProgress();
-  if(journeyChapters[journey.chapter].kind!==kind)return;
-  journey.progress+=1;
-  if(journey.progress>=journey.target)finishJourneyChapter();
-}
-
-function updateJourneyProgress() {
-  const journey=ensureJourneyProgress();
-  if(isInSecretWorld())return;
-  const kind=journeyChapters[journey.chapter].kind;
-  if(kind==="village" && state.player.x>=journey.targetX-interactionRanges.villager)finishJourneyChapter();
-  else if(kind==="walk") {
-    journey.progress+=Math.max(0,state.player.x-(state.player.previousX??state.player.x));
-    if(journey.progress>=journey.target)finishJourneyChapter();
-  }
-}
-
-function renderJourneyCard() {
-  const journey=ensureJourneyProgress();
-  return `<article class="quest-card"><strong>Voyage ${journey.voyage} · Chapitre ${journey.chapter+1}/5 — ${journeyChapters[journey.chapter].title}</strong><p>${getJourneyObjective()}</p><div class="progress-bar"><span style="width:${journey.chapter/5*100}%"></span></div><p>Chaque voyage accompli en ouvre un nouveau. Cache-cache, objets perdus, compagnon et portails restent disponibles pendant le voyage.</p></article>`;
-}
-
 function updateMissionTracker() {
   if (!missionTrackerNotice || state.time >= missionTrackerNotice.expiresAt) {
+    ui.missionTracker.classList.remove("is-visible");
     missionTrackerNotice = null;
-    const journey = ensureJourneyProgress();
-    const html = `<strong>Voyage ${journey.voyage} · Chapitre ${journey.chapter + 1}/5</strong><span>${getJourneyObjective()}</span>`;
-    if(ui.missionTracker.innerHTML!==html)ui.missionTracker.innerHTML=html;
-    ui.missionTracker.classList.toggle("is-visible",running && !isModalOpen());
   }
 }
 
@@ -5789,7 +5703,7 @@ function showMissionReminder() {
     showMissionTracker("reminder", state.activeQuest);
     return;
   }
-  showMessage(getJourneyObjective());
+  showMessage("Aucune mission active. Une enveloppe peut apparaitre sur le chemin.");
 }
 
 function normalizeQuest(quest) {
@@ -5877,7 +5791,6 @@ function collectDiscovery(item, quiet = false) {
   }
   state.discoveries.push(item.id);
   state.inventory[baseId] = (state.inventory[baseId] || 0) + 1;
-  if (!quiet) recordJourneyEvent("collect");
   if (!quiet) {
     state.recentDiscoveryNotice = {
       id: item.id,
@@ -6170,7 +6083,6 @@ function handleVillagerChoice(index) {
 function openVillagerHelp(villager) {
   if(openVillageActivityDialogue(villager))return;
   if (ui.villagerDialog.open && pendingVillagerConversation) return;
-  recordJourneyEvent("talk");
   setPlayerAction("talk", 1.4);
   const alreadyHelped = state.helpedVillagers.includes(villager.villageId);
   const relationKey = getVillagerKey(villager);
@@ -6314,7 +6226,6 @@ function buildJournal() {
         <span>${getPlaceIcon(place)} ${place}</span>
         <span>Temps ${formatPlayTime()}</span>
       </div>
-      ${renderJourneyCard()}
       <p class="journey-note">${getJourneySummary()}</p>
       <div class="journal-landscape ${getSeasonClass(getSeason())}">
         <span>${getPlaceIcon(place)}</span>
@@ -6654,7 +6565,6 @@ function pauseGame() {
   resetTouchControls();
   state.player.vx = 0;
   saveGame();
-  updateJourneyResume();
   ui.continueButton.disabled = false;
   ui.continueButton.style.opacity = "1";
   ui.startScreen.classList.remove("is-hidden");
@@ -6688,7 +6598,6 @@ function resetGame() {
   state.pendingQuestReward = null;
   state.nextLetterAt = 0;
   state.completedQuests = 0;
-  state.journey = null;
   state.rewards = [];
   state.worldDiscoveries = {};
   state.discoveryRespawns = {};
@@ -6761,7 +6670,6 @@ function saveGame() {
     pendingQuestReward: state.pendingQuestReward,
     nextLetterAt: state.nextLetterAt,
     completedQuests: state.completedQuests,
-    journey: state.journey,
     rewards: state.rewards,
     worldDiscoveries: state.worldDiscoveries,
     discoveryRespawns: state.discoveryRespawns,
@@ -6837,7 +6745,6 @@ function loadGame() {
     state.pendingQuestReward = payload.pendingQuestReward && typeof payload.pendingQuestReward === "object" ? payload.pendingQuestReward : null;
     state.nextLetterAt = Number.isFinite(payload.nextLetterAt) ? payload.nextLetterAt : 0;
     state.completedQuests = Number.isFinite(payload.completedQuests) ? payload.completedQuests : 0;
-    state.journey = normalizeJourneyProgress(payload.journey);
     state.rewards = Array.isArray(payload.rewards) ? payload.rewards : [];
     state.worldDiscoveries = normalizeWorldDiscoveries(payload.worldDiscoveries);
     state.discoveryRespawns = payload.discoveryRespawns && typeof payload.discoveryRespawns === "object" ? payload.discoveryRespawns : {};
@@ -8072,7 +7979,6 @@ setControlInputMode(window.matchMedia("(pointer: coarse)").matches ? "touch" : "
 loadOptions();
 preloadMainMusic()?.catch((error) => reportAudioError("Prechargement initial de la musique impossible.", error));
 const hasSave = loadGame();
-updateJourneyResume();
 ui.nicknameInput.value = state.playerProfile.nickname;
 ui.continueButton.disabled = !hasSave;
 ui.continueButton.style.opacity = hasSave ? "1" : "0.55";
