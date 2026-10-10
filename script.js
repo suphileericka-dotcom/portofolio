@@ -5694,8 +5694,7 @@ function getJourneyObjective() {
 }
 
 function updateJourneyResume() {
-  const journey=ensureJourneyProgress(),element=document.getElementById("journeyResume");
-  if(element)element.textContent=`Voyage ${journey.voyage} — Chapitre ${journey.chapter+1}/5 : ${journeyChapters[journey.chapter].title}. ${getJourneyObjective()} Progression sauvegardée automatiquement.`;
+  const journey=ensureJourneyProgress();
   ui.continueButton.textContent=`Continuer — Voyage ${journey.voyage}, chapitre ${journey.chapter+1}`;
 }
 

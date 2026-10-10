@@ -48,7 +48,7 @@ async function main(){
         saveGame();const saved=JSON.stringify(state.journey);loadGame();
         const restored=JSON.stringify(state.journey)===saved && fingerprint()===schedule;
         updateJourneyResume();buildJournal();
-        const menu=document.getElementById('journeyResume').textContent.includes('Voyage 2') && ui.continueButton.textContent.includes('chapitre 1');
+        const menu=!document.getElementById('journeyResume') && ui.continueButton.textContent.includes('Voyage 2') && ui.continueButton.textContent.includes('chapitre 1');
         const journal=ui.journalList.textContent.includes('Voyage 2');
         initializeJourneyChapter(2,3);const progress=state.journey.progress;
         state.activeSecretWorld={returnX:state.player.x};state.player.x=secretWorldOffset+9000;updateJourneyProgress();
@@ -84,7 +84,7 @@ async function main(){
       assert(layout,'chapter objective fits beneath HUD');
       await page.screenshot({path:path.join(root,'.tools',`journey-${viewport.width}.png`)});
       await page.evaluate(()=>pauseGame());
-      assert((await page.locator('#journeyResume').textContent()).includes('Chapitre 1'));
+      assert.equal(await page.locator('#journeyResume').count(),0);
       assert.deepEqual(errors,[]);
       console.log(`${viewport.width}x${viewport.height}: five chapters, endless next voyage, actual talk/pickups, save, menu, journal, no portal reset and no teleport progression passed`);
       await context.close();
