@@ -638,7 +638,8 @@ function normalizeVillagerMemory(raw = {}) {
     nextBubbleAt: Number.isFinite(raw.nextBubbleAt) ? raw.nextBubbleAt : 0,
     lastWeather: typeof raw.lastWeather === "string" ? raw.lastWeather : "",
     noticedDiscoveryId: typeof raw.noticedDiscoveryId === "string" ? raw.noticedDiscoveryId : "",
-    completedQuestNoticed: Number.isFinite(raw.completedQuestNoticed) ? raw.completedQuestNoticed : 0
+    completedQuestNoticed: Number.isFinite(raw.completedQuestNoticed) ? raw.completedQuestNoticed : 0,
+    storyStage: [0,1,2,3].includes(raw.storyStage) ? raw.storyStage : 0
   };
 }
 
@@ -5923,7 +5924,54 @@ function getVillagerMemoryLine(villager, memory) {
   return "On s'est deja croises, non ?";
 }
 
+function isFirstResidentStory(villager) {
+  return villager.villageId===getVillageIdFromX(world.firstRouteEnd+520) && villager.role==="Pecheur";
+}
+
+function ensureResidentStoryDiscovery(villager) {
+  if(!isFirstResidentStory(villager) || state.helpedVillagers.includes(villager.villageId)
+    || getAvailableItemQuantity(villager.need.itemId)>=(villager.need.amount||1))return null;
+  const id=makeId(villager.need.itemId,950000);
+  const existing=state.worldDiscoveries[id];
+  if(existing)return existing.collected?null:existing;
+  if(state.discoveries.includes(id))return null;
+  const item=getMissionCatalogItem(villager.need.itemId);
+  if(!item)return null;
+  return storeWorldDiscovery(placeDiscoverySafely({...item,id,x:villager.homeX+2500,
+    zoneKey:`resident-story-${villager.villageId}`,createdAt:state.time,hiddenUntil:state.time}));
+}
+
+function getResidentStoryText(villager,alreadyHelped) {
+  if(!isFirstResidentStory(villager))return "";
+  if(alreadyHelped) return getVillagerMemory(villager).storyStage<3
+    ? "Ce visage moussu… je le reconnais. Mon père venait s'asseoir près du petit jardin quand je rentrais de la rivière. Il l'appelait le Jardin des Retours. Grâce à toi, je me souviens enfin. Tu y seras toujours bienvenu."
+    : "Le Jardin des Retours porte à nouveau son nom. Chaque fois que je le regarde, je pense à mon père et à ton aide.";
+  const item=ensureResidentStoryDiscovery(villager);
+  const hint=item?` Une ${villager.need.itemLabel.toLowerCase()} se trouve sur le sentier, ${item.x>=state.player.x?"plus loin à droite":"derrière toi à gauche"}.`:"";
+  return `J'ai oublié le nom de cette vieille place près du petit jardin. Mon père y passait autrefois. Un visage moussu pourrait me rappeler ce souvenir.${hint} Si tu en trouves un, rapporte-le-moi. Tu peux aussi continuer ta promenade.`;
+}
+
+function acknowledgeResidentStory(villager,alreadyHelped) {
+  if(!isFirstResidentStory(villager))return;
+  const memory=getVillagerMemory(villager);
+  if(alreadyHelped && memory.storyStage<3) {
+    memory.storyStage=3;
+    rememberJournalEvent("Le pêcheur a retrouvé un souvenir de son père : le Jardin des Retours.");
+    playSoftPing();
+  } else if(!alreadyHelped && memory.storyStage===0)memory.storyStage=1;
+}
+
+function renderResidentStories() {
+  const villager=getResidentForVillage(getVillageByIndex(0));
+  const memory=getVillagerMemory(villager);
+  if(!memory.storyStage)return "";
+  const complete=memory.storyStage===3;
+  return `<article class="quest-card"><strong>Le Jardin des Retours — ${complete?"Souvenir retrouvé":"Histoire du pêcheur"}</strong><p>${complete?"Tu as aidé le pêcheur à retrouver le souvenir de son père. Le jardin reste un lieu où revenir.":memory.storyStage===2?"Le pêcheur a reçu ton aide. Reviens lui parler pour écouter la suite.":"Le pêcheur aimerait retrouver le nom de sa vieille place. Rapporte-lui une statue moussue avec le bouton Donner. Cette histoire est facultative."}</p></article>`;
+}
+
 function getVillagerRequestLine(villager, alreadyHelped) {
+  const story=getResidentStoryText(villager,alreadyHelped);
+  if(story)return story;
   if (alreadyHelped) return "Le village se souvient encore de ton aide.";
   const amount = villager.need.amount || 1;
   const label = villager.need.itemLabel || "objet";
@@ -5944,6 +5992,7 @@ function pickFreshConversation(villager, memory, options, seed) {
 }
 
 function getVillagerConversation(villager, memory, alreadyHelped, previousLastSeen = memory.lastSeenAt) {
+  if(isFirstResidentStory(villager) && (memory.storyStage===0 || (alreadyHelped && memory.storyStage<3)))return null;
   if (alreadyHelped && memory.visits < 3) return null;
   const personality = getVillagerPersonality(villager);
   const seed = state.time + villager.x + memory.visits * 29 + memory.relation * 7;
@@ -6126,6 +6175,7 @@ function openVillagerHelp(villager) {
   } else {
     ui.villagerText.textContent = `${relationLine} ${requestLine}`.trim();
     setVillagerDialogMode("help");
+    acknowledgeResidentStory(villager,alreadyHelped);
   }
   pendingVillagerHelp = villager;
   updateVillagerChallengeButton(villager);
@@ -6159,13 +6209,14 @@ function givePendingItem() {
   state.inventory[itemId] -= required;
   state.helpedVillagers.push(pendingVillagerHelp.villageId);
   const memory = getVillagerMemory(pendingVillagerHelp);
+  if(isFirstResidentStory(pendingVillagerHelp))memory.storyStage=2;
   memory.helpCount += 1;
   memory.relation += 1.1;
   memory.gifts.push({ need: itemId, amount: required, at: new Date().toISOString() });
   advanceQuest("helpVillager", 1);
   const thankedVillager = pendingVillagerHelp;
   closeDialog(ui.villagerDialog);
-  showVillagerBubble(thankedVillager, "Merci. Vraiment.", { cooldown: 24, force: true });
+  showVillagerBubble(thankedVillager, isFirstResidentStory(thankedVillager)?"Ce visage me rappelle quelque chose… Reviens me voir quand tu veux.":"Merci. Vraiment.", { cooldown: 24, force: true });
   pendingVillagerConversation = null;
   pendingVillagerHelp = null;
   playSoftPing();
@@ -6249,6 +6300,8 @@ function buildJournal() {
 
   appendJournalBlock("Encyclopedie", renderEncyclopedia(), "gallery-block");
   appendJournalBlock("Habitants", renderVillagers(), "gallery-block");
+  const story=renderResidentStories();
+  if(story)appendJournalBlock("Souvenirs des habitants",story,"mission-block");
   appendJournalBlock("Missions", renderQuestCard(true), "mission-block");
   appendJournalBlock("Carte", renderMap(), "map-block");
   if (state.companion.unlocked) appendJournalBlock("Mon compagnon", renderCompanionJournal(), "companion-block");
