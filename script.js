@@ -1434,6 +1434,7 @@ function getInteractionObstacleXs(sourceItem = null) {
   getRiverCrossings((sourceItem?.x ?? state.player.x) - 5000, (sourceItem?.x ?? state.player.x) + 5000)
     .forEach((bridge) => obstacles.push({ x: bridge.x, distance: 265 }));
   getProceduralVillages().forEach((village) => obstacles.push({ x: village.x + 410, distance: minDiscoveryVillagerDistance }));
+  getProceduralLandmarks().forEach((place) => obstacles.push({x:place.x,distance:280}));
   const companionGiver = getCompanionGiver();
   if (companionGiver) obstacles.push({ x: companionGiver.x, distance: minDiscoveryVillagerDistance });
   getProceduralSecretLocations().forEach((secret) => obstacles.push({ x: secret.x, distance: minDiscoveryDoorDistance }));
@@ -1759,8 +1760,29 @@ const landmarkTypes = [
 ];
 
 function getProceduralLandmarks() {
-  // These locations remain disabled until each one has a physical, coherent route.
-  return [];
+  if(isInSecretWorld() || !isExpandedWorld())return [];
+  const first=world.firstRouteEnd+5600,spacing=9000;
+  const start=Math.max(0,Math.floor((state.camera.x-first-1000)/spacing));
+  const end=Math.max(start,Math.floor((state.camera.x+window.innerWidth+1000-first)/spacing));
+  return Array.from({length:end-start+1},(_,i)=>getRareLandmark(start+i))
+    .filter(place=>place.x>=state.camera.x-400&&place.x<=state.camera.x+window.innerWidth+400);
+}
+
+const rarePlaces = [
+  {type:"hollow-tree",name:"Le grand arbre creux",rewardId:"leaf",description:"Des racines entourent un abri naturel. Une feuille nervurée repose à son pied."},
+  {type:"greenhouse",name:"La serre oubliée",rewardId:"mushroom",description:"Les plantes ont repris cette ancienne serre. Un champignon lumineux pousse sous les vitres."},
+  {type:"spring",name:"La source lumineuse",rewardId:"shell",description:"Une petite source brille entre les pierres. Une coquille de rivière repose sur sa rive."}
+];
+
+function getRareLandmark(index) {
+  let x=world.firstRouteEnd+5600+index*9000;
+  for(let attempt=0;attempt<20;attempt++) {
+    const villageIndex=Math.max(0,Math.round((x-world.firstRouteEnd-520)/villageSpacing));
+    const village=getVillageByIndex(villageIndex);
+    if(!isRiverGap(x,220) && (x<village.x-500 || x>village.x+1200))break;
+    x+=320;
+  }
+  return {...rarePlaces[index%rarePlaces.length],id:`rare-place-${index}`,index,x,action:"Observer",rare:true};
 }
 
 function getProceduralTrailMarkers() {
@@ -2198,6 +2220,7 @@ function drawWorldObjects() {
   });
 
   getProceduralTrailMarkers().forEach(drawTrailMarker);
+  getProceduralLandmarks().forEach(drawLandmark);
 
   const companionGiver = getCompanionGiver();
   if (companionGiver) {
@@ -2290,6 +2313,7 @@ function drawLandmark(landmark) {
   const y = world.ground;
   const visited = state.visitedLandmarks.includes(landmark.id);
   ctx.save();
+  if(landmark.rare){drawRareLandmark(landmark);ctx.restore();return;}
   if (landmark.type === "cabin") {
     ctx.fillStyle = "#6f4729";
     roundedRect(x - 68, y - 94, 112, 94, 5);
@@ -2346,6 +2370,43 @@ function drawLandmark(landmark) {
   ctx.font = "800 10px Nunito";
   ctx.textAlign = "center";
   ctx.fillText(landmark.name, x, y - 154);
+  ctx.restore();
+}
+
+function drawRareLandmark(place) {
+  const night=getDayPhase().night,shade=color=>blendHex(color,"#253a40",night*.45);
+  ctx.save();ctx.translate(place.x,world.ground-34);
+  if(place.type==="hollow-tree") {
+    ctx.fillStyle=shade("#806847");roundedRect(-45,-155,90,150,28);ctx.fill();
+    ctx.strokeStyle=shade("#695139");ctx.lineWidth=8;ctx.lineCap="round";
+    ctx.beginPath();ctx.moveTo(-28,-35);ctx.lineTo(-66,-5);ctx.moveTo(28,-35);ctx.lineTo(63,-7);ctx.stroke();
+    drawEllipse(0,-44,23,38,shade("#354136"));
+    drawEllipse(-43,-154,57,43,shade("#567b52"));drawEllipse(41,-163,65,48,shade("#74905a"));
+    drawEllipse(-3,-190,48,40,shade("#668952"));
+    for(let i=0;i<5;i++)drawEllipse(-33+i*17,-102,3,8,shade("#b39a66"));
+  } else if(place.type==="greenhouse") {
+    ctx.fillStyle=shade("#719c91");ctx.globalAlpha=.48;roundedRect(-70,-100,140,91,4);ctx.fill();ctx.globalAlpha=1;
+    ctx.strokeStyle=shade("#9b9270");ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(-78,-100);ctx.lineTo(0,-142);ctx.lineTo(78,-100);ctx.lineTo(70,-100);ctx.lineTo(70,-9);ctx.lineTo(-70,-9);ctx.lineTo(-70,-100);ctx.closePath();ctx.stroke();
+    for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(i*35,-118);ctx.lineTo(i*35,-9);ctx.stroke();}
+    ctx.beginPath();ctx.moveTo(-70,-58);ctx.lineTo(70,-58);ctx.stroke();
+    for(let i=0;i<6;i++){
+      const x=-55+i*22;ctx.strokeStyle=shade("#587c4e");ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(x,-10);ctx.quadraticCurveTo(x-10,-40,x+3,-66-i%2*14);ctx.stroke();
+      drawEllipse(x-7,-34,8,4,shade("#80a260"));drawEllipse(x+4,-50,7,4,shade("#97ad75"));
+    }
+  } else {
+    const glow=ctx.createRadialGradient(0,-20,4,0,-20,90);glow.addColorStop(0,"rgba(131,218,214,.32)");glow.addColorStop(1,"rgba(131,218,214,0)");
+    ctx.fillStyle=glow;ctx.fillRect(-95,-105,190,120);
+    drawEllipse(0,-15,65,17,shade("#658c8a"));drawEllipse(0,-19,53,10,"#8ac5c3");
+    for(let i=0;i<7;i++)drawEllipse(-68+i*22,-10-(i%2)*10,11,8,shade("#929c86"));
+    ctx.strokeStyle="#d9ede0";ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(0,-20,26+Math.sin(state.time*1.3)*4,4,0,0,Math.PI*2);ctx.stroke();
+    for(let i=0;i<3;i++)drawEllipse(-28+i*27,-48-Math.sin(state.time+i)*5,2,2,"#d9ede0");
+  }
+  if(!state.visitedLandmarks.includes(place.id)) {
+    ctx.save();ctx.translate(70,-12);ctx.scale(.42,.42);
+    renderObjectVisual(place.rewardId,ctx);ctx.restore();
+  }
   ctx.restore();
 }
 
@@ -3881,6 +3942,7 @@ function getInteractionLabel(target) {
   if(target.kind === "shelter-exit")return "Sortir du refuge";
   if(target.kind === "hidden-resident")return "Appeler doucement";
   if(target.kind === "lost-item")return "Objet perdu - Ramasser";
+  if(target.kind === "landmark")return `${target.entry.name} · Observer`;
   if (target.kind === "item") return `${target.entry.label || "Objet"} • Ramasser`;
   if (target.kind === "letter") return "Enveloppe • Lire";
   if (target.kind === "villager" || target.kind === "companion") return `${target.entry.role} • Parler`;
@@ -4854,6 +4916,13 @@ function visitLandmark(landmark) {
   state.visitedLandmarks.push(landmark.id);
   rememberPlace(landmark.name);
   advanceQuest("landmark", 1);
+  if(landmark.rare) {
+    const reward=getCatalogItem(landmark.rewardId);
+    if(reward)collectDiscovery({...reward,id:makeId(reward.id,970000+landmark.index),place:landmark.name},true);
+    rememberJournalEvent(`J'ai découvert ${landmark.name.toLowerCase()}. ${landmark.description}`);
+    showMessage(`${landmark.name} : souvenir ajouté au Carnet.${reward?` ${reward.label} rejoint ton sac.`:""}`);
+    playSoftPing();updateAchievements();return;
+  }
   const reward = getCatalogItem(landmark.rewardId);
   if (landmark.type === "cabin") {
     state.player.rest = 1;
@@ -6304,6 +6373,11 @@ function buildJournal() {
   if(story)appendJournalBlock("Souvenirs des habitants",story,"mission-block");
   appendJournalBlock("Missions", renderQuestCard(true), "mission-block");
   appendJournalBlock("Carte", renderMap(), "map-block");
+  const rareVisited=state.visitedLandmarks.filter(id=>/^rare-place-\d+$/.test(id)).slice(-12);
+  if(rareVisited.length)appendJournalBlock("Lieux rares découverts",rareVisited.map(id=>{
+    const place=getRareLandmark(Number(id.replace("rare-place-","")));
+    return `<article class="quest-card"><strong>${place.name}</strong><p>${place.description}</p><p>Souvenir de ta promenade.</p></article>`;
+  }).join(""),"map-block");
   if (state.companion.unlocked) appendJournalBlock("Mon compagnon", renderCompanionJournal(), "companion-block");
 }
 
