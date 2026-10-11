@@ -52,6 +52,13 @@ async function main(){
       assert.deepEqual(errors,[]);
       await page.evaluate(()=>{const p=getRareLandmark(0);state.player.x=p.x;state.camera.x=p.x-window.innerWidth/2;draw();});
       await page.screenshot({path:path.join(root,'.tools',`rare-tree-${viewport.width}.png`)});
+      for(let index=0;index<3;index++)for(const [phase,time]of [['day',100],['night',220]]) {
+        await page.evaluate(([index,time])=>{
+          const p=getRareLandmark(index);state.player.x=p.x+45;state.camera.x=p.x-window.innerWidth/2;
+          state.time=time;ui.message.classList.remove('is-visible');draw();
+        },[index,time]);
+        await page.screenshot({path:path.join(root,'.tools',`rare-${index}-${phase}-${viewport.width}.png`)});
+      }
       console.log(`${viewport.width}x${viewport.height}: three real sites, stable safe positions, observation, one reward, journal, save and unchanged portal passed`);
       await context.close();
     }
