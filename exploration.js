@@ -90,6 +90,13 @@
     },
     moveDepth(dt, input, previousX, speed) {
       const p = state.player;
+      // Horizontal mode: x is already integrated by the main game update.
+      // Do not run depth obstacle resolution here; it could stop the player
+      // on a decorative foreground trunk.
+      p.depth = 0;
+      p.depthVelocity = 0;
+      return;
+      /*
       const limit = api.depthLimit(p.x);
       if (!limit) { p.depth = 0; p.depthVelocity = 0; return; }
       const target = 0;
@@ -111,6 +118,7 @@
       if (Math.abs(x - previousX) < 0.01 && Math.abs(dx) > 0.1) p.vx = 0;
       p.depthVelocity = 0;
       api.companionDepth += (depth - api.companionDepth) * (1 - Math.exp(-3 * dt));
+      */
     },
     onStart(reset) {
       api.release(); lastPosition = null;
