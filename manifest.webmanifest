@@ -9,7 +9,7 @@
   "display_override": ["fullscreen", "standalone", "minimal-ui"],
   "background_color": "#101817",
   "theme_color": "#142221",
-  "orientation": "landscape",
+  "orientation": "any",
   "icons": [
     {
       "src": "/pwa-icons/icon-192.png",
