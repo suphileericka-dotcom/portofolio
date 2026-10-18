@@ -63,8 +63,8 @@
       let x = touch.x, y = touch.y;
       if (keys.has("ArrowLeft") || keys.has("q") || keys.has("Q") || keys.has("a") || keys.has("A")) x -= 1;
       if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) x += 1;
-      if (["ArrowUp", "z", "Z", "w", "W"].some(k => keys.has(k))) y -= 1;
-      if (["ArrowDown", "s", "S"].some(k => keys.has(k))) y += 1;
+      // Vertical input remains reserved for the existing jump action.
+      y = 0;
       const length = Math.hypot(x, y);
       const magnitude = Math.min(1, length);
       const keyboard = touch.id === null;
@@ -92,7 +92,7 @@
       const p = state.player;
       const limit = api.depthLimit(p.x);
       if (!limit) { p.depth = 0; p.depthVelocity = 0; return; }
-      const target = input.y * speed * 0.62;
+      const target = 0;
       p.depthVelocity = (p.depthVelocity || 0) + (target - (p.depthVelocity || 0)) * (1 - Math.exp(-8 * dt));
       if (!input.y && Math.abs(p.depthVelocity) < 0.25) p.depthVelocity = 0;
       const startDepth = p.depth || 0;
@@ -107,9 +107,9 @@
         const nextDepth = clamp(depth + dy / steps, -58 * api.depthLimit(x), 46 * api.depthLimit(x));
         if (!blocked(x, nextDepth)) depth = nextDepth;
       }
-      p.x = x; p.depth = depth;
+      p.x = x; p.depth = 0;
       if (Math.abs(x - previousX) < 0.01 && Math.abs(dx) > 0.1) p.vx = 0;
-      if (Math.abs(depth - startDepth) < 0.01 && Math.abs(dy) > 0.1) p.depthVelocity = 0;
+      p.depthVelocity = 0;
       api.companionDepth += (depth - api.companionDepth) * (1 - Math.exp(-3 * dt));
     },
     onStart(reset) {
@@ -215,7 +215,7 @@
     const eased = amount * amount * (3 - 2 * amount);
     touch.x = length ? dx / length * eased : 0;
     touch.y = length ? dy / length * eased : 0;
-    const px = length ? dx / length * distance : 0, py = length ? dy / length * distance : 0;
+    const px = length ? dx / length * distance : 0, py = 0;
     knob.style.transform = `translate(calc(-50% + ${px}px), calc(-50% + ${py}px))`;
   }
   function end(event) { if (event.pointerId === touch.id) api.release(); }
