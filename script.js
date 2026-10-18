@@ -4286,7 +4286,7 @@ function updateMobilePadModeState() {
   });
   ui.padModeButton.classList.toggle("is-active", runningMode);
   ui.padModeButton.setAttribute("aria-label", runningMode ? "Course : passer en marche" : "Marche : passer en course");
-  document.querySelector(".guide-pad-mode").classList.toggle("is-active", runningMode);
+  document.querySelector(".guide-pad-mode")?.classList.toggle("is-active", runningMode);
 }
 
 function updateMobilePadCompanionState() {
@@ -4295,14 +4295,14 @@ function updateMobilePadCompanionState() {
   ui.padCompanionButton.classList.toggle("is-hidden", unlocked && state.companion.present === false);
   ui.padCompanionButton.classList.toggle("is-active", unlocked && state.companion.present !== false);
   const guideCompanion = document.querySelector(".guide-pad-companion");
-  guideCompanion.classList.toggle("is-hidden", unlocked && state.companion.present === false);
-  guideCompanion.classList.toggle("is-active", unlocked && state.companion.present !== false);
+  guideCompanion?.classList.toggle("is-hidden", unlocked && state.companion.present === false);
+  guideCompanion?.classList.toggle("is-active", unlocked && state.companion.present !== false);
   ui.padCompanionButton.setAttribute("aria-label", state.companion.present === false ? "Faire venir le compagnon" : "Cacher le compagnon");
 }
 
 function updateMobilePadActionState(zone = "idle") {
   ui.mobilePad.classList.toggle("is-jump", zone === "jump");
-  document.querySelector(".guide-pad").classList.toggle("is-jump", zone === "jump");
+  document.querySelector(".guide-pad")?.classList.toggle("is-jump", zone === "jump");
   updateMobilePadModeState();
   updateMobilePadCompanionState();
 }
