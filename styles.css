@@ -504,6 +504,14 @@ h2 {
   transform: translate(-50%, 0);
 }
 
+.message.is-discovery {
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  padding: 0.55rem 0.8rem;
+  font-size: 0.85rem;
+  box-shadow: none;
+}
+
 .mission-tracker {
   position: absolute;
   z-index: 4;

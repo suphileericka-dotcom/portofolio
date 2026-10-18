@@ -68,6 +68,7 @@ const ui = {
   padCompanionButton: document.getElementById("padCompanionButton")
 };
 
+const exploration = window.bosquetExploration || null;
 const saveKey = "bosquet-lent-save";
 const optionsKey = "bosquet-lent-options";
 const playerKey = "bosquet-lent-player";
@@ -1685,7 +1686,7 @@ function getProceduralLetters() {
   if (isInSecretWorld()) return [];
   if (state.activeQuest || state.pendingQuestReward || state.friendlyChallenge || state.villageActivity || state.time < state.nextLetterAt) return [];
   if (!isExpandedWorld()) {
-    return [{ id: "ancient-letter-start", x: 1240 }];
+    return [{ id: "ancient-letter-start", x: state.completedQuests === 0 ? 438 : 1240, questSeed: 1240 }];
   }
   const relativeCamera = state.camera.x - world.firstRouteEnd;
   const start = Math.max(0, Math.floor((relativeCamera - 500) / world.chapterSize));
@@ -2177,6 +2178,8 @@ function drawGround(colors) {
 function drawWorldObjects() {
   ctx.save();
   ctx.translate(-state.camera.x, 0);
+  const behindScenery = exploration && (state.player.depth || 0) < -18;
+  if (behindScenery) { drawCompanion(); drawPlayer(); }
   // Reuse the same visible entries for drawing and interaction: a long session
   // can otherwise rebuild the full discovery list twice every frame.
   const visibleDiscoveries = getVisibleWorldDiscoveries();
@@ -2293,6 +2296,18 @@ function drawWorldObjects() {
 
   getProceduralLetters().forEach((letter, index) => {
     const y = world.ground - 26 + Math.sin(state.time * 1.8 + index) * 4;
+    if (letter.id === "ancient-letter-start" && state.completedQuests === 0) {
+      ctx.save();
+      const pulse = 0.5 + Math.sin(state.time * 1.8) * 0.5;
+      const glow = ctx.createRadialGradient(letter.x, y, 5, letter.x, y, 32 + pulse * 4);
+      glow.addColorStop(0, "rgba(255, 224, 151, 0.32)");
+      glow.addColorStop(1, "rgba(255, 224, 151, 0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(letter.x, y, 36, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     drawLetterIcon(letter.x, y);
   });
 
@@ -2302,8 +2317,7 @@ function drawWorldObjects() {
 
   drawFriendlyChallengeGoal();
   drawBridges();
-  drawCompanion();
-  drawPlayer();
+  if (!behindScenery) { drawCompanion(); drawPlayer(); }
   drawBridges(true);
   ctx.restore();
 }
@@ -2980,7 +2994,7 @@ function drawCompanion() {
   const moving = Math.abs(state.companion.pace || 0) > 18;
   const sleeping = p.rest > 0.2;
   const x = Number.isFinite(state.companion.x) ? state.companion.x : p.x - p.face * 82;
-  const y = getWalkSurfaceY(x) - 7;
+  const y = getWalkSurfaceY(x) - 7 + (exploration ? exploration.companionDepth : 0);
   const face = Math.sign(p.x - x) || p.face;
   const fade = state.companion.transitionUntil > state.time ? Math.min(1, Math.max(0.25, 1 - (state.companion.transitionUntil - state.time) / 1.2)) : 1;
   ctx.save();
@@ -3740,50 +3754,68 @@ function drawRainWeather(intensity, protectedFromWeather = false) {
   const groundY = world.ground + 16;
   const riverX = getVisibleRiverX();
   ctx.save();
-  ctx.fillStyle = `rgba(18, 28, 29, ${0.06 + rain * 0.08})`;
+  ctx.fillStyle = `rgba(18, 28, 29, ${rain * 0.14})`;
   ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = `rgba(35, 55, 50, ${0.06 + rain * 0.07})`;
+  ctx.fillStyle = `rgba(35, 55, 50, ${rain * 0.13})`;
   ctx.fillRect(0, world.ground - 18, w, h - world.ground + 18);
 
   const layers = [
-    { count: 18, speed: 260, length: 18, alpha: 0.12, width: 0.8, drift: 6 },
-    { count: 42, speed: 430, length: 28, alpha: 0.2, width: 1, drift: 12 },
-    { count: 18, speed: 620, length: 42, alpha: 0.32, width: 1.35, drift: 20 }
+    { count: 32, speed: 300, length: 10, alpha: 0.14, width: 0.65 },
+    { count: 52, speed: 510, length: 19, alpha: 0.23, width: 0.9 },
+    { count: 22, speed: 760, length: 29, alpha: 0.3, width: 1.25 }
   ];
   layers.forEach((layer, layerIndex) => {
-    const count = Math.max(5, Math.round(layer.count * rain * mobileFactor));
-    ctx.strokeStyle = `rgba(216, 235, 241, ${layer.alpha * (protectedFromWeather ? 0.62 : 1)})`;
+    // Fixed slots keep existing drops in place as the shower fades in and out.
+    const count = Math.round(layer.count * mobileFactor);
     ctx.lineWidth = layer.width;
     ctx.lineCap = "round";
     for (let i = 0; i < count; i += 1) {
       const seed = hashNumber(i * 31 + layerIndex * 97);
       const seedB = hashNumber(i * 47 + layerIndex * 131);
-      const travel = (state.time * layer.speed + seed * h * 1.8) % (h + 120);
-      const x = (i * (w / Math.max(1, count)) + seedB * 140 + state.time * layer.drift) % (w + 100) - 50;
-      const y = travel - 80;
-      const len = layer.length * (0.72 + seed * 0.72) * (0.85 + rain * 0.28);
-      const slant = (10 + layerIndex * 5 + rain * 12) * (0.8 + seedB * 0.45);
+      const visibility = Math.max(0, Math.min(1, (rain - seedB * 0.7) / 0.3));
+      if (visibility <= 0) continue;
+      const speed = layer.speed * (0.8 + seed * 0.4);
+      const travel = (state.time * speed + seed * (h + 120)) % (h + 120);
+      const y = travel - 60;
+      const slope = 0.16 + seedB * 0.07;
+      // The streak follows the same downward, wind-driven direction as its motion.
+      const gust = Math.sin(state.time * 0.65 + layerIndex) * 10;
+      const x = ((i + seedB) * w / count + travel * slope + gust) % (w + 120) - 60;
+      const len = layer.length * (0.75 + seed * 0.5);
+      const edgeFade = Math.max(0, Math.min(1, (y + 45) / 45, (h + 35 - y) / 45));
+      ctx.strokeStyle = `rgba(216, 235, 241, ${layer.alpha * visibility * edgeFade * (protectedFromWeather ? 0.62 : 1)})`;
       ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x - slant, y + len);
+      ctx.moveTo(x - len * slope, y - len);
+      ctx.lineTo(x, y);
       ctx.stroke();
     }
   });
 
-  const impactCount = Math.round((8 + rain * 18) * mobileFactor);
+  const impactCount = Math.round(26 * mobileFactor);
   for (let i = 0; i < impactCount; i += 1) {
-    const seed = hashNumber(i * 73 + Math.floor(state.time * 2.6));
-    if (seed > 0.42 + rain * 0.28) continue;
-    const life = (state.time * (0.75 + rain * 0.5) + seed * 8 + i * 0.23) % 1;
-    const x = (i * 157 + seed * 340 + Math.floor(state.camera.x * 0.08)) % (w + 120) - 60;
+    const phase = state.time * (0.85 + hashNumber(i * 19) * 0.55) + i * 0.618;
+    const life = phase % 1;
+    // Pick a new position only between impacts, when opacity has returned to zero.
+    const seed = hashNumber(i * 73 + Math.floor(phase) * 137);
+    const x = seed * w;
     const nearWater = riverX !== null && Math.abs(x - riverX) < 350 && seed > 0.52;
-    const y = nearWater ? world.ground + 25 + Math.sin(i + state.time * 2) * 10 : groundY + seed * 18;
-    const radius = (nearWater ? 9 : 4) + life * (nearWater ? 18 : 9);
-    ctx.strokeStyle = `rgba(216, 235, 241, ${(1 - life) * (nearWater ? 0.22 : 0.14) * rain})`;
+    const y = nearWater ? world.ground + 25 + seed * 16 : groundY + seed * 18;
+    const radius = 1 + life * (nearWater ? 18 : 7);
+    const fade = Math.sin(Math.PI * life) * (1 - life);
+    ctx.strokeStyle = `rgba(216, 235, 241, ${fade * (nearWater ? 0.3 : 0.22) * rain * (protectedFromWeather ? 0.62 : 1)})`;
     ctx.lineWidth = nearWater ? 1.1 : 0.8;
     ctx.beginPath();
     ctx.ellipse(x, y, radius, radius * (nearWater ? 0.34 : 0.18), 0, 0, Math.PI * 2);
     ctx.stroke();
+    if (!nearWater && life < 0.45) {
+      const lift = Math.sin(life / 0.45 * Math.PI) * 5;
+      ctx.beginPath();
+      ctx.moveTo(x - radius, y - lift);
+      ctx.lineTo(x - radius - 1, y - lift + 2);
+      ctx.moveTo(x + radius, y - lift);
+      ctx.lineTo(x + radius + 1, y - lift + 2);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -3811,9 +3843,9 @@ function drawPlayer() {
   const hopOffset = hopTimeLeft > 0 ? Math.sin((1 - hopTimeLeft / hopDurationSeconds) * Math.PI) * hopHeight : 0;
   drawCharacter({
     x: p.x,
-    y: getWalkSurfaceY(p.x) - hopOffset - (state.shelter ? getShelterById(state.shelter.id).setback*(1-shelterFade) : 0),
+    y: getWalkSurfaceY(p.x) + (exploration ? p.depth || 0 : 0) - hopOffset - (state.shelter ? getShelterById(state.shelter.id).setback*(1-shelterFade) : 0),
     face: p.face,
-    velocity: p.vx,
+    velocity: exploration ? Math.hypot(p.vx, p.depthVelocity || 0) : p.vx,
     body: appearance.body,
     skin: appearance.skin,
     hair: appearance.hair,
@@ -4018,6 +4050,7 @@ function getInteractionLabel(target) {
 }
 
 function drawContextualInteraction() {
+  if (exploration) return; // The trial's action button already names this interaction.
   if (!running || isModalOpen()) return;
   const target = getInteractionTarget();
   const portal = state.activeSecretPortal;
@@ -4162,6 +4195,7 @@ function draw() {
   drawShootingStars();
   drawOverlay();
   drawWeather();
+  exploration?.drawOverlay();
 }
 
 function drawShootingStars() {
@@ -4207,6 +4241,7 @@ function isModalOpen() {
 }
 
 function clearMovementIntent() {
+  exploration?.release(true);
   pointer.active = false;
   pointer.worldX = state.player.x;
   joystick.active = false;
@@ -4220,6 +4255,7 @@ function clearMovementIntent() {
 }
 
 function resetTouchControls() {
+  exploration?.release(true);
   pointer.active = false;
   pointer.worldX = state.player.x;
   joystick.active = false;
@@ -4307,13 +4343,16 @@ function toggleMoveMode() {
 }
 
 function getInteractionTarget(visibleDiscoveries = getVisibleWorldDiscoveries(), visibleResidents = getVisibleVillageResidents()) {
+  if (exploration && Math.abs(state.player.depth || 0) > 50) return null;
   if(state.shelter)return {kind:"shelter-exit",entry:getShelterById(state.shelter.id)};
   const hidden = visibleResidents.find(resident=>resident.concealed && Math.abs(resident.x-state.player.x)<48);
   if(hidden)return {kind:"hidden-resident",entry:hidden};
   const lost=state.villageActivity;
   if(lost?.kind === "lost" && lost.stage === "searching" && Math.abs(lost.lostItem.x-state.player.x)<52)return {kind:"lost-item",entry:lost.lostItem};
   const p = state.player;
-  const inRange = (entry, range) => Math.abs(entry.x - p.x) < range;
+  const inRange = (entry, range) => exploration
+    ? Math.hypot(entry.x - p.x, p.depth || 0) < range
+    : Math.abs(entry.x - p.x) < range;
   const byAim = (a, b) => {
     const da = a.x - p.x;
     const db = b.x - p.x;
@@ -4363,6 +4402,7 @@ function getInteractionTarget(visibleDiscoveries = getVisibleWorldDiscoveries(),
 
 function update(dt, elapsed = dt) {
   const p = state.player;
+  if (exploration?.updateScene(dt)) return;
   if (isModalOpen()) {
     clearMovementIntent();
     p.y = getWalkSurfaceY(p.x);
@@ -4377,6 +4417,8 @@ function update(dt, elapsed = dt) {
   if (keys.has("ArrowLeft") || keys.has("q") || keys.has("Q") || keys.has("a") || keys.has("A")) input -= 1;
   if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) input += 1;
   if (joystick.active) input += joystick.x;
+  const freeInput = exploration?.getInput();
+  if (freeInput) input = freeInput.x;
   input = Math.max(-1, Math.min(1, input));
   if (Math.abs(input) > 0.2) p.lastTravelDirection = Math.sign(input);
   if (state.friendlyChallenge?.readyAt > state.time) {
@@ -4386,7 +4428,7 @@ function update(dt, elapsed = dt) {
 
   if(state.shelter){input=0;p.vx=0;}
   const weather = getWeatherForChapter();
-  const runTarget = isRunInput(input) && Math.abs(input) > 0.12 && p.rest <= 0.15 ? 1 : 0;
+  const runTarget = freeInput ? freeInput.run : isRunInput(input) && Math.abs(input) > 0.12 && p.rest <= 0.15 ? 1 : 0;
   p.runBlend += (runTarget - p.runBlend) * Math.min(1, dt * 3.8);
   const maxSpeed = getPlayerTargetSpeed(weather);
   const target = input * maxSpeed;
@@ -4396,11 +4438,12 @@ function update(dt, elapsed = dt) {
   p.x += p.vx * dt;
   const unclampedX = p.x;
   p.x = clampToPlayableWorldX(p.x);
+  exploration?.moveDepth(dt, freeInput, beforeMoveX, maxSpeed);
   if (isInSecretWorld() && Math.abs(unclampedX - p.x) > 0.5 && Math.abs(input) > 0.2 && state.time - state.lastSecretEdgeMessageAt > 3) {
     state.lastSecretEdgeMessageAt = state.time;
     showMessageFor("Le bord de ce monde se replie. Reviens vers le chemin lumineux.", 2600);
   }
-  p.y = getWalkSurfaceY(p.x);
+  p.y = getWalkSurfaceY(p.x) + (exploration ? p.depth || 0 : 0);
   if (Math.abs(p.vx) > 5) p.face = Math.sign(p.vx);
   p.rest = Math.max(0, p.rest - dt * 0.35);
   const previousWeather = state.weather;
@@ -4418,6 +4461,7 @@ function update(dt, elapsed = dt) {
   updateVillageActivity(dt);
   updateVillagerAwareness(dt, input);
   updateCompanion(dt);
+  exploration?.updateGuidance(dt);
   updateMobilePadCompanionState();
   updateQuestHint(dt);
   updateWorldDiscoveries(dt);
@@ -4425,7 +4469,7 @@ function update(dt, elapsed = dt) {
   updateMicroEvents(dt);
   updateSecretWorld(dt, input, beforeMoveX);
   updateSecretPortal(Math.max(0, elapsed - dt));
-  p.y = getWalkSurfaceY(p.x);
+  p.y = getWalkSurfaceY(p.x) + (exploration ? p.depth || 0 : 0);
   if (p.x >= world.firstRouteEnd && !state.cinematicPlayed) playRouteEndCinematic();
 
   const targetZoom = p.rest > 0 ? 1.08 : 1;
@@ -4514,6 +4558,7 @@ function showMessage(text) {
 
 function showMessageFor(text, duration = 3400) {
   ui.message.textContent = text;
+  ui.message.classList.toggle("is-discovery", text.includes("Carnet mis à jour"));
   ui.message.classList.add("is-visible");
   clearTimeout(messageTimer);
   messageTimer = setTimeout(() => ui.message.classList.remove("is-visible"), duration);
@@ -5300,11 +5345,13 @@ function readAncientLetter(letter) {
     showMessage("Tu as deja une mission en cours. Termine-la avant d'en commencer une nouvelle.");
     return;
   }
-  state.activeQuest = makeQuest(letter.x);
+  // Keep the original mission selection when moving the introductory envelope.
+  state.activeQuest = makeQuest(letter.questSeed ?? letter.x);
   state.questLastProgressAt = state.time;
   state.lastQuestHintAt = state.time;
   state.nextLetterAt = Number.POSITIVE_INFINITY;
-  openQuestPopup(state.activeQuest);
+  showMissionTracker("new", state.activeQuest);
+  saveGame();
   playSoftPing();
   updateMissionTracker();
 }
@@ -5797,7 +5844,7 @@ function showMissionTracker(kind, quest) {
   let hint = "";
 
   if (kind === "new") {
-    title = "Nouvelle mission";
+    title = quest.title || "Nouvelle mission";
   } else if (kind === "progress") {
     title = quest.title || "Mission en cours";
     detail = `${quest.objective} - ${progress}`;
@@ -5807,10 +5854,10 @@ function showMissionTracker(kind, quest) {
   } else if (kind === "reminder") {
     title = quest.title || "Mission en cours";
     detail = `${quest.objective} - ${progress}`;
-    hint = getQuestSearchHint(quest) || getQuestHint(quest);
+    hint = getQuestSearchHint(quest);
   }
 
-  ui.missionTracker.innerHTML = `<strong>${title}</strong><span>${detail}</span>${kind === "new" ? `<span>${progress}</span>` : ""}${hint ? `<span>${hint}</span>` : ""}`;
+  ui.missionTracker.innerHTML = `<strong>${title}</strong><span>${detail}</span>${hint ? `<span>${hint}</span>` : ""}`;
   missionTrackerNotice = { expiresAt: state.time + missionTrackerDisplaySeconds };
   ui.missionTracker.classList.remove("is-visible");
   void ui.missionTracker.offsetWidth;
@@ -5945,12 +5992,8 @@ function collectDiscovery(item, quiet = false) {
     updateAchievements();
     return true;
   }
-  if (!quiet && !state.hiddenDiscoveryPopups.includes(baseId)) {
-    openDiscoveryPopup(item);
-    updateAchievements();
-    return true;
-  }
   updateAchievements();
+  if (!quiet && firstTime) showMessageFor("Nouvelle découverte · Carnet mis à jour", 2800);
   return true;
   } finally {
     collectingDiscoveryIds.delete(item.id);
@@ -5958,17 +6001,7 @@ function collectDiscovery(item, quiet = false) {
 }
 
 function openDiscoveryPopup(item) {
-  const baseId = baseDiscoveryId(item.id);
-  pendingDiscoveryPopup = baseId;
-  ui.discoveryTitle.textContent = item.label;
-  ui.hideDiscoveryPopup.checked = false;
-  ui.discoveryBody.innerHTML = `
-    <div class="discovery-icon">${getItemIcon(item, "large")}</div>
-    <p>${item.text}</p>
-    <p><strong>Rareté</strong> ${item.rarity || "Commun"}</p>
-    <p><strong>Utilité</strong> ${getItemUse(item.id)}</p>
-  `;
-  openDialog(ui.discoveryDialog);
+  showMessageFor("Carnet mis à jour", 2800);
 }
 
 function closeDiscoveryPopup() {
@@ -6743,10 +6776,11 @@ async function startGame(reset = false) {
   updateMissionTracker();
   if (state.pendingQuestReward) {
     openQuestCompletePopup(state.pendingQuestReward);
-  } else if (firstStart) {
-    showMessage("Fleches, ZQSD ou joystick pour marcher. Espace pour sauter, E pour interagir.");
+  } else if (firstStart && !exploration) {
+    showMessageFor("Une enveloppe t’attend", 2800);
   }
   saveGame();
+  exploration?.onStart(reset);
 }
 
 function pauseGame() {
@@ -6763,6 +6797,7 @@ function pauseGame() {
 }
 
 function resetGame() {
+  if (exploration) { state.player.depth = 0; state.player.depthVelocity = 0; }
   state.player.x = 380;
   state.player.vx = 0;
   state.player.action = "";
@@ -6837,6 +6872,7 @@ function resetGame() {
 function saveGame() {
   const payload = {
     x: state.player.x,
+    ...(exploration ? { depth: state.player.depth || 0 } : {}),
     moveMode: state.moveMode,
     time: state.time,
     discoveries: state.discoveries,
@@ -6907,6 +6943,7 @@ function loadGame() {
   try {
     const payload = JSON.parse(raw);
     state.player.x = Number.isFinite(payload.x) ? Math.max(0, payload.x) : 380;
+    if (exploration) state.player.depth = Number.isFinite(payload.depth) ? Math.max(-58, Math.min(46, payload.depth)) : 0;
     state.moveMode = payload.moveMode === "run" ? "run" : "walk";
     joystick.mode = state.moveMode;
     state.time = Number.isFinite(payload.time) ? Math.max(0, payload.time) : 0;
@@ -7935,6 +7972,10 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   keys.add(event.key);
+  if (exploration && ["ArrowUp", "ArrowDown", "w", "W", "z", "Z", "s", "S"].includes(event.key)) {
+    event.preventDefault();
+    return;
+  }
   if (event.key === "e" || event.key === "E") {
     event.preventDefault();
     if (running && !event.repeat) interact();
@@ -7958,6 +7999,7 @@ document.addEventListener("click", (event) => {
 }, true);
 
 canvas.addEventListener("pointerdown", (event) => {
+  if (exploration) return;
   if (!running) return;
   pointer.active = false;
   pointer.x = event.clientX;
@@ -8160,9 +8202,9 @@ ui.effectsVolume.addEventListener("input", () => {
   if (audio) updateAudio();
 });
 ui.resetDiscoveryTipsButton.addEventListener("click", () => {
-  state.hiddenDiscoveryPopups = [];
-  saveGame();
-  showMessage("Les explications des objets sont reactivees.");
+  closeDialog(ui.optionsDialog);
+  buildJournal();
+  openDialog(ui.journalDialog);
 });
 
 loadPlayerProfile();
@@ -8177,4 +8219,5 @@ updateMissionTracker();
 resizeGame();
 updateFullscreenButton();
 draw();
+exploration?.init();
 requestAnimationFrame(loop);

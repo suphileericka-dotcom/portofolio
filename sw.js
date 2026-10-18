@@ -1,9 +1,11 @@
-const CACHE_NAME = "bosquet-lent-v35";
+const CACHE_NAME = "bosquet-lent-v37";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./script.js",
+  "./exploration.js",
+  "./exploration.css",
   "./manifest.webmanifest",
   "./pwa-icons/icon-192.png",
   "./pwa-icons/icon-512.png",

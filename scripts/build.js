@@ -7,6 +7,8 @@ const files = [
   "index.html",
   "styles.css",
   "script.js",
+  "exploration.js",
+  "exploration.css",
   "manifest.webmanifest",
   "sw.js",
   "robots.txt",
