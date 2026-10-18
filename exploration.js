@@ -1,6 +1,7 @@
 /* Optional mobile exploration trial. The existing world and renderers stay authoritative. */
 (() => {
-  const memoryKey = "bosquet-lent-learning-v1";
+  // New tutorial revision: show the hand once after the movement controls change.
+  const memoryKey = "bosquet-lent-learning-v2";
   let learned = {};
   try { learned = JSON.parse(localStorage.getItem(memoryKey) || "{}") || {}; } catch {}
   const remember = (key) => {
@@ -10,7 +11,7 @@
   const clamp = (v, low, high) => Math.max(low, Math.min(high, v));
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const touch = { id: null, x: 0, y: 0, originX: 0, originY: 0, radius: 46 };
-  let controls, stick, knob, guide, action, skip, banner, scene = null, travelled = 0;
+  let controls, stick, knob, guide, action, skip, banner, scene = null, travelled = 0, idleSeconds = 0;
   let lastPosition = null;
   const api = {
     companionDepth: 0,
@@ -153,6 +154,9 @@
     },
     updateGuidance(dt) {
       const p = state.player;
+      const input = api.getInput();
+      if (input.magnitude < 0.04 && Math.abs(p.vx) < 4) idleSeconds += dt;
+      else idleSeconds = 0;
       if (lastPosition) travelled += Math.hypot(p.x - lastPosition.x, (p.depth || 0) - lastPosition.depth);
       lastPosition = { x: p.x, depth: p.depth || 0 };
       if (travelled > 50 && !learned.move) remember("move");
@@ -166,7 +170,7 @@
       if (!controls) return;
       updateControls();
       if (!running || isModalOpen()) return;
-      if (!learned.move && !scene && touch.id === null) {
+      if (!scene && touch.id === null && (!learned.move || idleSeconds > 0.25)) {
         guide.hidden = false; guide.classList.remove("is-tap");
         guide.style.left = `${Math.min(140, innerWidth * 0.22)}px`;
         guide.style.top = `${innerHeight - 92}px`;

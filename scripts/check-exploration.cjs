@@ -87,7 +87,7 @@ const root = path.resolve(__dirname, '..');
       await page.locator('#continueButton').click();
       await page.waitForTimeout(150);
       assert.equal(await page.locator('#trialSkip').isVisible(), false, 'continue skips introduction');
-      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('bosquet-lent-learning-v1')).move), true, 'gesture remembered');
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('bosquet-lent-learning-v2')).move), true, 'gesture remembered');
       assert.deepEqual(errors, []);
       console.log(`${viewport.width}x${viewport.height}: movement, collisions, bridge, analog pointer, save isolation and onboarding passed`);
       await context.close();
