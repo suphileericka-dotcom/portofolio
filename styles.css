@@ -1761,7 +1761,9 @@ h2 {
 }
 .guide-pad::before { border: 1px solid rgba(247, 243, 223, 0.1); }
 .guide-pad::after { inset: 0.42rem; border: 1px dashed rgba(240, 189, 108, 0.12); }
-.guide-pad-mode { left: 0.82rem; top: 50%; }
+.guide-pad .guide-pad-jump { left: 50%; top: -0.2rem; }
+.guide-pad .guide-pad-mode { left: 0.82rem; top: 50%; }
+.guide-pad .guide-pad-companion { left: calc(100% - 0.82rem); top: 50%; }
 .guide-pad-knob {
   position: absolute; top: 50%; left: 50%; width: 2.4rem; height: 2.4rem;
   transform: translate(-50%, -50%); border-radius: 50%; background: rgba(240, 189, 108, 0.9);
