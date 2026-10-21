@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Bosquet Lent - Jeu contemplatif gratuit en ligne</title>
-  <meta name="description" content="Bosquet Lent est un jeu contemplatif gratuit en 3D. Explore une foret douce, allume des lanternes, rencontre des habitants et sauvegarde ta promenade dans le navigateur.">
+  <meta name="description" content="Bosquet Lent est un jeu contemplatif gratuit en 2D. Explore une foret douce, allume des lanternes, rencontre des habitants et sauvegarde ta promenade dans le navigateur.">
   <meta name="keywords" content="Bosquet Lent, bosquetlent, Bosquet, jeu contemplatif, jeu en ligne gratuit, jeu 2D, jeu de foret">
   <meta name="robots" content="index,follow">
   <link rel="canonical" href="https://bosquet-lent.vercel.app/">
@@ -55,12 +55,11 @@
   </defs></svg>
 
   <main class="game-shell">
-    <canvas id="threeCanvas" aria-hidden="true"></canvas>
     <canvas id="gameCanvas" aria-label="Jeu de marche contemplative dans une foret en 2D"></canvas>
 
     <section id="startScreen" class="start-screen">
       <div class="title-block">
-        <p class="eyebrow">Marche contemplative en 3D</p>
+        <p class="eyebrow">Marche contemplative en 2D</p>
         <h1>Bosquet Lent</h1>
         <p class="intro">Explore une foret douce, allume les lanternes, collectionne de petites trouvailles et repose-toi pres de la riviere.</p>
         <div class="start-actions">
@@ -83,7 +82,7 @@
 
     <aside id="message" class="message" aria-live="polite"></aside>
     <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
-        <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.34</aside>
+        <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.33</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -309,10 +308,9 @@
 
   <script src="exploration.js"></script>
   <script src="script.js"></script>
-  <script type="module" src="three-world.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.34").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.33").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});

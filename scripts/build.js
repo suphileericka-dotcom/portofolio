@@ -9,7 +9,6 @@ const files = [
   "script.js",
   "exploration.js",
   "exploration.css",
-  "three-world.js",
   "manifest.webmanifest",
   "sw.js",
   "robots.txt",
@@ -17,7 +16,7 @@ const files = [
   "cover-bosquet-lent-game-style.png",
   "jean-paul-v-aventures-chinoises-289659.mp3",
 ];
-const directories = ["pwa-icons", ".well-known", "privacy", "vendor"];
+const directories = ["pwa-icons", ".well-known", "privacy"];
 
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
