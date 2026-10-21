@@ -169,17 +169,23 @@
     drawOverlay() {
       if (!controls) return;
       updateControls();
-      if (!running || isModalOpen()) return;
-      if (!scene && touch.id === null && (!learned.move || idleSeconds > 0.25)) {
+      if (!running || isModalOpen()) {
+        guide.hidden = true;
+        return;
+      }
+      if (!scene && touch.id === null && idleSeconds >= 120) {
+        const target = getInteractionTarget();
+        const canTouch = target && ["item", "letter", "lantern", "secret", "rest"].includes(target.kind);
+        if (canTouch) {
+          guide.hidden = false;
+          guide.classList.add("is-tap");
+          guide.style.left = `${clamp(target.entry.x - state.camera.x, 68, innerWidth - 68)}px`;
+          guide.style.top = `${clamp(world.ground - 42, 88, innerHeight - 92)}px`;
+          return;
+        }
         guide.hidden = false; guide.classList.remove("is-tap");
         guide.style.left = `${innerWidth * 0.36}px`;
         guide.style.top = `${innerHeight * 0.53}px`;
-      } else if (false && !learned.letter && !scene && touch.id === null && getInteractionTarget()?.kind === "letter") {
-        const letter = getInteractionTarget().entry;
-        guide.hidden = false; guide.classList.add("is-tap");
-        guide.style.left = `${letter.x - state.camera.x}px`;
-        guide.style.top = `${world.ground - 26}px`;
-        guide.querySelector(".lesson-label").textContent = "Touche l’enveloppe";
       } else guide.hidden = true;
     }
   };
