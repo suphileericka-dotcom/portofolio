@@ -7956,8 +7956,11 @@ function isKeyboardShortcutBlocked(target) {
 }
 
 function setControlInputMode(mode) {
-  // A computer can have a touch screen, but it keeps keyboard controls and no joystick.
-  if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) mode = "desktop";
+  // Only phones and tablets receive the virtual joystick. A touchscreen computer keeps keyboard controls.
+  const mobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  document.body.dataset.mobileDevice = mobileDevice ? "true" : "false";
+  if (!mobileDevice) mode = "desktop";
   if (document.body.dataset.controlInput === mode) return;
   if (mode === "desktop") resetTouchControls();
   document.body.dataset.controlInput = mode;
