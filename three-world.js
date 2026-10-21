@@ -147,21 +147,20 @@ function frame(time) {
   if (state) {
     const z = gameZ(state.player.x);
     const moving = Math.abs(state.player.vx || 0) > 3;
-    player.position.set((state.player.depth || 0) * 0.05, moving ? Math.abs(Math.sin(time * 0.012)) * 0.06 : 0, z);
+    player.position.set(0, moving ? Math.abs(Math.sin(time * 0.012)) * 0.06 : 0, z);
     player.rotation.y = state.player.face < 0 ? Math.PI : 0;
     updateForest(z);
     lantern.position.set(-3.3, 0, Math.floor(z / 14) * 14 + 7);
     const isVisibleCompanion = state.companion?.unlocked && state.companion?.present !== false;
     companion.visible = Boolean(isVisibleCompanion);
-    companion.position.set((state.player.depth || 0) * 0.05 - 0.85, 0.27 + Math.sin(time * 0.006) * 0.025, z - 0.45);
+    companion.position.set(-0.85, 0.27 + Math.sin(time * 0.006) * 0.025, z - 0.45);
     portal.visible = Boolean(state.activeSecretPortal);
     if (portal.visible) {
       portal.position.set(0, 0, gameZ(state.activeSecretPortal.x));
       portal.rotation.y = time * 0.001;
     }
-    const lateral = (state.player.depth || 0) * 0.05;
-    const target = new THREE.Vector3(lateral, 0.95, z + 0.7);
-    const desired = new THREE.Vector3(lateral + 7.6, 5.4, z - 10.5);
+    const target = new THREE.Vector3(0, 0.95, z + 0.7);
+    const desired = new THREE.Vector3(7.6, 5.4, z - 10.5);
     camera.position.lerp(desired, 0.055);
     camera.lookAt(target);
   }

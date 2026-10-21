@@ -4343,6 +4343,7 @@ function toggleMoveMode() {
 }
 
 function getInteractionTarget(visibleDiscoveries = getVisibleWorldDiscoveries(), visibleResidents = getVisibleVillageResidents()) {
+  if (exploration && Math.abs(state.player.depth || 0) > 50) return null;
   if(state.shelter)return {kind:"shelter-exit",entry:getShelterById(state.shelter.id)};
   const hidden = visibleResidents.find(resident=>resident.concealed && Math.abs(resident.x-state.player.x)<48);
   if(hidden)return {kind:"hidden-resident",entry:hidden};
@@ -8221,18 +8222,6 @@ draw();
 exploration?.init();
 window.bosquetGame = {
   get state() { return state; },
-  get running() { return running; },
-  getInteractionTarget,
-  getWorldSnapshot() {
-    return {
-      discoveries: getVisibleWorldDiscoveries().filter((entry) => !hasCollectedDiscovery(entry)),
-      letters: getProceduralLetters(),
-      residents: getVisibleVillageResidents().filter((entry) => !entry.concealed),
-      lanterns: getProceduralLanterns().filter((entry) => !state.lanterns.includes(entry.id)),
-      rests: getProceduralRests(),
-      villages: getProceduralVillages(),
-      portal: state.activeSecretPortal
-    };
-  }
+  get running() { return running; }
 };
 requestAnimationFrame(loop);
