@@ -5793,12 +5793,23 @@ function grantQuestReward() {
 
 function openQuestPopup(quest) {
   ui.questDialogBody.innerHTML = `
-    <p><strong>Mission :</strong> ${quest.title}</p>
-    <p>${quest.description}</p>
-    <p><strong>Objectif precis :</strong> ${quest.objective}</p>
-    <p><strong>Progression :</strong> ${quest.progress} / ${quest.target}</p>
-    <p><strong>Indice :</strong> ${getQuestHint(quest)}</p>
-    <p><strong>Recompense :</strong> 2 objets aleatoires</p>
+    <article class="mission-poster">
+      <div class="mission-poster-pin" aria-hidden="true"></div>
+      <header class="mission-poster-header">
+        <span aria-hidden="true">✦</span>
+        <p>Message du Bosquet</p>
+        <h3>${quest.title}</h3>
+      </header>
+      <p class="mission-poster-copy">${quest.description}</p>
+      <section class="mission-poster-objective">
+        <span>Objectif</span>
+        <strong>${quest.objective}</strong>
+        <div class="mission-poster-progress" aria-label="Progression ${quest.progress} sur ${quest.target}"><i style="width: ${Math.min(100, Math.round(((quest.progress || 0) / Math.max(1, quest.target || 1)) * 100))}%"></i></div>
+        <small>${quest.progress || 0} / ${quest.target || 1}</small>
+      </section>
+      <p class="mission-poster-hint"><b>Indice</b>${getQuestHint(quest)}</p>
+      <footer><span>Récompense</span><strong>Deux trouvailles du Bosquet</strong></footer>
+    </article>
   `;
   openDialog(ui.questDialog);
 }

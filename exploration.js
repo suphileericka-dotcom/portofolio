@@ -180,10 +180,19 @@
         const target = getInteractionTarget();
         const canTouch = target && ["item", "letter", "lantern", "secret", "rest"].includes(target.kind);
         if (canTouch) {
+          const itemY = Number.isFinite(target.entry.y)
+            ? target.entry.y + (getWalkSurfaceY(target.entry.x) - world.ground) + (target.entry.groundOffset || 0)
+            : world.ground - 20;
+          const targetY = target.kind === "item" ? itemY
+            : target.kind === "letter" ? world.ground - 26
+              : target.kind === "lantern" ? world.ground - 62
+                : target.kind === "rest" ? world.ground - 38
+                  : world.ground - 88;
           guide.hidden = false;
           guide.classList.add("is-tap");
-          guide.style.left = `${clamp(target.entry.x - state.camera.x, 68, innerWidth - 68)}px`;
-          guide.style.top = `${clamp(world.ground - 42, 88, innerHeight - 92)}px`;
+          // The fingertip sits above and left of the guide element's centre.
+          guide.style.left = `${clamp(target.entry.x - state.camera.x + 22, 68, innerWidth - 68)}px`;
+          guide.style.top = `${clamp(targetY + 46, 88, innerHeight - 72)}px`;
           return;
         }
         guide.hidden = false; guide.classList.remove("is-tap");

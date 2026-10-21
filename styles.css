@@ -1699,6 +1699,53 @@ h2 {
   color: var(--sun);
 }
 
+.mission-poster {
+  position: relative;
+  display: grid;
+  gap: 0.9rem;
+  overflow: hidden;
+  padding: 1.4rem 1.2rem 1.15rem;
+  border: 1px solid rgba(240, 189, 108, 0.48);
+  border-radius: 0.55rem 0.55rem 1.15rem 0.7rem;
+  color: #344137;
+  background:
+    linear-gradient(110deg, transparent 0 68%, rgba(134, 91, 50, 0.06) 68% 70%, transparent 70%),
+    radial-gradient(circle at 12% 14%, rgba(255, 251, 220, 0.8), transparent 20%),
+    #e9d7a7;
+  box-shadow: inset 0 0 0 4px rgba(117, 79, 47, 0.1), 0 10px 22px rgba(0, 0, 0, 0.18);
+  transform: rotate(-0.45deg);
+}
+
+.mission-poster::before,
+.mission-poster::after {
+  content: "";
+  position: absolute;
+  width: 5.4rem;
+  height: 5.4rem;
+  border: 1px solid rgba(62, 102, 66, 0.15);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.mission-poster::before { right: -2.9rem; top: -2.9rem; }
+.mission-poster::after { left: -3.4rem; bottom: -3.4rem; }
+.mission-poster-pin { position: absolute; left: 50%; top: 0.6rem; width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #a95942; box-shadow: 0 1px 2px rgba(33, 22, 16, 0.36); }
+.mission-poster-header { display: grid; justify-items: center; gap: 0.15rem; padding: 0.3rem 1.1rem 0.7rem; text-align: center; border-bottom: 1px solid rgba(87, 62, 37, 0.26); }
+.mission-poster-header span { color: #9d7141; font-size: 1.2rem; }
+.mission-poster-header p, .mission-poster-header h3 { margin: 0; }
+.mission-poster-header p, .mission-poster-objective > span, .mission-poster footer > span { color: #765131; font-size: 0.66rem; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; }
+.mission-poster-header h3 { color: #2c493b; font-family: "Spectral", Georgia, serif; font-size: 1.65rem; line-height: 1.05; }
+.mission-poster-copy { margin: 0; text-align: center; line-height: 1.45; }
+.mission-poster-objective { display: grid; justify-items: center; gap: 0.28rem; padding: 0.72rem; border: 1px dashed rgba(88, 106, 57, 0.48); border-radius: 0.35rem; background: rgba(255, 247, 208, 0.38); text-align: center; }
+.mission-poster-objective strong { color: #315a42; }
+.mission-poster-progress { width: min(13rem, 82%); height: 0.38rem; overflow: hidden; border-radius: 99px; background: rgba(66, 77, 45, 0.18); }
+.mission-poster-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #83a64a, #d09a3d); }
+.mission-poster-objective small { color: #6e5738; font-weight: 800; }
+.mission-poster-hint { margin: 0; padding-left: 0.7rem; border-left: 3px solid rgba(115, 146, 70, 0.75); font-size: 0.9rem; line-height: 1.4; }
+.mission-poster-hint b { display: block; color: #4e773f; font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.mission-poster footer { display: grid; justify-items: center; gap: 0.15rem; padding-top: 0.2rem; text-align: center; }
+.mission-poster footer strong { color: #855c2f; font-family: "Spectral", Georgia, serif; }
+
 .mission-reward-list {
   margin: 0;
   padding-left: 1.2rem;
