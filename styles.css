@@ -1749,6 +1749,42 @@ h2 {
 .discovery-paper-dialog .check-row { position: relative; z-index: 1; color: #5d664f; }
 .discovery-paper-dialog .choice-actions { position: relative; z-index: 1; }
 
+.villager-paper-dialog {
+  border-color: rgba(115, 83, 46, 0.6);
+  border-radius: 0.58rem 0.3rem 1.1rem 0.76rem;
+  color: #3e4b3c;
+  background: #ead7a7;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.38), inset 0 0 0 4px rgba(122, 84, 45, 0.1);
+}
+
+.villager-paper-dialog form {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(55deg, transparent 0 76%, rgba(118, 78, 41, 0.07) 76% 78%, transparent 78%),
+    radial-gradient(circle at 10% 12%, rgba(255, 250, 215, 0.9), transparent 22rem);
+}
+
+.villager-paper-dialog form::after {
+  content: "❀";
+  position: absolute;
+  right: 1.1rem;
+  top: 0.8rem;
+  color: #d48669;
+  font-size: 2.05rem;
+  line-height: 1;
+  text-shadow: -0.7rem 1.25rem 0 #6d9753, -1.22rem 1.8rem 0 #a7ba69;
+  pointer-events: none;
+}
+
+.villager-paper-dialog .panel-header { position: relative; z-index: 1; padding-right: 3.1rem; border-bottom-color: rgba(93, 66, 37, 0.26); }
+.villager-paper-dialog .panel-header h2 { color: #315a42; font-family: "Spectral", Georgia, serif; }
+.villager-paper-dialog .close-button { border-color: rgba(101, 76, 47, 0.42); color: #4b6044; background: rgba(255, 247, 212, 0.48); }
+.villager-paper-dialog .dialog-copy { position: relative; z-index: 1; color: #465642; font-family: "Spectral", Georgia, serif; font-size: 1.12rem; line-height: 1.52; }
+.villager-paper-dialog .dialog-choice-list, .villager-paper-dialog .choice-actions { position: relative; z-index: 1; }
+.villager-paper-dialog .dialog-choice-button { border-color: rgba(94, 124, 70, 0.46); color: #38563e; background: rgba(255, 248, 215, 0.52); }
+.villager-paper-dialog .dialog-choice-button:hover, .villager-paper-dialog .dialog-choice-button:focus-visible { background: rgba(229, 208, 146, 0.68); }
+
 .mission-dialog h2 {
   font-size: clamp(1.65rem, 5vw, 2.35rem);
 }
