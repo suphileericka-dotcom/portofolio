@@ -64,8 +64,8 @@
       let x = touch.x, y = touch.y;
       if (keys.has("ArrowLeft") || keys.has("q") || keys.has("Q") || keys.has("a") || keys.has("A")) x -= 1;
       if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) x += 1;
-      // Vertical input remains reserved for the existing jump action.
-      y = 0;
+      if (keys.has("ArrowUp")) y -= 1;
+      if (keys.has("ArrowDown")) y += 1;
       const length = Math.hypot(x, y);
       const magnitude = Math.min(1, length);
       const keyboard = touch.id === null;
@@ -91,35 +91,20 @@
     },
     moveDepth(dt, input, previousX, speed) {
       const p = state.player;
-      // Horizontal mode: x is already integrated by the main game update.
-      // Do not run depth obstacle resolution here; it could stop the player
-      // on a decorative foreground trunk.
-      p.depth = 0;
-      p.depthVelocity = 0;
-      return;
-      /*
       const limit = api.depthLimit(p.x);
       if (!limit) { p.depth = 0; p.depthVelocity = 0; return; }
-      const target = 0;
+      const target = input.y * speed * 0.62;
       p.depthVelocity = (p.depthVelocity || 0) + (target - (p.depthVelocity || 0)) * (1 - Math.exp(-8 * dt));
       if (!input.y && Math.abs(p.depthVelocity) < 0.25) p.depthVelocity = 0;
       const startDepth = p.depth || 0;
-      const dx = p.x - previousX, dy = p.depthVelocity * dt;
-      const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 5));
       const obstacles = api.obstacles(p.x);
-      let x = previousX, depth = startDepth;
+      let depth = startDepth;
       const blocked = (px, pd) => obstacles.some(o => ((px - o.x) / o.rx) ** 2 + ((pd - o.depth) / o.ry) ** 2 < 1);
-      for (let step = 0; step < steps; step++) {
-        // Axis-separated resolution lets the player slide around a trunk.
-        if (!blocked(x + dx / steps, depth)) x += dx / steps;
-        const nextDepth = clamp(depth + dy / steps, -58 * api.depthLimit(x), 46 * api.depthLimit(x));
-        if (!blocked(x, nextDepth)) depth = nextDepth;
-      }
-      p.x = x; p.depth = 0;
-      if (Math.abs(x - previousX) < 0.01 && Math.abs(dx) > 0.1) p.vx = 0;
-      p.depthVelocity = 0;
+      const nextDepth = clamp(depth + p.depthVelocity * dt, -58 * limit, 46 * limit);
+      if (!blocked(p.x, nextDepth)) depth = nextDepth;
+      else p.depthVelocity = 0;
+      p.depth = depth;
       api.companionDepth += (depth - api.companionDepth) * (1 - Math.exp(-3 * dt));
-      */
     },
     onStart(reset) {
       api.release(); lastPosition = null;
