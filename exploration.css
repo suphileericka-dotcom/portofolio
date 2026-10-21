@@ -1,4 +1,3 @@
-.exploration-prototype #mobilePad { display: none !important; }
 .exploration-prototype .start-screen.is-hidden { pointer-events: none; }
 .exploration-prototype .start-screen { overflow-y: auto; }
 .exploration-prototype .version-badge { display: none; }
@@ -12,7 +11,8 @@
 .floating-stick span { position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; transform: translate(-50%, -50%); border-radius: 50%; background: #e2dfbba6; border: 1px solid #fff6d5a1; box-shadow: 0 3px 14px #1e3b4024; }
 .floating-stick.horizontal-only::after { top: 47%; bottom: auto; height: 6%; border-left: 0; border-right: 0; }
 .trial-actions { display: none; position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: max(25px, env(safe-area-inset-bottom)); align-items: center; gap: 10px; }
-.is-playing:not(.is-scene) .trial-actions { display: flex; }
+.exploration-prototype .floating-stick,
+.exploration-prototype .trial-actions { display: none !important; }
 .trial-actions button, #trialSkip { min-width: 46px; min-height: 46px; border: 1px solid #f5ebc675; border-radius: 28px; color: #f9f3dd; background: #304c3cbb; font: 700 13px Nunito, sans-serif; }
 .trial-actions button:disabled { opacity: .35; }
 #trialInteract { min-width: 92px; padding: 0 15px; }

@@ -14,6 +14,7 @@
   let controls, stick, knob, guide, action, skip, banner, scene = null, travelled = 0, idleSeconds = 0;
   let lastPosition = null;
   const api = {
+    useFloatingJoystick: false,
     companionDepth: 0,
     init() {
       document.body.classList.add("exploration-prototype");

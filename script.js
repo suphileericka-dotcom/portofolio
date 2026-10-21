@@ -4418,7 +4418,7 @@ function update(dt, elapsed = dt) {
   if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) input += 1;
   if (joystick.active) input += joystick.x;
   const freeInput = exploration?.getInput();
-  if (freeInput) input = freeInput.x;
+  if (freeInput && exploration?.useFloatingJoystick) input = freeInput.x;
   input = Math.max(-1, Math.min(1, input));
   if (Math.abs(input) > 0.2) p.lastTravelDirection = Math.sign(input);
   if (state.friendlyChallenge?.readyAt > state.time) {
