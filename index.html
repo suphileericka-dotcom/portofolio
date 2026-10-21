@@ -83,7 +83,7 @@
 
     <aside id="message" class="message" aria-live="polite"></aside>
     <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
-        <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.35</aside>
+        <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.34</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -312,7 +312,7 @@
   <script type="module" src="three-world.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.35").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.34").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});
