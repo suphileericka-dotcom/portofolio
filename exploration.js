@@ -11,7 +11,7 @@
   const clamp = (v, low, high) => Math.max(low, Math.min(high, v));
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const touch = { id: null, x: 0, y: 0, originX: 0, originY: 0, radius: 46 };
-  let controls, stick, knob, guide, action, skip, banner, scene = null, travelled = 0, idleSeconds = 0;
+  let controls, stick, knob, guide, action, skip, banner, scene = null, travelled = 0, idleSeconds = 0, launchGuide = false;
   let lastPosition = null;
   const api = {
     useFloatingJoystick: false,
@@ -122,7 +122,7 @@
       */
     },
     onStart(reset) {
-      api.release(); lastPosition = null;
+      api.release(); lastPosition = null; idleSeconds = 0; launchGuide = true;
       window.scrollTo(0, 0);
       document.querySelector(".game-shell").scrollTop = 0;
       if (reset) { api.companionDepth = 0; beginScene("intro", 2.6); }
@@ -156,7 +156,10 @@
       const p = state.player;
       const input = api.getInput();
       if (input.magnitude < 0.04 && Math.abs(p.vx) < 4) idleSeconds += dt;
-      else idleSeconds = 0;
+      else {
+        idleSeconds = 0;
+        launchGuide = false;
+      }
       if (lastPosition) travelled += Math.hypot(p.x - lastPosition.x, (p.depth || 0) - lastPosition.depth);
       lastPosition = { x: p.x, depth: p.depth || 0 };
       if (travelled > 50 && !learned.move) remember("move");
@@ -173,7 +176,7 @@
         guide.hidden = true;
         return;
       }
-      if (!scene && touch.id === null && idleSeconds >= 120) {
+      if (!scene && touch.id === null && (launchGuide || idleSeconds >= 60)) {
         const target = getInteractionTarget();
         const canTouch = target && ["item", "letter", "lantern", "secret", "rest"].includes(target.kind);
         if (canTouch) {
