@@ -5802,8 +5802,8 @@ function openQuestPopup(quest) {
       </div>
       <header class="mission-poster-header">
         <span aria-hidden="true">✦</span>
-        <p>Message du Bosquet</p>
-        <h3>${quest.title}</h3>
+        <p>Nouvelle mission du Bosquet</p>
+        <h3>Mission : ${quest.title}</h3>
       </header>
       <p class="mission-poster-copy">${quest.description}</p>
       <section class="mission-poster-objective">
@@ -5860,7 +5860,7 @@ function showMissionTracker(kind, quest) {
   let hint = "";
 
   if (kind === "new") {
-    title = quest.title || "Nouvelle mission";
+    title = `Mission : ${quest.title || "Nouvelle mission"}`;
   } else if (kind === "progress") {
     title = quest.title || "Mission en cours";
     detail = `${quest.objective} - ${progress}`;
