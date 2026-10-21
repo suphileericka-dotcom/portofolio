@@ -1695,6 +1695,21 @@ h2 {
   color: var(--sun);
 }
 
+.discovery-popup-item {
+  display: grid;
+  grid-template-columns: 4.2rem 1fr;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(240, 189, 108, 0.24);
+  border-radius: 0.55rem;
+  background: rgba(247, 243, 223, 0.06);
+}
+
+.discovery-popup-item .item-icon { justify-self: center; }
+.discovery-popup-item p, .discovery-popup-note { margin: 0.32rem 0 0; line-height: 1.42; }
+.discovery-popup-note { color: var(--sun); font-size: 0.88rem; text-align: center; }
+
 .mission-dialog h2 {
   font-size: clamp(1.65rem, 5vw, 2.35rem);
 }

@@ -6009,7 +6009,7 @@ function collectDiscovery(item, quiet = false) {
     return true;
   }
   updateAchievements();
-  if (!quiet && firstTime) showMessageFor("Nouvelle découverte · Carnet mis à jour", 2800);
+  if (!quiet && firstTime) openDiscoveryPopup(item);
   return true;
   } finally {
     collectingDiscoveryIds.delete(item.id);
@@ -6017,7 +6017,23 @@ function collectDiscovery(item, quiet = false) {
 }
 
 function openDiscoveryPopup(item) {
-  showMessageFor("Carnet mis à jour", 2800);
+  const itemId = baseDiscoveryId(item.id);
+  if (state.hiddenDiscoveryPopups.includes(itemId)) {
+    showMessageFor("Nouvelle découverte · Carnet mis à jour", 2800);
+    return;
+  }
+  const catalogItem = getCatalogItem(itemId) || item;
+  pendingDiscoveryPopup = itemId;
+  ui.hideDiscoveryPopup.checked = false;
+  ui.discoveryTitle.textContent = `Découverte : ${catalogItem.label || "Objet"}`;
+  ui.discoveryBody.innerHTML = `
+    <div class="discovery-popup-item">
+      ${getItemIcon(catalogItem, "large")}
+      <div><strong>${catalogItem.label || "Nouvel objet"}</strong><p>${catalogItem.text || "Une trouvaille ajoutée à ton Carnet."}</p></div>
+    </div>
+    <p class="discovery-popup-note">Ajouté à ton Carnet et à ta collection.</p>
+  `;
+  openDialog(ui.discoveryDialog);
 }
 
 function closeDiscoveryPopup() {
