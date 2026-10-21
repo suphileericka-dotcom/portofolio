@@ -1710,6 +1710,45 @@ h2 {
 .discovery-popup-item p, .discovery-popup-note { margin: 0.32rem 0 0; line-height: 1.42; }
 .discovery-popup-note { color: var(--sun); font-size: 0.88rem; text-align: center; }
 
+.discovery-paper-dialog {
+  border-color: rgba(128, 85, 47, 0.62);
+  border-radius: 0.32rem 0.75rem 1.25rem 0.58rem;
+  color: #3e4b3c;
+  background: #ead7a7;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.38), inset 0 0 0 4px rgba(122, 84, 45, 0.11);
+}
+
+.discovery-paper-dialog form {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(124deg, transparent 0 73%, rgba(118, 78, 41, 0.07) 73% 75%, transparent 75%),
+    radial-gradient(circle at 12% 10%, rgba(255, 250, 215, 0.92), transparent 24rem);
+}
+
+.discovery-paper-dialog form::before {
+  content: "❀";
+  position: absolute;
+  right: 1.15rem;
+  top: 0.88rem;
+  color: #cf8d6c;
+  font-size: 2.1rem;
+  line-height: 1;
+  text-shadow: -0.75rem 1.28rem 0 #769957, -1.28rem 1.82rem 0 #a7bc68;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.discovery-paper-dialog .panel-header { position: relative; z-index: 1; padding-right: 3.2rem; border-bottom-color: rgba(93, 66, 37, 0.26); }
+.discovery-paper-dialog .panel-header h2 { color: #315a42; font-family: "Spectral", Georgia, serif; }
+.discovery-paper-dialog .close-button { border-color: rgba(101, 76, 47, 0.42); color: #4b6044; background: rgba(255, 247, 212, 0.48); }
+.discovery-paper-dialog .discovery-body { position: relative; z-index: 1; color: #495746; }
+.discovery-paper-dialog .discovery-body strong { color: #315a42; }
+.discovery-paper-dialog .discovery-popup-item { border-color: rgba(105, 126, 70, 0.4); background: rgba(255, 248, 215, 0.38); }
+.discovery-paper-dialog .discovery-popup-note { color: #765131; font-weight: 800; }
+.discovery-paper-dialog .check-row { position: relative; z-index: 1; color: #5d664f; }
+.discovery-paper-dialog .choice-actions { position: relative; z-index: 1; }
+
 .mission-dialog h2 {
   font-size: clamp(1.65rem, 5vw, 2.35rem);
 }
