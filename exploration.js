@@ -26,7 +26,7 @@
         <div class="touch-lesson" aria-hidden="true"><span class="lesson-ring"></span>
           <svg viewBox="0 0 54 68"><path d="M20 36V10c0-7 9-7 9 0v18c4-5 9-2 9 3 5-3 10 0 9 5 6 0 8 4 6 10l-5 16H22L9 44c-4-6 3-11 7-6l4 4z" fill="#f4e7bd" stroke="#405c49" stroke-width="2" stroke-linejoin="round"/></svg>
           <span class="lesson-label">Glisse doucement</span></div>
-        <div class="trial-actions"><button id="trialJump" aria-label="Sauter">↟</button>
+        <div class="trial-actions"><button id="trialJump" aria-label="Sauter"><span aria-hidden="true">+</span></button>
           <button id="trialCompanion" aria-label="Afficher ou cacher le compagnon">♧</button>
           <button id="trialInteract">Interagir</button></div>
         <button id="trialSkip" hidden>Passer</button><p class="trial-caption" aria-live="polite"></p>`;

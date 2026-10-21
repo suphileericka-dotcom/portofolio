@@ -1,4 +1,4 @@
-import * as THREE from "./vendor/three.module.js";
+import * as THREE from "./vendor/three.module.js?v=1.0.36";
 
 const canvas = document.getElementById("threeCanvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });

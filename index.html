@@ -83,7 +83,7 @@
 
     <aside id="message" class="message" aria-live="polite"></aside>
     <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
-        <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.35</aside>
+        <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.36</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -255,7 +255,7 @@
             <div><dt>Allure</dt><dd>Une petite inclinaison fait marcher doucement. Une inclinaison plus grande accélère progressivement.</dd></div>
             <div><dt>Relâcher</dt><dd>Relâche ton doigt pour ralentir naturellement et t’arrêter sans à-coup.</dd></div>
             <div><dt>Interaction</dt><dd>Approche une enveloppe, un objet ou un habitant. Le bouton contextuel indique l’action réellement disponible.</dd></div>
-            <div><dt>Saut</dt><dd>Touche le bouton avec l'icône du personnage qui saute pour franchir un petit obstacle.</dd></div>
+            <div><dt>Saut</dt><dd>Touche le petit cercle + pour franchir un petit obstacle.</dd></div>
             <div><dt>Compagnon</dt><dd>Touche la patte dans le joystick pour cacher ton compagnon. Touche-la à nouveau pour le faire revenir.</dd></div>
             <div><dt>Aide</dt><dd>La main animée revient lorsque tu restes immobile et disparaît pendant tes déplacements.</dd></div>
           </dl>
@@ -309,10 +309,10 @@
 
   <script src="exploration.js"></script>
   <script src="script.js"></script>
-  <script type="module" src="three-world.js"></script>
+  <script type="module" src="three-world.js?v=1.0.36"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.35").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.36").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});
