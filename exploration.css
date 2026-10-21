@@ -16,7 +16,7 @@
 .trial-actions button, #trialSkip { min-width: 46px; min-height: 46px; border: 1px solid #f5ebc675; border-radius: 28px; color: #f9f3dd; background: #304c3cbb; font: 700 13px Nunito, sans-serif; }
 .trial-actions button:disabled { opacity: .35; }
 #trialInteract { min-width: 92px; padding: 0 15px; }
-#trialJump { font-size: 27px; }
+#trialJump { font-size: 27px; font-weight: 500; line-height: 1; }
 #trialSkip { position: absolute; right: 22px; bottom: 28px; padding: 0 22px; }
 .trial-caption { position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%); text-align: center; font-size: 17px; text-shadow: 0 2px 6px #203228; width: min(70%, 420px); }
 .trial-start-note { font-size: 12px; opacity: .75; }
