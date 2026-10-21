@@ -8220,4 +8220,8 @@ resizeGame();
 updateFullscreenButton();
 draw();
 exploration?.init();
+window.bosquetGame = {
+  get state() { return state; },
+  get running() { return running; }
+};
 requestAnimationFrame(loop);
