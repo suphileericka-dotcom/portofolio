@@ -7940,6 +7940,8 @@ function isKeyboardShortcutBlocked(target) {
 }
 
 function setControlInputMode(mode) {
+  // A computer can have a touch screen, but it keeps keyboard controls and no joystick.
+  if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) mode = "desktop";
   if (document.body.dataset.controlInput === mode) return;
   if (mode === "desktop") resetTouchControls();
   document.body.dataset.controlInput = mode;

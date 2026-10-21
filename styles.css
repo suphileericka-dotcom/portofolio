@@ -1893,6 +1893,13 @@ body[data-control-input="desktop"] .mobile-pad {
   display: none;
 }
 
+/* Keep the virtual joystick off computers, including touchscreen laptops. */
+@media (hover: hover) and (pointer: fine) {
+  .mobile-pad {
+    display: none !important;
+  }
+}
+
 @media (max-width: 560px) {
   .start-screen {
     align-items: end;
