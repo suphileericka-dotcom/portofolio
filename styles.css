@@ -1704,7 +1704,7 @@ h2 {
   display: grid;
   gap: 0.9rem;
   overflow: hidden;
-  padding: 1.4rem 1.2rem 1.15rem;
+  padding: 1.4rem 4.2rem 1.15rem 1.2rem;
   border: 1px solid rgba(240, 189, 108, 0.48);
   border-radius: 0.55rem 0.55rem 1.15rem 0.7rem;
   color: #344137;
@@ -1730,6 +1730,17 @@ h2 {
 .mission-poster::before { right: -2.9rem; top: -2.9rem; }
 .mission-poster::after { left: -3.4rem; bottom: -3.4rem; }
 .mission-poster-pin { position: absolute; left: 50%; top: 0.6rem; width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #a95942; box-shadow: 0 1px 2px rgba(33, 22, 16, 0.36); }
+.mission-poster-botany { position: absolute; z-index: 1; right: 0.35rem; top: 2.8rem; width: 3.55rem; height: 11.4rem; pointer-events: none; transform: rotate(4deg); }
+.poster-stem { position: absolute; left: 1.72rem; top: 0.55rem; width: 0.16rem; height: 10rem; border-radius: 99px; background: linear-gradient(#466f42, #79914b); transform: rotate(13deg); transform-origin: top; }
+.poster-leaf { position: absolute; width: 1.23rem; height: 2.05rem; border-radius: 100% 0 100% 0; background: linear-gradient(130deg, #a3bd62, #4b7a46); box-shadow: inset 0 0 0 1px rgba(241, 234, 169, 0.24); }
+.poster-leaf::after { content: ""; position: absolute; left: 48%; top: 0.17rem; width: 1px; height: 1.7rem; background: rgba(241, 237, 181, 0.45); transform: rotate(-42deg); transform-origin: top; }
+.poster-leaf-one { left: 0.18rem; top: 3.45rem; transform: rotate(-48deg); }
+.poster-leaf-two { right: 0.1rem; top: 5.45rem; transform: rotate(125deg) scale(.88); }
+.poster-leaf-three { left: 0.42rem; top: 7.52rem; transform: rotate(-34deg) scale(.73); }
+.poster-flower { position: absolute; left: 0.42rem; top: 0; width: 2.3rem; height: 2.3rem; }
+.poster-flower b { position: absolute; left: 0.78rem; top: 0.78rem; width: 0.76rem; height: 0.76rem; border-radius: 100% 0 100% 0; background: linear-gradient(145deg, #fff0b5, #e8ba71); transform-origin: 0 0; box-shadow: inset 0 0 0 1px rgba(166, 104, 53, 0.12); }
+.poster-flower b:nth-child(1) { transform: rotate(0deg); }.poster-flower b:nth-child(2) { transform: rotate(72deg); }.poster-flower b:nth-child(3) { transform: rotate(144deg); }.poster-flower b:nth-child(4) { transform: rotate(216deg); }.poster-flower b:nth-child(5) { transform: rotate(288deg); }
+.poster-flower em { position: absolute; left: 0.93rem; top: 0.93rem; width: 0.47rem; height: 0.47rem; border-radius: 50%; background: #b97836; box-shadow: 0 0 0 0.13rem rgba(255, 230, 142, 0.45); }
 .mission-poster-header { display: grid; justify-items: center; gap: 0.15rem; padding: 0.3rem 1.1rem 0.7rem; text-align: center; border-bottom: 1px solid rgba(87, 62, 37, 0.26); }
 .mission-poster-header span { color: #9d7141; font-size: 1.2rem; }
 .mission-poster-header p, .mission-poster-header h3 { margin: 0; }
@@ -1745,6 +1756,11 @@ h2 {
 .mission-poster-hint b { display: block; color: #4e773f; font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; }
 .mission-poster footer { display: grid; justify-items: center; gap: 0.15rem; padding-top: 0.2rem; text-align: center; }
 .mission-poster footer strong { color: #855c2f; font-family: "Spectral", Georgia, serif; }
+
+@media (max-width: 390px) {
+  .mission-poster { padding-right: 3.55rem; }
+  .mission-poster-botany { right: -0.12rem; transform: scale(.82) rotate(4deg); transform-origin: top right; }
+}
 
 .mission-reward-list {
   margin: 0;

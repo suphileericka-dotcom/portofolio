@@ -5795,6 +5795,11 @@ function openQuestPopup(quest) {
   ui.questDialogBody.innerHTML = `
     <article class="mission-poster">
       <div class="mission-poster-pin" aria-hidden="true"></div>
+      <div class="mission-poster-botany" aria-hidden="true">
+        <i class="poster-stem"></i>
+        <i class="poster-leaf poster-leaf-one"></i><i class="poster-leaf poster-leaf-two"></i><i class="poster-leaf poster-leaf-three"></i>
+        <i class="poster-flower"><b></b><b></b><b></b><b></b><b></b><em></em></i>
+      </div>
       <header class="mission-poster-header">
         <span aria-hidden="true">✦</span>
         <p>Message du Bosquet</p>
