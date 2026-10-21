@@ -17,25 +17,25 @@
 .trial-actions button:disabled { opacity: .35; }
 #trialInteract { min-width: 92px; padding: 0 15px; }
 #trialJump {
-  width: 68px;
-  min-width: 68px;
-  height: 68px;
-  min-height: 68px;
-  border: 1px solid rgba(255, 248, 221, 0.7);
+  width: 54px;
+  min-width: 54px;
+  height: 54px;
+  min-height: 54px;
+  border: 2px solid rgba(247, 243, 223, 0.58);
   border-radius: 50%;
-  color: #fff9e6;
-  background: radial-gradient(circle at 34% 28%, rgba(255, 255, 244, 0.28), rgba(47, 78, 64, 0.52) 52%, rgba(19, 42, 35, 0.7));
-  box-shadow: inset 0 0 0 5px rgba(255, 247, 216, 0.09), 0 6px 24px rgba(9, 28, 22, 0.28);
-  font-size: 34px;
-  font-weight: 400;
-  line-height: 1;
-  text-shadow: 0 1px 6px rgba(10, 31, 24, 0.6);
+  color: rgba(247, 243, 223, 0.76);
+  background: rgba(15, 38, 34, 0.14);
+  box-shadow: none;
 }
 
+#trialJump svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; }
+#trialJump svg circle { fill: currentColor; stroke: none; }
+
 #trialJump:active {
-  transform: scale(0.92);
-  background: radial-gradient(circle at 34% 28%, rgba(255, 255, 244, 0.44), rgba(99, 137, 100, 0.68) 55%, rgba(19, 42, 35, 0.78));
-  box-shadow: inset 0 0 0 5px rgba(255, 247, 216, 0.18), 0 0 26px rgba(250, 225, 156, 0.34);
+  transform: scale(0.9);
+  color: #fff3bc;
+  background: rgba(240, 189, 108, 0.18);
+  box-shadow: 0 0 16px rgba(240, 189, 108, 0.2);
 }
 #trialSkip { position: absolute; right: 22px; bottom: 28px; padding: 0 22px; }
 .trial-caption { position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%); text-align: center; font-size: 17px; text-shadow: 0 2px 6px #203228; width: min(70%, 420px); }
