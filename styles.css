@@ -691,6 +691,11 @@ h2 {
   top: -0.2rem;
 }
 
+.pad-action-jump .control-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
 .pad-action-companion {
   left: calc(100% - 0.82rem);
   top: 50%;
