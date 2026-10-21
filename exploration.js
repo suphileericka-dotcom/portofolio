@@ -22,9 +22,8 @@
       css.rel = "stylesheet"; css.href = "exploration.css"; document.head.append(css);
       controls = document.createElement("section");
       controls.id = "explorationControls";
-      controls.innerHTML = `<span class="trial-label">Bosquet Lent</span>
-        <div class="floating-stick" aria-hidden="true"><span></span></div>
-        <div class="touch-lesson" aria-hidden="true"><span class="lesson-ring"></span>
+      controls.innerHTML = `<div class="floating-stick" aria-hidden="true"><span></span></div>
+        <div class="touch-lesson touch-lesson-advance" aria-hidden="true"><span class="lesson-ring"></span>
           <svg viewBox="0 0 54 68"><path d="M20 36V10c0-7 9-7 9 0v18c4-5 9-2 9 3 5-3 10 0 9 5 6 0 8 4 6 10l-5 16H22L9 44c-4-6 3-11 7-6l4 4z" fill="#f4e7bd" stroke="#405c49" stroke-width="2" stroke-linejoin="round"/></svg>
           <span class="lesson-label">Glisse doucement</span></div>
         <div class="trial-actions"><button id="trialJump" aria-label="Sauter"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 7.5v17M7.5 16h17M10.3 10.3l11.4 11.4M21.7 10.3 10.3 21.7"/><circle cx="16" cy="16" r="3.4"/></svg></button>
@@ -173,10 +172,9 @@
       if (!running || isModalOpen()) return;
       if (!scene && touch.id === null && (!learned.move || idleSeconds > 0.25)) {
         guide.hidden = false; guide.classList.remove("is-tap");
-        guide.style.left = `${Math.min(140, innerWidth * 0.22)}px`;
-        guide.style.top = `${innerHeight - 92}px`;
-        guide.querySelector(".lesson-label").textContent = "Glisse doucement";
-      } else if (!learned.letter && !scene && touch.id === null && getInteractionTarget()?.kind === "letter") {
+        guide.style.left = `${innerWidth * 0.36}px`;
+        guide.style.top = `${innerHeight * 0.53}px`;
+      } else if (false && !learned.letter && !scene && touch.id === null && getInteractionTarget()?.kind === "letter") {
         const letter = getInteractionTarget().entry;
         guide.hidden = false; guide.classList.add("is-tap");
         guide.style.left = `${letter.x - state.camera.x}px`;
