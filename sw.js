@@ -1,4 +1,4 @@
-const CACHE_NAME = "bosquet-lent-v40";
+const CACHE_NAME = "bosquet-lent-v39";
 const ASSETS = [
   "./",
   "./index.html",
@@ -6,9 +6,9 @@ const ASSETS = [
   "./script.js",
   "./exploration.js",
   "./exploration.css",
-  "./three-world.js?v=1.0.36",
-  "./vendor/three.module.js?v=1.0.36",
-  "./vendor/three.core.js?v=1.0.36",
+  "./three-world.js",
+  "./vendor/three.module.js",
+  "./vendor/three.core.js",
   "./manifest.webmanifest",
   "./pwa-icons/icon-192.png",
   "./pwa-icons/icon-512.png",
