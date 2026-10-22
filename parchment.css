@@ -13,6 +13,10 @@
   padding: 12px 48px 12px 8px;
   filter: drop-shadow(0 10px 14px #19120870);
 }
+.panel-dialog.parchment-dialog[open] form,
+.panel-dialog.parchment-dialog[open] .mission-poster,
+.panel-dialog.parchment-dialog[open] .discovery-body,
+.panel-dialog.parchment-dialog[open] .mission-body { color:#294838 !important; }
 .panel-dialog.parchment-dialog form {
   position: relative;
   display: flex;
