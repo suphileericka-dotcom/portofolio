@@ -61,6 +61,13 @@
 .panel-dialog.parchment-dialog button { min-height: 46px; padding: 10px 16px; color: #302316; background: #f8edcf; border: 1px solid #927044; font-size: 16px; }
 .panel-dialog.parchment-dialog .dialog-choice-button:hover { background: #e5d4a8; }
 .panel-dialog.parchment-dialog .parchment-quill { right: -2px; top: 20%; width: 40px; transform: rotate(15deg); }
+.panel-dialog.parchment-dialog.discovery-paper-dialog form,
+.panel-dialog.parchment-dialog.mission-dialog form,
+.panel-dialog.parchment-dialog.companion-dialog form { color:#302316; }
+.panel-dialog.parchment-dialog .discovery-body,
+.panel-dialog.parchment-dialog .mission-body { color:#302316; }
+.panel-dialog.parchment-dialog .panel-header h2 { color:#3b2918; }
+.panel-dialog.parchment-dialog .check-row { color:#4b3822; }
 .panel-dialog.parchment-dialog .choice-actions { margin-top: 8px; }
 .panel-dialog.parchment-dialog .primary-button { background:linear-gradient(#648262,#36593e); color:#fff2d5; border:2px solid #b1955d; border-radius:24px; box-shadow:0 3px 3px #50381540; }
 .panel-dialog.parchment-dialog .dialog-choice-button { text-align:left; border:2px solid #c29a60; border-radius:16px; background:linear-gradient(#fff0cb,#ebcd96); box-shadow:inset 0 1px #fff7df,0 2px 2px #76552c30; }

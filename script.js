@@ -100,7 +100,7 @@ const interactionRanges = { item: 78, letter: 78, secret: 105, villager: 98, com
 
 function openDialog(dialog) {
   if (!dialog) return;
-  if (["questDialog", "villagerDialog"].includes(dialog.id)) {
+  if (["questDialog", "villagerDialog", "discoveryDialog", "encyclopediaDetailDialog", "questCompleteDialog", "companionDialog"].includes(dialog.id)) {
     dialog.classList.add("parchment-dialog");
     if (!dialog.querySelector(".parchment-quill")) {
       const quill = document.createElement("div");
