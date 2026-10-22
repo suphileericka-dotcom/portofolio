@@ -5818,6 +5818,8 @@ function grantQuestReward() {
 }
 
 function openQuestPopup(quest) {
+  ui.questDialog.querySelector(".close-button").textContent = "Plus tard";
+  ui.startQuestButton.textContent = "Accepter la mission";
   ui.questDialogBody.innerHTML = `
     <article class="mission-poster">
       <div class="mission-poster-pin" aria-hidden="true"></div>
@@ -5828,10 +5830,12 @@ function openQuestPopup(quest) {
       </div>
       <header class="mission-poster-header">
         <span aria-hidden="true">✦</span>
-        <p>Nouvelle mission du Bosquet</p>
-        <h3>Mission : ${quest.title}</h3>
+        <p>Lettre de Mission</p>
+        <div class="parchment-rule" aria-hidden="true">❧</div>
+        <h3>${quest.title}</h3>
       </header>
-      <p class="mission-poster-copy">${quest.description}</p>
+      <section class="mission-letter-message"><strong>Un message du Gardien</strong><p>${quest.description}</p></section>
+      <div class="parchment-rule" aria-hidden="true">❧</div>
       <section class="mission-poster-objective">
         <span>Objectif</span>
         <strong>${quest.objective}</strong>
@@ -5839,6 +5843,7 @@ function openQuestPopup(quest) {
         <small>${quest.progress || 0} / ${quest.target || 1}</small>
       </section>
       <p class="mission-poster-hint"><b>Indice</b>${getQuestHint(quest)}</p>
+      <div class="parchment-rule" aria-hidden="true">❧</div>
       <footer><span>Récompense</span><strong>Deux trouvailles du Bosquet</strong></footer>
     </article>
   `;

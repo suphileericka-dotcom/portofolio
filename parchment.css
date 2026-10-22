@@ -59,6 +59,12 @@
 .panel-dialog.parchment-dialog small { color: #302316 !important; font-size: 17px; line-height: 1.65; text-shadow: none; }
 .panel-dialog.parchment-dialog .mission-poster { padding: 0; background: none; box-shadow: none; border: 0; }
 .panel-dialog.parchment-dialog .mission-poster-header { padding: 0 0 12px; }
+.panel-dialog.parchment-dialog .mission-poster-header p { color:#6e5530 !important; letter-spacing:.12em; text-transform:uppercase; font-size:.78rem; font-weight:900; }
+.panel-dialog.parchment-dialog .mission-poster-header h3 { color:#2c493b !important; text-align:center; }
+.parchment-rule { color:#9b7441; text-align:center; font-size:1.1rem; line-height:1; opacity:.85; }
+.mission-letter-message { padding:.7rem .9rem; border-left:3px solid #6e8a50; background:#fff8df66; }
+.mission-letter-message strong { display:block; color:#315a42 !important; font-family:Spectral,Georgia,serif; font-size:1.15rem !important; }
+.mission-letter-message p { margin:.3rem 0 0; }
 .panel-dialog.parchment-dialog .mission-poster-objective,
 .panel-dialog.parchment-dialog .discovery-popup-item { background: #fff8df88 !important; border: 1px solid #809263 !important; }
 .panel-dialog.parchment-dialog .dialog-copy { padding: 12px 0; }
