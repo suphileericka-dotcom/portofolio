@@ -108,6 +108,11 @@ function openDialog(dialog) {
       quill.setAttribute("aria-hidden", "true");
       quill.innerHTML = '<svg viewBox="0 0 70 220"><path d="M15 190C5 140 12 48 58 8C75 68 50 145 15 190Z" fill="#738465" stroke="#405039"/><path d="M10 215Q26 115 58 8M25 143L11 112M32 115L16 83M39 88L24 58M25 143L49 125M32 115L58 94M39 88L64 65" fill="none" stroke="#e4d5ac" stroke-width="2"/></svg>';
       dialog.append(quill);
+      const foliage = document.createElement("div");
+      foliage.className = "parchment-foliage";
+      foliage.setAttribute("aria-hidden", "true");
+      foliage.innerHTML = '<svg viewBox="0 0 60 360"><path d="M29 355Q5 220 35 10" fill="none" stroke="#65713b" stroke-width="3"/>' + [25,75,125,175,225,275,325].map((y,i) => `<g transform="translate(28 ${y}) scale(${i%2 ? -1 : 1} 1)"><path d="M0 0Q-30-30-23-42Q8-38 0 0" fill="#658442" stroke="#3e592c"/><path d="M0 0L-19-33" stroke="#a4ad65"/></g>`).join('') + [60,195,310].map(y => `<g transform="translate(24 ${y})"><g fill="#ffeac0" stroke="#cba264" stroke-width=".5">${[0,72,144,216,288].map(a=>`<ellipse cy="-8" rx="4" ry="9" transform="rotate(${a})"/>`).join('')}</g><circle r="4" fill="#c8963e"/></g>`).join('') + '</svg>';
+      dialog.append(foliage);
       dialog.addEventListener("cancel", (event) => {
         if (dialog.id === "villagerDialog" && pendingVillagerConversation) return;
         event.preventDefault(); closeDialog(dialog);

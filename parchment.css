@@ -1,4 +1,7 @@
 /* Loaded after every base dialog rule: the document itself is the paper. */
+.parchment-foliage { position:absolute; left:-15px; top:40px; bottom:25px; width:48px; pointer-events:none; z-index:4; }
+.parchment-foliage svg { width:100%; height:100%; }
+.parchment-quill::after { content:''; display:block; width:42px; height:38px; margin:-5px 0 0 -9px; border-radius:9px 9px 16px 16px; background:radial-gradient(ellipse at 50% 5%, #080c09 0 20%, #b78c4d 23% 27%, transparent 30%), linear-gradient(100deg,#171c17,#494230 45%,#121710); box-shadow:0 4px 4px #35261660; }
 .panel-dialog.parchment-dialog[open] {
   width: min(680px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
@@ -7,7 +10,7 @@
   background: transparent;
   box-shadow: none;
   overflow: visible;
-  padding: 12px 42px 12px 0;
+  padding: 12px 48px 12px 8px;
   filter: drop-shadow(0 10px 14px #19120870);
 }
 .panel-dialog.parchment-dialog form {
@@ -15,7 +18,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 30px clamp(18px, 4vw, 34px);
+  padding: 30px clamp(28px, 5vw, 44px);
   max-height: calc(100dvh - 48px);
   overflow: auto;
   border: 0;
@@ -59,6 +62,19 @@
 .panel-dialog.parchment-dialog .dialog-choice-button:hover { background: #e5d4a8; }
 .panel-dialog.parchment-dialog .parchment-quill { right: -2px; top: 20%; width: 40px; transform: rotate(15deg); }
 .panel-dialog.parchment-dialog .choice-actions { margin-top: 8px; }
+.panel-dialog.parchment-dialog .primary-button { background:linear-gradient(#648262,#36593e); color:#fff2d5; border:2px solid #b1955d; border-radius:24px; box-shadow:0 3px 3px #50381540; }
+.panel-dialog.parchment-dialog .dialog-choice-button { text-align:left; border:2px solid #c29a60; border-radius:16px; background:linear-gradient(#fff0cb,#ebcd96); box-shadow:inset 0 1px #fff7df,0 2px 2px #76552c30; }
+#villagerDialog.parchment-dialog h2 { color:#fff0cf; padding:10px 24px; border:2px solid #805532; border-radius:9px; background:repeating-linear-gradient(2deg,transparent 0 9px,#52331633 10px 11px),linear-gradient(#a47349,#74492c); box-shadow:0 3px 4px #53351d50; }
+.panel-dialog.parchment-dialog .parchment-quill svg path:first-child { fill:#f2d5a3; stroke:#b58b51; }
+.panel-dialog.parchment-dialog .parchment-quill svg path:last-child { stroke:#ad834d; }
+.panel-dialog.parchment-dialog[open] { animation: parchment-sheet-open .55s ease-out both; }
+.panel-dialog.parchment-dialog[open]::before { animation: parchment-top-roll .55s ease-out both; }
+.panel-dialog.parchment-dialog[open]::after { animation: parchment-bottom-roll .55s ease-out both; }
+.panel-dialog.parchment-dialog.is-rolling-up { animation:parchment-sheet-open .22s ease-in reverse both; }
+@keyframes parchment-sheet-open { from { clip-path:inset(48% 0); } to { clip-path:inset(-10% -10%); } }
+@keyframes parchment-top-roll { from { top:calc(50% - 10px); } to { top:7px; } }
+@keyframes parchment-bottom-roll { from { bottom:calc(50% - 10px); } to { bottom:7px; } }
+@media(prefers-reduced-motion:reduce) { .panel-dialog.parchment-dialog[open],.panel-dialog.parchment-dialog[open]::before,.panel-dialog.parchment-dialog[open]::after { animation:none; } }
 @media (max-height: 450px) {
   .panel-dialog.parchment-dialog form { padding-top: 22px; padding-bottom: 22px; gap: 8px; }
   .panel-dialog.parchment-dialog .panel-header { padding-bottom: 6px; }
