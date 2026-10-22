@@ -100,6 +100,20 @@ const interactionRanges = { item: 78, letter: 78, secret: 105, villager: 98, com
 
 function openDialog(dialog) {
   if (!dialog) return;
+  if (["questDialog", "villagerDialog"].includes(dialog.id)) {
+    dialog.classList.add("parchment-dialog");
+    if (!dialog.querySelector(".parchment-quill")) {
+      const quill = document.createElement("div");
+      quill.className = "parchment-quill";
+      quill.setAttribute("aria-hidden", "true");
+      quill.innerHTML = '<svg viewBox="0 0 70 220"><path d="M15 190C5 140 12 48 58 8C75 68 50 145 15 190Z" fill="#738465" stroke="#405039"/><path d="M10 215Q26 115 58 8M25 143L11 112M32 115L16 83M39 88L24 58M25 143L49 125M32 115L58 94M39 88L64 65" fill="none" stroke="#e4d5ac" stroke-width="2"/></svg>';
+      dialog.append(quill);
+      dialog.addEventListener("cancel", (event) => {
+        if (dialog.id === "villagerDialog" && pendingVillagerConversation) return;
+        event.preventDefault(); closeDialog(dialog);
+      });
+    }
+  }
   if (lastPointerGestureId > 0) dialog.dataset.interactionGesture = String(lastPointerGestureId);
   if (typeof dialog.showModal === "function") {
     if (!dialog.open) dialog.showModal();
@@ -109,8 +123,14 @@ function openDialog(dialog) {
   dialog.classList.add("is-fallback-open");
 }
 
-function closeDialog(dialog) {
+function closeDialog(dialog, animated = true) {
   if (!dialog) return;
+  if (animated && dialog.open && dialog.classList.contains("parchment-dialog") && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (dialog.classList.contains("is-rolling-up")) return;
+    dialog.classList.add("is-rolling-up");
+    setTimeout(() => { closeDialog(dialog, false); dialog.classList.remove("is-rolling-up"); }, 220);
+    return;
+  }
   if (typeof dialog.close === "function") {
     dialog.close();
     return;
@@ -5351,6 +5371,7 @@ function readAncientLetter(letter) {
   state.lastQuestHintAt = state.time;
   state.nextLetterAt = Number.POSITIVE_INFINITY;
   showMissionTracker("new", state.activeQuest);
+  openQuestPopup(state.activeQuest);
   saveGame();
   playSoftPing();
   updateMissionTracker();

@@ -814,6 +814,46 @@ h2 {
   transform: translate(-50%, -50%);
 }
 
+.parchment-dialog[open] {
+  width: min(42rem, calc(100vw - 1.5rem));
+  max-height: calc(100dvh - 1.5rem);
+  color: #302317;
+  background: #edd9a6;
+  border: 3px solid #a88850;
+  border-radius: 13px 7px 16px 9px;
+  box-shadow: inset 0 0 22px #ad85444d, 0 12px 35px #0006;
+  overflow: hidden;
+  animation: parchment-unroll .42s ease-out both;
+}
+.parchment-dialog[open] form {
+  display: flex; flex-direction: column; gap: .8rem;
+  max-height: calc(100dvh - 2rem); box-sizing: border-box;
+  padding: 1.2rem 4rem 1.2rem 1.2rem;
+  overflow: auto;
+  background: repeating-linear-gradient(3deg, #8b642008 0 1px, transparent 1px 5px), #edd9a6;
+}
+.parchment-dialog form::after, .parchment-dialog form::before,
+.parchment-dialog .mission-poster-botany, .parchment-dialog .mission-poster-pin,
+.parchment-dialog .mission-poster::before, .parchment-dialog .mission-poster::after { display: none; }
+.parchment-dialog .mission-poster { padding: .25rem; background: none; border: 0; box-shadow: none; transform: none; overflow: visible; }
+.parchment-dialog .panel-header { padding: 0; flex-shrink: 0; }
+.parchment-dialog .mission-body, .parchment-dialog .dialog-copy { overflow: auto; min-height: 0; }
+.parchment-dialog p, .parchment-dialog strong, .parchment-dialog small,
+.parchment-dialog .dialog-copy, .parchment-dialog .mission-poster-hint b { color: #302317; opacity: 1; font-family: Nunito, sans-serif; font-size: 1rem; line-height: 1.6; overflow-wrap: anywhere; }
+.parchment-dialog h2, .parchment-dialog h3 { color: #382a19; font-family: Spectral, Georgia, serif; line-height: 1.2; }
+.parchment-dialog .choice-actions, .parchment-dialog .dialog-choice-list { flex-shrink: 0; }
+.parchment-dialog button { min-height: 44px; color: #302317; background: #fff2cf; border: 1px solid #876e42; white-space: normal; }
+.parchment-dialog button:focus-visible { outline: 3px solid #385b35; outline-offset: 2px; }
+.parchment-quill { position: absolute; right: .55rem; top: 4rem; width: 2.5rem; pointer-events: none; transform: rotate(10deg); }
+.parchment-quill svg { width: 100%; height: auto; }
+.parchment-dialog[open] .mission-body, .parchment-dialog[open] .dialog-copy { animation: parchment-ink .42s ease-out both; }
+.parchment-dialog.is-rolling-up { animation: parchment-unroll .22s ease-in reverse both; }
+@keyframes parchment-unroll { from { clip-path: inset(48% 0 round 12px); } to { clip-path: inset(0 round 8px); } }
+@keyframes parchment-ink { 0%, 55% { opacity: 0; } 100% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .parchment-dialog[open], .parchment-dialog[open] .mission-body, .parchment-dialog[open] .dialog-copy { animation: none; }
+}
+
 .panel-dialog {
   width: min(34rem, calc(100vw - 1.4rem));
   max-height: min(44rem, calc(100dvh - 1.4rem));
