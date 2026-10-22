@@ -6,6 +6,7 @@ const outDir = path.join(root, "dist");
 const files = [
   "index.html",
   "styles.css",
+  "parchment.css",
   "script.js",
   "exploration.js",
   "exploration.css",

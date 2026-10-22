@@ -1,8 +1,9 @@
-const CACHE_NAME = "bosquet-lent-v44";
+const CACHE_NAME = "bosquet-lent-v45";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
+  "./parchment.css",
   "./script.js",
   "./exploration.js",
   "./exploration.css",
