@@ -30,6 +30,10 @@ const ui = {
   journalList: document.getElementById("journalList"),
   missionReminderButton: document.getElementById("missionReminderButton"),
   message: document.getElementById("message"),
+  regionBanner: document.getElementById("regionBanner"),
+  regionBannerKicker: document.getElementById("regionBannerKicker"),
+  regionBannerTitle: document.getElementById("regionBannerTitle"),
+  regionBannerSubtitle: document.getElementById("regionBannerSubtitle"),
   cinematic: document.getElementById("cinematic"),
   cinematicText: document.getElementById("cinematicText"),
   customizeDialog: document.getElementById("customizeDialog"),
@@ -164,6 +168,12 @@ const friendlyChallengeCooldownSeconds = 120;
 const friendlyChallengeRunnerStartDelay = 0.75;
 const friendlyChallengeRunnerSpeed = playerWalkSpeed * 1.18;
 const friendlyChallengeRunnerReturnSpeed = playerWalkSpeed * 0.82;
+const friendlyChallengeDefinitions = [
+  { kind: "race", title: "Course du sentier", objective: "Atteindre l'arrivee avant l'habitant.", duration: 52, distance: 6000, target: 1 },
+  { kind: "collection", title: "Panier du village", objective: "Ramasser 4 trouvailles avant la fin du temps.", duration: 110, distance: 0, target: 4 },
+  { kind: "exploration", title: "Chemin inconnu", objective: "Atteindre la balise d'exploration avant la fin du temps.", duration: 95, distance: 4200, target: 1 },
+  { kind: "search", title: "Objet cache", objective: "Retrouver l'objet cache sur le sentier.", duration: 125, distance: 2600, target: 1 }
+];
 const hopDurationSeconds = 0.62;
 const hopHeight = 42;
 const portalInvokerItemId = "star";
@@ -329,6 +339,8 @@ let secretTransitionToken = 0;
 let pendingVillagerConversation = null;
 let pendingCompanionSpecies = "";
 let itemUseInProgress = false;
+let lastRegionId = "";
+let regionBannerTimer = 0;
 const villagerBubbles = {};
 const villagerProximity = {};
 const villagerChallengeReturns = {};
@@ -355,6 +367,7 @@ const state = {
   villagerLastMet: {},
   villagerMemory: {},
   discoveredPlaces: [],
+  discoveredRegions: [],
   visitedLandmarks: [],
   visitedVillages: [],
   journalEvents: [],
@@ -377,6 +390,7 @@ const state = {
   activeSecretPortal: null,
   friendlyChallenge: null,
   friendlyChallengeCooldowns: {},
+  friendlyChallengeHistory: [],
   shelter: null,
   weatherCycleOffset: 0,
   nextWeatherChangeAt: 150,
@@ -386,6 +400,7 @@ const state = {
   nextVillageActivityAt: 90,
   itemEffects: { scoutUntil: 0, scoutTargetId: "", strideUntil: 0, glowUntil: 0, compassUntil: 0, compassTargetX: 0, compassLabel: "" },
   equipment: { lanternOn: false },
+  plantedItems: [],
   activeSecretWorld: null,
   lastSecretWorldId: "",
   lastSecretEdgeMessageAt: 0,
@@ -399,10 +414,10 @@ const state = {
 };
 
 const biomes = [
-  { at: 0, name: "Bosquet vert", sky: "#f0d99c", haze: "#c6cf8d", tree: "#3d512a", leaf: "#6d7f3f", grass: "#8d9b45" },
-  { at: 1800, name: "Clairiere fleurie", sky: "#efd39a", haze: "#b9c78f", tree: "#4b5e2d", leaf: "#7f8c4a", grass: "#a2a55a" },
-  { at: 3600, name: "Sous-bois frais", sky: "#d9cf96", haze: "#a8bf94", tree: "#2d5545", leaf: "#5f876c", grass: "#7f9b61" },
-  { at: 5400, name: "Nuit aux champignons", sky: "#4f6b70", haze: "#91b69c", tree: "#173629", leaf: "#315d4a", grass: "#536f3e" }
+  { id: "mystery-forest", at: 0, name: "La Foret Mysterieuse", subtitle: "Lanternes, fleurs et feuillages superposes", decor: "forest", sky: "#f0d99c", haze: "#c6cf8d", tree: "#354b2b", leaf: "#667d3d", grass: "#8d9b45", ground: "#282218", path: "#c4a05d", accent: "#f0bd6c", treeDensity: 1 },
+  { id: "firefly-village", at: 1800, name: "Le Village des Lucioles", subtitle: "Maisons de bois, jardins et lumieres chaudes", decor: "village", sky: "#f1cf91", haze: "#b8ca8d", tree: "#52612f", leaf: "#81934a", grass: "#9ba453", ground: "#30251b", path: "#d2a861", accent: "#ffe07a", treeDensity: 0.78 },
+  { id: "mist-valley", at: 3600, name: "La Vallee des Brumes", subtitle: "Rochers, ruisseaux et passages discrets", decor: "mist", sky: "#c9d4bd", haze: "#a6bbb0", tree: "#31574e", leaf: "#5d8171", grass: "#78916c", ground: "#26322d", path: "#a99d76", accent: "#bfe0d3", treeDensity: 0.48 },
+  { id: "star-garden", at: 5400, name: "Le Jardin des Etoiles", subtitle: "Fleurs lumineuses et trouvailles rares", decor: "stars", sky: "#526d76", haze: "#88ab98", tree: "#18382d", leaf: "#315f4c", grass: "#526f3f", ground: "#1f302b", path: "#6f7853", accent: "#f6cf36", treeDensity: 0.72 }
 ];
 
 const weatherTypes = [
@@ -575,6 +590,24 @@ const microEventCatalogItems = [
   { id: "rolling-micro-4", label: "Graine de chemin", rarity: "Rare", place: "Clairiere", text: "Elle roule comme si elle connaissait deja la pente.", use: "Une trouvaille rare des micro-evenements.", visualType: "cone" }
 ];
 
+function describeGeneratedItem(label, rarity) {
+  const name = label.toLowerCase();
+  if (name.includes("graine")) return "Une graine conservee par le chemin, assez vigoureuse pour prendre racine dans une region visitee.";
+  if (name.includes("fleur") || name.includes("petale") || name.includes("rose")) return "Une fleur delicate dont la couleur garde l'atmosphere du lieu ou elle a ete trouvee.";
+  if (name.includes("boussole")) return "Une petite boussole sensible aux lieux connus et aux objectifs encore inacheves.";
+  if (name.includes("lanterne")) return "Une lanterne de poche qui diffuse une lumiere calme sans troubler les habitants.";
+  if (name.includes("pierre") || name.includes("galet") || name.includes("cristal") || name.includes("gemme")) return "Un fragment mineral poli par l'eau, le vent ou les pas des voyageurs.";
+  if (name.includes("feuille") || name.includes("branche") || name.includes("foug")) return "Un fragment de plante dont les nervures racontent la saison et la region.";
+  if (name.includes("plume") || name.includes("aile")) return "Une plume legere restee sur le sentier apres le passage d'un oiseau discret.";
+  if (name.includes("carte") || name.includes("note") || name.includes("herbier")) return "Un document fragile qui garde une trace des chemins, des plantes ou des habitants.";
+  if (name.includes("coqu")) return "Une petite coquille lisse rapportee par le courant jusqu'au bord du chemin.";
+  return rarity === "Legendaire"
+    ? "Une trouvaille presque impossible, chaude comme un secret longtemps garde."
+    : rarity === "Rare"
+      ? "Un objet discret, mais assez singulier pour meriter une page du carnet."
+      : "Une petite chose du chemin, simple et rassurante.";
+}
+
 const generatedCatalogItems = extraItemNames.map((label, index) => {
   const rarity = index >= 90 ? "Legendaire" : index % 5 === 1 ? "Rare" : "Commun";
   const places = ["Foret", "Village", "Riviere", "Montagne", "Clairiere"];
@@ -583,11 +616,7 @@ const generatedCatalogItems = extraItemNames.map((label, index) => {
     label,
     rarity,
     place: places[index % places.length],
-    text: rarity === "Legendaire"
-      ? "Une trouvaille presque impossible, chaude comme un secret longtemps garde."
-      : rarity === "Rare"
-        ? "Un objet discret, mais assez singulier pour meriter une page du carnet."
-        : "Une petite chose du chemin, simple et rassurante.",
+    text: describeGeneratedItem(label, rarity),
     use: rarity === "Legendaire"
       ? "Objet legendaire de collection ou de mission."
       : rarity === "Rare"
@@ -1885,6 +1914,30 @@ function getBiome(x) {
   return current;
 }
 
+function showRegionBanner(region, firstDiscovery) {
+  if (!ui.regionBanner || !region) return;
+  window.clearTimeout(regionBannerTimer);
+  ui.regionBannerKicker.textContent = firstDiscovery ? "Nouvelle region" : "Retour dans la region";
+  ui.regionBannerTitle.textContent = region.name;
+  ui.regionBannerSubtitle.textContent = region.subtitle;
+  ui.regionBanner.classList.remove("is-visible");
+  requestAnimationFrame(() => ui.regionBanner.classList.add("is-visible"));
+  regionBannerTimer = window.setTimeout(() => ui.regionBanner.classList.remove("is-visible"), 3200);
+}
+
+function updateRegionDiscovery() {
+  if (isInSecretWorld()) return;
+  const region = getBiome(state.player.x);
+  if (!region || region.id === lastRegionId) return;
+  lastRegionId = region.id;
+  const firstDiscovery = !state.discoveredRegions.includes(region.id);
+  if (firstDiscovery) {
+    state.discoveredRegions.push(region.id);
+    rememberJournalEvent(`J'ai decouvert ${region.name.toLowerCase()}.`);
+  }
+  showRegionBanner(region, firstDiscovery);
+}
+
 function blendHex(a, b, t) {
   const ah = a.replace("#", "");
   const bh = b.replace("#", "");
@@ -1929,12 +1982,19 @@ function biomeColors() {
   const t = Math.max(0, Math.min(1, (x - current.at) / span));
   const weather = getWeatherForChapter();
   return {
+    id: current.id,
     name: current.name,
+    subtitle: current.subtitle,
+    decor: current.decor,
     sky: blendHex(blendHex(current.sky, next.sky, t), weather.sky, weather.alpha),
     haze: blendHex(blendHex(current.haze, next.haze, t), weather.sky, weather.alpha * 0.7),
     tree: blendHex(current.tree, next.tree, t),
     leaf: blendHex(current.leaf, next.leaf, t),
     grass: blendHex(current.grass, next.grass, t),
+    ground: blendHex(current.ground, next.ground, t),
+    path: blendHex(current.path, next.path, t),
+    accent: blendHex(current.accent, next.accent, t),
+    treeDensity: current.treeDensity,
     wind: weather.wind
   };
 }
@@ -2008,6 +2068,110 @@ function drawBackground(colors) {
   for (let i = -1; i < 8; i += 1) {
     drawShrubBand(i * 210, h * 0.67, i);
   }
+  ctx.restore();
+}
+
+function drawRegionAtmosphere(colors) {
+  if (isInSecretWorld()) return;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const region = getBiome(state.player.x);
+  ctx.save();
+  if (region.decor === "mist") {
+    ctx.globalAlpha = 0.17;
+    for (let i = -1; i < 5; i += 1) {
+      const drift = (state.time * (6 + i) + state.camera.x * 0.025) % (w + 280);
+      drawEllipse(drift - 180, h * (0.35 + i * 0.09), 190, 34, colors.accent);
+    }
+  } else if (region.decor === "stars") {
+    for (let i = 0; i < 34; i += 1) {
+      const x = (i * 97 - state.camera.x * 0.04 + w * 3) % w;
+      const y = h * 0.2 + (i * 47) % Math.max(80, Math.floor(h * 0.47));
+      ctx.globalAlpha = 0.16 + Math.abs(Math.sin(state.time * 1.5 + i)) * 0.48;
+      drawEllipse(x, y, 1.4 + hashNumber(i + 3) * 2.1, 1.4 + hashNumber(i + 3) * 2.1, colors.accent);
+    }
+  } else if (region.decor === "village") {
+    for (let i = 0; i < 9; i += 1) {
+      const x = (i * 181 - state.camera.x * 0.08 + w * 4) % w;
+      const y = h * (0.32 + hashNumber(i + 18) * 0.31);
+      const glow = ctx.createRadialGradient(x, y, 1, x, y, 22);
+      glow.addColorStop(0, "rgba(255, 224, 122, 0.58)");
+      glow.addColorStop(1, "rgba(255, 224, 122, 0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(x, y, 22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    ctx.globalAlpha = 0.2;
+    for (let i = 0; i < 6; i += 1) {
+      const x = (i * 260 - state.camera.x * 0.06 + w * 4) % w;
+      drawEllipse(x, h * 0.48 + Math.sin(i) * 16, 4, 4, colors.accent);
+    }
+  }
+  ctx.restore();
+}
+
+function drawRegionGroundDecor() {
+  if (isInSecretWorld()) return;
+  const region = getBiome(state.player.x);
+  const start = Math.floor((state.camera.x - 120) / 190) * 190;
+  const end = state.camera.x + window.innerWidth + 160;
+  ctx.save();
+  for (let x = start; x <= end; x += 190) {
+    const seed = Math.floor(x / 190);
+    const y = getWalkSurfaceY(x) - 18;
+    if (region.decor === "forest") {
+      drawEllipse(x + 32, y - 9, 10, 6, seed % 2 ? "#d38a6c" : "#e5c36b");
+      ctx.fillStyle = "#ead8a2";
+      ctx.fillRect(x + 29, y - 5, 6, 10);
+      drawEllipse(x + 66, y + 1, 13, 5, "rgba(110, 137, 61, 0.72)");
+    } else if (region.decor === "village") {
+      ctx.strokeStyle = "rgba(100, 67, 38, 0.72)";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(x + 10, y - 15);
+      ctx.lineTo(x + 10, y + 7);
+      ctx.moveTo(x + 52, y - 15);
+      ctx.lineTo(x + 52, y + 7);
+      ctx.moveTo(x + 5, y - 8);
+      ctx.lineTo(x + 58, y - 8);
+      ctx.stroke();
+      drawEllipse(x + 80, y - 3, 6, 6, seed % 2 ? "#e9a0a8" : "#f0cf70");
+    } else if (region.decor === "mist") {
+      drawEllipse(x + 28, y, 23, 9, "#73827c");
+      drawEllipse(x + 16, y - 4, 10, 4, "rgba(247,243,223,0.2)");
+      drawEllipse(x + 82, y + 2, 14, 6, "#64746f");
+    } else {
+      const pulse = 0.55 + Math.sin(state.time * 2 + seed) * 0.2;
+      ctx.globalAlpha = pulse;
+      drawEllipse(x + 32, y - 5, 8, 8, "#f6cf36");
+      drawEllipse(x + 25, y - 5, 7, 4, "#d89ab2");
+      drawEllipse(x + 39, y - 5, 7, 4, "#d89ab2");
+      ctx.globalAlpha = 1;
+    }
+  }
+  ctx.restore();
+}
+
+function drawPlantedItems() {
+  if (!Array.isArray(state.plantedItems) || !state.plantedItems.length || isInSecretWorld()) return;
+  ctx.save();
+  state.plantedItems.forEach((plant) => {
+    if (!Number.isFinite(plant.x) || Math.abs(plant.x - state.camera.x - window.innerWidth * 0.5) > window.innerWidth) return;
+    const age = Math.max(0, state.time - (plant.plantedAt || 0));
+    const growth = Math.min(1, 0.42 + age / 180);
+    const y = getWalkSurfaceY(plant.x) - 17;
+    ctx.strokeStyle = "#53713f";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(plant.x, y + 16);
+    ctx.quadraticCurveTo(plant.x - 3, y + 2, plant.x, y - 20 * growth);
+    ctx.stroke();
+    drawEllipse(plant.x - 8, y - 7 * growth, 9 * growth, 5 * growth, "#7ea04e");
+    drawEllipse(plant.x + 8, y - 14 * growth, 9 * growth, 5 * growth, "#91ad55");
+    if (growth > 0.86) drawEllipse(plant.x, y - 23, 5, 5, "#e8b98a");
+  });
   ctx.restore();
 }
 
@@ -2122,6 +2286,7 @@ function drawShrubBand(x, y, seed) {
 
 function drawParallaxTrees(colors) {
   const h = window.innerHeight;
+  const density = isInSecretWorld() ? 1 : (getBiome(state.player.x).treeDensity || 1);
   for (let layer = 0; layer < 3; layer += 1) {
     const factor = [0.22, 0.48, 0.82][layer];
     const alpha = [0.34, 0.54, 0.88][layer];
@@ -2136,6 +2301,7 @@ function drawParallaxTrees(colors) {
     for (let repeat = firstRepeat; repeat <= lastRepeat; repeat += 1) {
       for (const tree of trees) {
         if (tree.layer !== layer) continue;
+        if (density < 0.95 && hashNumber(tree.x + layer * 71) > density) continue;
         const x = tree.x + layer * 95 + repeat * repeatWidth;
         if (x + tree.w < visibleStart || x > visibleEnd) continue;
         const base = h * 0.74 + Math.sin(tree.x + repeat) * 18;
@@ -2212,6 +2378,8 @@ function drawWorldObjects() {
   const interactionTarget = getInteractionTarget(visibleDiscoveries, visibleResidents);
 
   drawCoverForeground();
+  drawRegionGroundDecor();
+  drawPlantedItems();
 
   getProceduralVillages().forEach((village) => {
     const y = world.ground - 18;
@@ -2883,6 +3051,7 @@ function drawDiscoveryBursts() {
 function drawFriendlyChallengeGoal() {
   const challenge = state.friendlyChallenge;
   if (!challenge || isInSecretWorld()) return;
+  if (challenge.kind === "collection" || challenge.kind === "search") return;
   const x = challenge.targetX;
   const y = world.ground - 18;
   const startX = Number.isFinite(challenge.startX) ? challenge.startX : challenge.villager.x;
@@ -2961,7 +3130,7 @@ function drawFriendlyChallengeGoal() {
   ctx.fillStyle = "#f7f3df";
   ctx.font = "800 11px Nunito";
   ctx.textAlign = "center";
-  ctx.fillText("Arrivee", x, y - 101);
+  ctx.fillText(challenge.kind === "exploration" ? "Balise" : "Arrivee", x, y - 101);
   ctx.restore();
 }
 
@@ -4119,6 +4288,25 @@ function drawFriendlyChallengeHud() {
     ctx.restore();
     return;
   }
+  if (challenge.kind === "collection" || challenge.kind === "search") {
+    const remaining = Math.max(0, Math.ceil(challenge.remaining));
+    const progress = Math.min(challenge.target || 1, challenge.progress || 0);
+    const x = window.innerWidth * 0.5;
+    const y = 34;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = "rgba(20, 34, 33, 0.82)";
+    roundedRect(-144, -18, 288, 36, 8);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(240, 189, 108, 0.4)";
+    ctx.stroke();
+    ctx.fillStyle = "#f0bd6c";
+    ctx.font = "900 12px Nunito";
+    ctx.textAlign = "center";
+    ctx.fillText(`${challenge.title}  ${progress}/${challenge.target}  ${remaining}s`, 0, 4);
+    ctx.restore();
+    return;
+  }
   const startX = Number.isFinite(challenge.startX) ? challenge.startX : challenge.villager.x;
   const direction = Math.sign(challenge.targetX - startX) || 1;
   const courseLength = Math.max(1, Math.abs(challenge.targetX - startX));
@@ -4138,7 +4326,10 @@ function drawFriendlyChallengeHud() {
   ctx.fillStyle = "#f0bd6c";
   ctx.font = "900 12px Nunito";
   ctx.textAlign = "center";
-  ctx.fillText(`Course ${friendlyChallengeDistanceLabel}  Toi ${playerProgress}%  Habit. ${runnerProgress}%`, 0, 4);
+  const label = challenge.kind === "exploration"
+    ? `${challenge.title}  Progression ${playerProgress}%  ${Math.ceil(challenge.remaining)}s`
+    : `Course ${friendlyChallengeDistanceLabel}  Toi ${playerProgress}%  Habit. ${runnerProgress}%`;
+  ctx.fillText(label, 0, 4);
   ctx.restore();
   const next = (challenge.route || []).find((obstacle) => !obstacle.playerPassed && (obstacle.x - state.player.x) * direction > 0);
   const nextX = (next?.x ?? challenge.targetX) - state.camera.x;
@@ -4209,6 +4400,7 @@ function drawSecretWorldHud() {
 function draw() {
   const colors = biomeColors();
   drawBackground(colors);
+  drawRegionAtmosphere(colors);
   ctx.save();
   ctx.translate(window.innerWidth / 2, window.innerHeight * 0.58);
   ctx.scale(state.camera.zoom, state.camera.zoom);
@@ -4474,6 +4666,7 @@ function update(dt, elapsed = dt) {
   const previousWeather = state.weather;
   state.chapter = getChapter();
   state.weather = getWeatherForChapter().id;
+  updateRegionDiscovery();
   rememberPlace(getPlaceType());
   if (previousWeather !== state.weather) {
     announceWeather();
@@ -4667,13 +4860,14 @@ function getItemUse(itemId) {
   const label = (item?.label || "").toLowerCase();
   if (label.includes("boussole")) return "Consommable : indique pendant un moment la direction d'un lieu deja connu ou de l'objectif actif.";
   if (label.includes("lanterne")) return "Equipement permanent : allume ou eteint une petite lueur autour de toi.";
+  if (label.includes("graine")) return "Peut etre plantee sur le chemin. La jeune pousse reste dans le monde et grandit avec le temps de jeu.";
   const typeUses = {
     leaf: "Dans le Carnet, touche « Repérer une trouvaille ». Pendant 75 secondes de jeu, une flèche indique la direction d'un objet à ramasser ; lorsqu'il est à l'écran, un cercle lumineux l'entoure. Rejoins-le, puis ramasse-le au toucher ou avec E sur clavier. Le repérage consomme un exemplaire de cet objet, mais seulement si une trouvaille est disponible. Il ne ramasse rien automatiquement.",
     stone: "Materiau de mission : les habitants peuvent en demander pour reparer le village.",
     shell: "Objet de mission et de collection lie aux zones humides.",
     cone: "Mouvement : consomme une graine ou une pomme de pin pour un leger elan temporaire.",
     mushroom: "Exploration : consomme un champignon pour produire une douce lueur temporaire.",
-    flower: "Cadeau : offre-la a l'habitant pres de toi pour renforcer doucement votre relation.",
+    flower: "Cadeau : peut etre offerte a un habitant proche pour renforcer doucement votre relation.",
     paper: "Objet de collection. Certaines missions peuvent demander des objets de cette famille.",
     tool: "Objet de collection, sauf boussole ou lanterne qui possedent une action propre.",
     rare: "Objet de collection rare. Son interet depend de sa fiche individuelle.",
@@ -4686,6 +4880,28 @@ function getItemUse(itemId) {
   return need ? need.use : "Servira peut-etre plus loin sur la route.";
 }
 
+function getItemCategory(itemOrId) {
+  const item = typeof itemOrId === "string" ? getCatalogItem(itemOrId) || { id: itemOrId } : itemOrId;
+  const label = (item?.label || "").toLowerCase();
+  if (label.includes("graine")) return "Graine a planter";
+  if (label.includes("boussole") || label.includes("lanterne")) return "Outil d'exploration";
+  const categories = {
+    leaf: "Botanique",
+    stone: "Mineral",
+    feather: "Objet naturel",
+    shell: "Trouvaille de riviere",
+    cone: "Graine et foret",
+    mushroom: "Champignon",
+    star: "Relique lumineuse",
+    flower: "Fleur et cadeau",
+    paper: "Document",
+    tool: "Outil",
+    rare: "Relique rare",
+    charm: "Souvenir"
+  };
+  return categories[getItemVisualType(item)] || "Souvenir";
+}
+
 function getReservedMissionQuantity(itemId) {
   if (!state.activeQuest || state.activeQuest.itemId !== baseDiscoveryId(itemId)) return 0;
   return Math.max(0, (state.activeQuest.target || 0) - (state.activeQuest.progress || 0));
@@ -4696,28 +4912,76 @@ function getAvailableItemQuantity(itemId) {
   return Math.max(0, (state.inventory[baseId] || 0) - getReservedMissionQuantity(baseId));
 }
 
-function getItemAction(itemId) {
+function getItemActions(itemId) {
   const baseId = baseDiscoveryId(itemId);
   const item = getCatalogItem(baseId);
   const label = (item?.label || "").toLowerCase();
-  if (baseId === portalInvokerItemId) return { label: "Utiliser", kind: "portal" };
-  if (baseId === companionChangerItemId) return { label: state.companion.unlocked ? "Changer" : "Choisir", kind: "companion" };
-  if (label.includes("boussole")) return { label: "Utiliser", kind: "compass" };
-  if (label.includes("lanterne")) return { label: state.equipment.lanternOn ? "Eteindre" : "Allumer", kind: "lantern" };
+  if (baseId === portalInvokerItemId) return [{ label: "Ouvrir un portail", kind: "portal" }];
+  if (baseId === companionChangerItemId) return [{ label: state.companion.unlocked ? "Changer de compagnon" : "Choisir un compagnon", kind: "companion" }];
+  if (label.includes("boussole")) return getCompassTarget() ? [{ label: "Utiliser", kind: "compass" }] : [];
+  if (label.includes("lanterne")) return [{ label: state.equipment.lanternOn ? "Eteindre" : "Allumer", kind: "lantern" }];
+  if (label.includes("graine")) return canPlantItemHere() ? [{ label: "Planter", kind: "plant" }] : [];
   const type = getItemVisualType(item || baseId);
-  if (type === "leaf") return { label: "Repérer une trouvaille", kind: "scout" };
-  if (type === "cone") return { label: "Prendre elan", kind: "stride" };
-  if (type === "mushroom") return { label: "Allumer une lueur", kind: "glow" };
-  if (type === "flower" || /fruit|baie|pomme/.test(label)) return { label: "Offrir", kind: "gift" };
-  return null;
+  if (type === "leaf") return [{ label: "Reperer une trouvaille", kind: "scout" }];
+  if (type === "cone") return [{ label: "Prendre elan", kind: "stride" }];
+  if (type === "mushroom") return [{ label: "Allumer une lueur", kind: "glow" }];
+  if ((type === "flower" || /fruit|baie|pomme/.test(label)) && getGiftTarget()) return [{ label: "Offrir", kind: "gift" }];
+  return [];
+}
+
+function getItemAction(itemId) {
+  return getItemActions(itemId)[0] || null;
 }
 
 function getItemUsageStatus(itemId) {
   const action = getItemAction(itemId);
+  const baseId = baseDiscoveryId(itemId);
+  const item = getCatalogItem(itemId);
+  const label = (item?.label || "").toLowerCase();
+  const type = getItemVisualType(item || itemId);
+  if (label.includes("graine")) return "Consommable a planter";
+  if (type === "flower" || /fruit|baie|pomme/.test(label)) return "Consommable a offrir";
+  if (label.includes("lanterne")) return "Equipement permanent";
+  if (baseId === portalInvokerItemId || baseId === companionChangerItemId || label.includes("boussole") || ["leaf", "cone", "mushroom"].includes(type)) return "Consommable";
   if (!action) return "Collection ou mission";
   if (action.kind === "lantern") return "Equipement permanent";
   if (action.kind === "gift") return "Consommable a offrir";
+  if (action.kind === "plant") return "Consommable a planter";
   return "Consommable";
+}
+
+function canPlantItemHere() {
+  if (isInSecretWorld() || state.friendlyChallenge) return false;
+  return !state.plantedItems.some((plant) => Math.abs(plant.x - state.player.x) < 150);
+}
+
+function plantItem(itemId) {
+  if (itemUseInProgress || getAvailableItemQuantity(itemId) < 1 || !canPlantItemHere()) {
+    showMessage("Choisis un endroit libre du chemin pour planter cette graine.");
+    return;
+  }
+  itemUseInProgress = true;
+  if (!consumeItem(itemId)) {
+    itemUseInProgress = false;
+    return;
+  }
+  const item = getCatalogItem(itemId);
+  state.plantedItems.push({
+    id: `plant-${Date.now()}-${state.plantedItems.length}`,
+    itemId: baseDiscoveryId(itemId),
+    label: item?.label || "Graine",
+    x: Math.round(state.player.x + state.player.face * 58),
+    plantedAt: state.time,
+    regionId: getBiome(state.player.x).id
+  });
+  if (state.plantedItems.length > 80) state.plantedItems = state.plantedItems.slice(-80);
+  rememberJournalEvent(`J'ai plante ${item?.label?.toLowerCase() || "une graine"} sur le chemin.`);
+  closeDialog(ui.encyclopediaDetailDialog);
+  closeDialog(ui.journalDialog);
+  showMessage("La graine est plantee. Elle grandira au fil de tes promenades.");
+  playSoftPing();
+  saveGame();
+  itemUseInProgress = false;
 }
 
 function consumeItem(itemId) {
@@ -5438,6 +5702,41 @@ function updateDiscoveryBursts() {
   }
 }
 
+function getFriendlyChallengeDefinition(villager) {
+  const villageIndex = Math.abs(Math.round((villager.homeX || villager.x || 0) / villageSpacing));
+  const index = (villageIndex + state.friendlyChallengeHistory.length) % friendlyChallengeDefinitions.length;
+  return friendlyChallengeDefinitions[index];
+}
+
+function createSearchChallengeItem(challenge) {
+  const pool = itemCatalog.filter((item) => item.rarity !== "Legendaire" && item.id !== portalInvokerItemId);
+  const item = pool[Math.floor(hashNumber(challenge.startedAt + challenge.targetX) * pool.length) % pool.length];
+  if (!item) return null;
+  const placed = storeWorldDiscovery(placeDiscoverySafely({
+    ...item,
+    id: makeId(item.id, 980000 + Math.floor(hashNumber(challenge.startedAt + challenge.targetX) * 19000)),
+    x: challenge.targetX,
+    place: getPlaceType(challenge.targetX),
+    zoneKey: `challenge-${challenge.villageId}-${Math.floor(challenge.startedAt)}`,
+    challengeItem: true,
+    hiddenUntil: state.time
+  }));
+  return placed;
+}
+
+function registerFriendlyChallengeDiscovery(item) {
+  const challenge = state.friendlyChallenge;
+  if (!challenge || challenge.readyAt > state.time) return;
+  if (challenge.kind === "collection") {
+    challenge.progress = Math.min(challenge.target, (challenge.progress || 0) + 1);
+    showMessage(`Defi de collecte : ${challenge.progress} / ${challenge.target}.`);
+    if (challenge.progress >= challenge.target) finishFriendlyChallenge(true);
+  } else if (challenge.kind === "search" && item.id === challenge.targetItemId) {
+    challenge.progress = 1;
+    finishFriendlyChallenge(true);
+  }
+}
+
 function getFriendlyChallengeReward(challenge) {
   const rareItems = itemCatalog.filter((item) => item.rarity === "Rare" || item.rarity === "Legendaire");
   const fallback = itemCatalog.filter((item) => item.rarity !== "Legendaire");
@@ -5564,15 +5863,23 @@ function updateFriendlyChallenge(dt) {
   if (!challenge || isInSecretWorld()) return;
   if (challenge.readyAt > state.time) return;
   challenge.remaining = Math.max(0, challenge.remaining - dt);
-  const runnerFinished = updateChallengeRunner(challenge, dt);
-  updateChallengePlayerRoute(challenge);
-  if (Math.abs(state.player.x - challenge.targetX) <= 58) {
+  if (challenge.kind === "race" || !challenge.kind) {
+    const runnerFinished = updateChallengeRunner(challenge, dt);
+    updateChallengePlayerRoute(challenge);
+    if (Math.abs(state.player.x - challenge.targetX) <= 58) {
+      finishFriendlyChallenge(true);
+      return;
+    }
+    if (runnerFinished) {
+      finishFriendlyChallenge(false, "runner");
+      return;
+    }
+  } else if (challenge.kind === "exploration" && Math.abs(state.player.x - challenge.targetX) <= 72) {
+    challenge.progress = 1;
     finishFriendlyChallenge(true);
     return;
   }
-  if (runnerFinished) {
-    finishFriendlyChallenge(false, "runner");
-  } else if (challenge.remaining <= 0) {
+  if (challenge.remaining <= 0) {
     finishFriendlyChallenge(false, "timeout");
   }
 }
@@ -5584,15 +5891,18 @@ function finishFriendlyChallenge(won, reason = "") {
   state.friendlyChallengeCooldowns[challenge.villageId] = state.time + (won ? friendlyChallengeCooldownSeconds : 12);
   sendChallengeRunnerHome(challenge, won);
   const villager = challenge.villager;
+  let earnedReward = null;
+  if (challenge.targetItemId && state.worldDiscoveries[challenge.targetItemId]) delete state.worldDiscoveries[challenge.targetItemId];
   if (won) {
     const reward = getFriendlyChallengeReward(challenge);
+    earnedReward = reward;
     const memory = getVillagerMemory(villager);
     memory.relation += 0.85;
     if (reward) {
       collectDiscovery({ ...reward, id: makeId(reward.id, Math.floor(state.time * 10) + challenge.targetX), place: getPlaceType(challenge.targetX) }, true);
-      showMessage(`Course reussie. Tu gagnes : ${reward.label}.`);
-      rememberJournalEvent(`J'ai releve le defi amical de ${villager.role.toLowerCase()} et gagne ${reward.label.toLowerCase()}.`);
-      openDiscoveryPopup(reward);
+      showMessage(`${challenge.title || "Defi reussi"} termine. Tu gagnes : ${reward.label}.`);
+      rememberJournalEvent(`J'ai reussi ${challenge.title?.toLowerCase() || "un defi amical"} propose par ${villager.role.toLowerCase()} et gagne ${reward.label.toLowerCase()}.`);
+      if (challenge.kind === "race" || challenge.kind === "exploration") openDiscoveryPopup(reward);
     } else {
       showMessage("Defi reussi. L'habitant est impressionne.");
     }
@@ -5600,9 +5910,18 @@ function finishFriendlyChallenge(won, reason = "") {
     playSoftPing();
   } else {
     const runnerWon = reason === "runner";
-    showMessage(runnerWon ? `${villager.role} atteint l'arrivee avant toi.` : "Le temps de la course est termine.");
-    showVillagerBubble(villager, runnerWon ? "J'y suis arrive avant toi. On recommence quand tu veux." : "Ce n'est pas une course contre le temps. On recommencera.", { cooldown: 18, force: true });
+    showMessage(runnerWon ? `${villager.role} atteint l'arrivee avant toi.` : `Le temps du defi « ${challenge.title || "Defi amical"} » est termine.`);
+    showVillagerBubble(villager, runnerWon ? "J'y suis arrive avant toi. On recommence quand tu veux." : "On pourra reprendre ce defi calmement une autre fois.", { cooldown: 18, force: true });
   }
+  state.friendlyChallengeHistory.push({
+    kind: challenge.kind || "race",
+    title: challenge.title || "Course du sentier",
+    objective: challenge.objective || "Atteindre l'arrivee.",
+    won,
+    reward: earnedReward?.label || "",
+    at: new Date().toISOString()
+  });
+  if (state.friendlyChallengeHistory.length > 20) state.friendlyChallengeHistory = state.friendlyChallengeHistory.slice(-20);
   saveGame();
 }
 
@@ -6031,6 +6350,7 @@ function collectDiscovery(item, quiet = false) {
     rememberJournalEvent(`J'ai trouve ${item.label.toLowerCase()} pour la premiere fois.`);
   }
   if (!quiet) noteWalkProgress("discovery", item.label.toLowerCase());
+  if (!quiet) registerFriendlyChallengeDiscovery(item);
   advanceQuest("collectAny", 1);
   getQuestCollectTypes(item).forEach((type) => advanceQuest(type, 1));
   if (isFlowerDiscovery(item)) advanceQuest("collectFlower", 1);
@@ -6060,7 +6380,7 @@ function openDiscoveryPopup(item) {
   ui.discoveryBody.innerHTML = `
     <div class="discovery-popup-item">
       ${getItemIcon(catalogItem, "large")}
-      <div><strong>${catalogItem.label || "Nouvel objet"}</strong><p>${catalogItem.text || "Une trouvaille ajoutée à ton Carnet."}</p></div>
+      <div><strong>${catalogItem.label || "Nouvel objet"}</strong><p>${catalogItem.text || "Une trouvaille ajoutée à ton Carnet."}</p><p><strong>${getItemCategory(catalogItem)}</strong> · ${getItemUse(itemId)}</p></div>
     </div>
     <p class="discovery-popup-note">Ajouté à ton Carnet et à ta collection.</p>
   `;
@@ -6101,6 +6421,7 @@ function updateVillagerChallengeButton(villager) {
   const available = canStartFriendlyChallenge(villager);
   ui.challengeButton.hidden = !available;
   ui.challengeButton.disabled = !available;
+  if (available) ui.challengeButton.textContent = `Defi : ${getFriendlyChallengeDefinition(villager).title}`;
 }
 
 function getFriendlyChallengeDirection(villager) {
@@ -6114,34 +6435,52 @@ function startFriendlyChallenge() {
     showMessage(state.friendlyChallenge ? "Un defi est deja en cours." : "Ce defi sera disponible un peu plus tard.");
     return;
   }
+  const definition = getFriendlyChallengeDefinition(villager);
   const startX = Number.isFinite(villager.homeX) ? villager.homeX : villager.x;
   const direction = getFriendlyChallengeDirection(villager);
-  const targetX = clampToPlayableWorldX(startX + direction * friendlyChallengeDistance);
-  if (Math.abs(targetX - startX) < friendlyChallengeDistance * 0.8) {
+  const targetX = clampToPlayableWorldX(startX + direction * definition.distance);
+  if (definition.distance > 0 && Math.abs(targetX - startX) < definition.distance * 0.8) {
     showMessage("Le chemin est trop court ici. Essaie depuis un autre village.");
     return;
   }
   state.friendlyChallenge = {
+    kind: definition.kind,
+    title: definition.title,
+    objective: definition.objective,
     villageId: villager.villageId,
     villager,
     startX,
     targetX,
-    remaining: friendlyChallengeDurationSeconds,
+    target: definition.target,
+    progress: 0,
+    remaining: definition.duration,
     startedAt: state.time,
     readyAt: state.time + 3,
-    route: createFriendlyChallengeRoute(startX, targetX),
-    runner: createFriendlyChallengeRunner(villager, targetX, direction)
+    route: definition.kind === "race" ? createFriendlyChallengeRoute(startX, targetX) : [],
+    runner: definition.kind === "race" ? createFriendlyChallengeRunner(villager, targetX, direction) : null
   };
-  state.player.x = startX;
+  if (definition.kind === "search") {
+    const hiddenItem = createSearchChallengeItem(state.friendlyChallenge);
+    if (!hiddenItem) {
+      state.friendlyChallenge = null;
+      showMessage("L'objet du defi n'a pas pu etre place. Reessaie un peu plus tard.");
+      return;
+    }
+    state.friendlyChallenge.targetItemId = hiddenItem.id;
+    state.friendlyChallenge.targetX = hiddenItem.x;
+    state.friendlyChallenge.objective = `Retrouver ${hiddenItem.label.toLowerCase()} cache sur le sentier.`;
+  }
+  if (definition.kind === "race" || definition.kind === "exploration") state.player.x = startX;
   state.player.face = direction;
   state.player.vx = 0;
-  state.friendlyChallenge.runner.departAt = state.friendlyChallenge.readyAt;
+  if (state.friendlyChallenge.runner) state.friendlyChallenge.runner.departAt = state.friendlyChallenge.readyAt;
   closeDialog(ui.villagerDialog);
   pendingVillagerConversation = null;
   pendingVillagerHelp = null;
-  setPlayerAction("run", 0.5);
-  showMessage(`Course de ${friendlyChallengeDistanceLabel} : suis les pointilles, saute les petits obstacles et arrive avant l'habitant.`);
-  showVillagerBubble(villager, "Je pars a mon rythme. Rendez-vous a l'arrivee !", { cooldown: 20, force: true });
+  if (definition.kind === "race") setPlayerAction("run", 0.5);
+  const rewardPreview = getFriendlyChallengeReward(state.friendlyChallenge);
+  showMessage(`${state.friendlyChallenge.title} : ${state.friendlyChallenge.objective} Temps : ${definition.duration} s.${rewardPreview ? ` Recompense : ${rewardPreview.label}.` : ""}`);
+  showVillagerBubble(villager, definition.kind === "race" ? "Je pars a mon rythme. Rendez-vous a l'arrivee !" : "Je garde le temps. Bonne recherche !", { cooldown: 20, force: true });
   playSoftPing();
   saveGame();
 }
@@ -6532,6 +6871,7 @@ function buildJournal() {
   const story=renderResidentStories();
   if(story)appendJournalBlock("Souvenirs des habitants",story,"mission-block");
   appendJournalBlock("Missions", renderQuestCard(true), "mission-block");
+  if (state.friendlyChallengeHistory.length) appendJournalBlock("Defis amicaux", renderFriendlyChallengeHistory(), "mission-block");
   appendJournalBlock("Carte", renderMap(), "map-block");
   const rareVisited=state.visitedLandmarks.filter(id=>/^rare-place-\d+$/.test(id)).slice(-12);
   if(rareVisited.length)appendJournalBlock("Lieux rares découverts",rareVisited.map(id=>{
@@ -6555,16 +6895,17 @@ function getLastFoundItem() {
 }
 
 function renderEncyclopedia() {
-  const known = new Set(Object.keys(state.inventory));
+  const known = new Set([...Object.keys(state.inventory), ...state.discoveries.map(baseDiscoveryId)]);
   return `<div class="encyclopedia-grid">${itemCatalog.map((item) => {
     const discovered = known.has(item.id);
     return `
       <article class="encyclopedia-card ${discovered ? "is-known" : "is-unknown"}" ${discovered ? `data-item-id="${item.id}" tabindex="0" role="button"` : ""}>
         <div class="journal-object-image">${discovered ? getItemIcon(item) : getUnknownItemIcon()}</div>
         <strong>${discovered ? item.label : "Objet inconnu"}</strong>
-        <span>${discovered ? `${item.place} - ${getRarityStars(item.rarity)}` : "Silhouette dans le brouillard"}</span>
+        <span>${discovered ? `${getItemCategory(item)} - ${getRarityStars(item.rarity)}` : "Silhouette dans le brouillard"}</span>
         ${discovered ? `<small>Possede : ${state.inventory[item.id] || 0}</small>` : ""}
         <small>${discovered ? getShortItemConditionHint(item) : "Conditions inconnues"}</small>
+        ${discovered ? "<small>Toucher pour examiner</small>" : ""}
       </article>
     `;
   }).join("")}</div>`;
@@ -6577,9 +6918,9 @@ function getShortItemConditionHint(itemOrId) {
 
 function openEncyclopediaDetail(itemId) {
   const item = getCatalogItem(itemId);
-  if (!item || !state.inventory[item.id]) return;
-  const action = getItemAction(item.id);
+  if (!item || !hasCollectedBaseItem(item.id)) return;
   const available = getAvailableItemQuantity(item.id);
+  const actions = available > 0 ? getItemActions(item.id) : [];
   const reserved = getReservedMissionQuantity(item.id);
   ui.encyclopediaDetailTitle.textContent = item.label;
   ui.encyclopediaDetailTitle.dataset.itemId = item.id;
@@ -6587,15 +6928,32 @@ function openEncyclopediaDetail(itemId) {
     <div class="discovery-icon">${getItemIcon(item, "large")}</div>
     <p>${item.text}</p>
     <p><strong>Utilite</strong> ${getItemUse(item.id)}</p>
-    <p><strong>Possede</strong> ${state.inventory[item.id] || 0}${reserved ? ` (${reserved} reserve pour la mission)` : ""}</p>
-    <p><strong>Type</strong> ${getItemUsageStatus(item.id)}</p>
+    <div class="item-detail-grid">
+      <p><strong>Categorie</strong><br>${getItemCategory(item)}</p>
+      <p><strong>Quantite</strong><br>${state.inventory[item.id] || 0}${reserved ? ` (${reserved} reserve)` : ""}</p>
+      <p><strong>Usage</strong><br>${getItemUsageStatus(item.id)}</p>
+      <p><strong>Rarete</strong><br>${getRarityStars(item.rarity)} ${item.rarity || "Commun"}</p>
+    </div>
     <p><strong>Lieu</strong> ${item.place || "Chemin"}</p>
     <p><strong>Conditions d'apparition</strong> ${getItemConditionHint(item)}</p>
-    <p><strong>Rarete</strong> ${getRarityStars(item.rarity)} - ${item.rarity || "Commun"}</p>
     <p><strong>Date de decouverte</strong> ${formatDiscoveryDate(item.id)}</p>
-    ${action ? `<div class="choice-actions item-use-actions"><button class="primary-button" type="button" data-item-action="${action.kind}" ${available < 1 ? "disabled" : ""}>${action.label}</button></div>` : ""}
+    <p class="item-action-note">${getItemActionHint(item)}</p>
+    <div class="choice-actions item-use-actions">
+      ${actions.map((action) => `<button class="primary-button" type="button" data-item-action="${action.kind}" ${available < 1 && action.kind !== "lantern" ? "disabled" : ""}>${action.label}</button>`).join("")}
+      <button class="secondary-button" type="button" data-item-action="keep">Conserver</button>
+    </div>
   `;
   openDialog(ui.encyclopediaDetailDialog);
+}
+
+function getItemActionHint(item) {
+  if (getAvailableItemQuantity(item.id) < 1) return "Tu n'en as plus d'exemplaire disponible. La fiche reste conservee dans le Carnet.";
+  if (getItemActions(item.id).length) return "Une action est disponible ici. Elle sera sauvegardee immediatement.";
+  const label = (item.label || "").toLowerCase();
+  const type = getItemVisualType(item);
+  if (label.includes("graine")) return "Pour planter, retourne sur un endroit libre du chemin principal.";
+  if (type === "flower" || /fruit|baie|pomme/.test(label)) return "Pour offrir cet objet, ouvre cette fiche pres d'un habitant.";
+  return "Aucune action directe pour le moment : conserve-le pour une mission ou la collection.";
 }
 
 function renderVillagers() {
@@ -6637,11 +6995,24 @@ function renderCompanionJournal() {
 }
 
 function renderMap() {
-  const places = ["Foret", "Riviere", "Village", "Montagne", "Clairiere", "Lieu secret"];
+  const regions = biomes.map((region) => ({ id: region.id, label: region.name, icon: getPlaceIcon(region.decor === "village" ? "Village" : region.decor === "mist" ? "Riviere" : "Foret") }));
+  const places = regions.concat([{ id: "secret", label: "Lieux secrets", icon: getPlaceIcon("Lieu secret") }]);
   return `<div class="travel-map">${places.map((place) => {
-    const discovered = state.discoveredPlaces.some((known) => known === place || known.includes(place));
-    return `<div class="map-zone ${discovered ? "is-known" : "is-fog"}"><span>${getPlaceIcon(place)}</span><strong>${place}</strong></div>`;
+    const discovered = place.id === "secret"
+      ? state.discoveredPlaces.some((known) => known.includes("secret") || known.includes("Jardin") || known.includes("Vallee"))
+      : state.discoveredRegions.includes(place.id);
+    return `<div class="map-zone ${discovered ? "is-known" : "is-fog"}"><span>${place.icon}</span><strong>${discovered ? place.label : "Region inconnue"}</strong></div>`;
   }).join("")}</div>`;
+}
+
+function renderFriendlyChallengeHistory() {
+  return `<div class="challenge-history">${state.friendlyChallengeHistory.slice(-8).reverse().map((entry) => `
+    <article>
+      <strong>${entry.title || "Defi amical"}</strong>
+      <span>${entry.won ? "Reussi" : "A retenter"}</span>
+      <p>${entry.objective || "Objectif du chemin"}${entry.reward ? ` Recompense : ${entry.reward}.` : ""}</p>
+    </article>
+  `).join("")}</div>`;
 }
 
 function renderQuestCard(compact = false) {
@@ -6875,6 +7246,7 @@ function resetGame() {
   state.villagerLastMet = {};
   state.villagerMemory = {};
   state.discoveredPlaces = [];
+  state.discoveredRegions = [];
   state.visitedLandmarks = [];
   state.visitedVillages = [];
   state.journalEvents = [];
@@ -6897,6 +7269,7 @@ function resetGame() {
   state.activeSecretPortal = null;
   state.friendlyChallenge = null;
   state.friendlyChallengeCooldowns = {};
+  state.friendlyChallengeHistory = [];
   state.shelter = null;
   state.weatherCycleOffset = 0;
   state.nextWeatherChangeAt = 150;
@@ -6907,6 +7280,7 @@ function resetGame() {
   updateVillageActivityControls();
   state.itemEffects = { scoutUntil: 0, scoutTargetId: "", strideUntil: 0, glowUntil: 0, compassUntil: 0, compassTargetX: 0, compassLabel: "" };
   state.equipment = { lanternOn: false };
+  state.plantedItems = [];
   state.activeSecretWorld = null;
   state.lastSecretWorldId = "";
   state.lastSecretEdgeMessageAt = 0;
@@ -6919,6 +7293,7 @@ function resetGame() {
   state.chapter = 1;
   state.weather = "clear";
   state.cinematicPlayed = false;
+  lastRegionId = "";
   state.player.rest = 0;
   state.moveMode = "walk";
   joystick.mode = "walk";
@@ -6948,6 +7323,7 @@ function saveGame() {
     villagerLastMet: state.villagerLastMet,
     villagerMemory: state.villagerMemory,
     discoveredPlaces: state.discoveredPlaces,
+    discoveredRegions: state.discoveredRegions,
     visitedLandmarks: state.visitedLandmarks,
     visitedVillages: state.visitedVillages,
     journalEvents: state.journalEvents,
@@ -6971,6 +7347,7 @@ function saveGame() {
     activeSecretPortal: state.activeSecretPortal,
     friendlyChallenge: state.friendlyChallenge,
     friendlyChallengeCooldowns: state.friendlyChallengeCooldowns,
+    friendlyChallengeHistory: state.friendlyChallengeHistory,
     shelter: state.shelter,
     weatherCycleOffset: state.weatherCycleOffset,
     nextWeatherChangeAt: state.nextWeatherChangeAt,
@@ -6980,6 +7357,7 @@ function saveGame() {
     nextVillageActivityAt: state.nextVillageActivityAt,
     itemEffects: state.itemEffects,
     equipment: state.equipment,
+    plantedItems: state.plantedItems,
     activeSecretWorld: state.activeSecretWorld,
     lastSecretWorldId: state.lastSecretWorldId,
     recentDiscoveryNotice: state.recentDiscoveryNotice,
@@ -7024,6 +7402,9 @@ function loadGame() {
       ? Object.fromEntries(Object.entries(payload.villagerMemory).map(([key, value]) => [key, normalizeVillagerMemory(value)]))
       : {};
     state.discoveredPlaces = Array.isArray(payload.discoveredPlaces) ? payload.discoveredPlaces : [];
+    state.discoveredRegions = Array.isArray(payload.discoveredRegions)
+      ? payload.discoveredRegions.filter((id) => biomes.some((region) => region.id === id))
+      : [];
     state.visitedLandmarks = Array.isArray(payload.visitedLandmarks) ? payload.visitedLandmarks.filter((id) => typeof id === "string") : [];
     state.visitedVillages = Array.isArray(payload.visitedVillages) ? payload.visitedVillages : [];
     state.journalEvents = Array.isArray(payload.journalEvents) ? payload.journalEvents : [];
@@ -7058,13 +7439,16 @@ function loadGame() {
     state.friendlyChallengeCooldowns = payload.friendlyChallengeCooldowns && typeof payload.friendlyChallengeCooldowns === "object"
       ? Object.fromEntries(Object.entries(payload.friendlyChallengeCooldowns).filter(([, value]) => Number.isFinite(value) && value >= state.time))
       : {};
+    state.friendlyChallengeHistory = Array.isArray(payload.friendlyChallengeHistory)
+      ? payload.friendlyChallengeHistory.filter((entry) => entry && typeof entry === "object").slice(-20)
+      : [];
     state.friendlyChallenge = payload.friendlyChallenge && typeof payload.friendlyChallenge === "object"
       && typeof payload.friendlyChallenge.villageId === "string"
       && Number.isFinite(payload.friendlyChallenge.targetX)
       && Number.isFinite(payload.friendlyChallenge.remaining)
       && payload.friendlyChallenge.remaining > 0
       && payload.friendlyChallenge.villager && typeof payload.friendlyChallenge.villager === "object"
-      ? payload.friendlyChallenge
+      ? { kind: "race", title: "Course du sentier", objective: "Atteindre l'arrivee avant l'habitant.", target: 1, progress: 0, ...payload.friendlyChallenge }
       : null;
     state.itemEffects = payload.itemEffects && typeof payload.itemEffects === "object"
       ? {
@@ -7078,6 +7462,9 @@ function loadGame() {
       }
       : { scoutUntil: 0, scoutTargetId: "", strideUntil: 0, glowUntil: 0, compassUntil: 0, compassTargetX: 0, compassLabel: "" };
     state.equipment = payload.equipment && typeof payload.equipment === "object" ? { lanternOn: Boolean(payload.equipment.lanternOn) } : { lanternOn: false };
+    state.plantedItems = Array.isArray(payload.plantedItems)
+      ? payload.plantedItems.filter((plant) => plant && Number.isFinite(plant.x) && typeof plant.itemId === "string").slice(-80)
+      : [];
     state.activeSecretWorld = payload.activeSecretWorld && typeof payload.activeSecretWorld === "object" ? payload.activeSecretWorld : null;
     state.lastSecretWorldId = typeof payload.lastSecretWorldId === "string" ? payload.lastSecretWorldId : "";
     state.lastSecretEdgeMessageAt = 0;
@@ -8202,6 +8589,8 @@ ui.encyclopediaDetailBody.addEventListener("click", (event) => {
   if (action.dataset.itemAction === "compass") useCompassItem(ui.encyclopediaDetailTitle.dataset.itemId);
   if (action.dataset.itemAction === "lantern") toggleLanternEquipment();
   if (action.dataset.itemAction === "gift") offerGiftItem(ui.encyclopediaDetailTitle.dataset.itemId);
+  if (action.dataset.itemAction === "plant") plantItem(ui.encyclopediaDetailTitle.dataset.itemId);
+  if (action.dataset.itemAction === "keep") closeDialog(ui.encyclopediaDetailDialog);
 });
 ui.companionSelectGrid.addEventListener("click", (event) => {
   const option = event.target.closest("[data-companion-species]");
