@@ -688,6 +688,7 @@ function normalizeVillagerMemory(raw = {}) {
     visits: Number.isFinite(raw.visits) ? raw.visits : 0,
     relation: Number.isFinite(raw.relation) ? raw.relation : 0,
     helpCount: Number.isFinite(raw.helpCount) ? raw.helpCount : 0,
+    hideRetry: raw.hideRetry === true,
     quickTalks: Number.isFinite(raw.quickTalks) ? raw.quickTalks : 0,
     choices: raw.choices && typeof raw.choices === "object" ? raw.choices : {},
     gifts: Array.isArray(raw.gifts) ? raw.gifts : [],
@@ -747,8 +748,9 @@ function canOfferVillageActivity(villager) {
 
 function createVillageActivityOffer(villager) {
   if(!canOfferVillageActivity(villager))return null;
+  const retry=getVillagerMemory(villager).hideRetry;
   state.nextVillageActivityAt=state.time+150;
-  if(Math.random()>.16)return null;
+  if(!retry && Math.random()>.16)return null;
   const village=getVillageForResident(villager);
   if(!village)return null;
   const spots=getVillageActivitySpots(village);
@@ -756,7 +758,7 @@ function createVillageActivityOffer(villager) {
   const pool=fresh.length?fresh:spots;
   if(!pool.length)return null;
   const spot=pool[Math.floor(Math.random()*pool.length)];
-  if(Math.random()>=.5)return createLostVillageActivityOffer(villager,village,spot);
+  if(!retry && Math.random()>=.5)return createLostVillageActivityOffer(villager,village,spot);
   return {id:"hide-and-seek",activityOffer:{kind:"hide",villageId:villager.villageId,villageX:village.x,homeX:villager.homeX,spot},
     prompt:"On joue a cache-cache ? Je me cache pres du village.",
     choices:[{id:"accept",text:"Oui, je vais te chercher."},{id:"refuse",text:"Une autre fois, merci."}]};
@@ -780,15 +782,18 @@ function handleVillageActivityChoice(villager,conversation,choice) {
   }
   const offer=conversation.activityOffer;
   if(!offer)return false;
+  getVillagerMemory(villager).hideRetry=false;
   pendingVillagerConversation=null;
   pendingVillagerHelp=null;
   closeDialog(ui.villagerDialog);
   state.villageActivityCooldowns[villager.villageId]=state.time+600;
   state.nextVillageActivityAt=state.time+240;
   if(choice.id==="accept" && !state.villageActivity && !state.friendlyChallenge && !state.activeQuest) {
-    state.villageActivity={...offer,stage:offer.kind==="hide"?"preparing":"searching",x:offer.homeX,readyAt:state.time+2.5,expiresAt:state.time+(offer.kind==="hide"?240:600)};
+    state.villageActivity={...offer,stage:offer.kind==="hide"?"preparing":"searching",x:offer.homeX,startedAt:state.time,readyAt:state.time+3,expiresAt:state.time+(offer.kind==="hide"?243:600)};
     state.villageActivityLastSpot[villager.villageId]=offer.spot.id;
-    showMessageFor(offer.kind==="hide"?"Ferme les yeux un instant…":"Merci. Reviens me voir quand tu l'auras retrouvée.",2200);
+    if(offer.kind==="hide") {
+      clearTimeout(messageTimer);ui.message.classList.remove("is-visible");
+    } else showMessageFor("Merci. Reviens me voir quand tu l'auras retrouvée.",2200);
   } else showMessageFor("Une autre fois, sans souci.",1800);
   updateVillageActivityControls();
   saveGame();
@@ -810,14 +815,23 @@ function finishVillageActivity(message="") {
 function updateVillageActivity(dt) {
   const activity=state.villageActivity;
   if(!activity)return;
+  if(activity.kind==="hide" && activity.stage!=="returning" && state.time>=activity.expiresAt) {
+    getVillagerMemory({villageId:activity.villageId}).hideRetry=true;
+    state.villageActivityCooldowns[activity.villageId]=state.time;
+    state.nextVillageActivityAt=state.time;
+    finishVillageActivity("Temps ecoule. Tu peux rejouer avec l'habitant.");return;
+  }
   if(isInSecretWorld() || Math.abs(state.player.x-activity.villageX)>1300
-    || state.time>activity.expiresAt || state.activeQuest || state.friendlyChallenge) {
+    || (activity.kind!=="hide" && state.time>activity.expiresAt) || state.activeQuest || state.friendlyChallenge) {
     finishVillageActivity("La petite activité se termine. L'habitant rentre au village.");return;
   }
-  if(activity.stage==="preparing" && state.time>=activity.readyAt) {
-    activity.stage="searching";activity.x=activity.spot.x;
-    showMessageFor("Cherche pres des maisons.",2200);
-    saveGame();
+  if(activity.stage==="preparing") {
+    const progress=Math.max(0,Math.min(1,(state.time-(activity.startedAt ?? activity.readyAt-3))/3));
+    activity.x=activity.homeX+(activity.spot.x-activity.homeX)*progress;
+    if(state.time>=activity.readyAt) {
+      activity.stage="searching";activity.x=activity.spot.x;
+      saveGame();
+    }
   }
   if(activity.stage==="returning") {
     const dx=activity.homeX-activity.x;
@@ -2149,88 +2163,6 @@ function drawBackground(colors) {
   ctx.restore();
 }
 
-function drawRegionAtmosphere(colors) {
-  if (isInSecretWorld()) return;
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  const region = getBiome(state.player.x);
-  ctx.save();
-  if (region.decor === "mist") {
-    ctx.globalAlpha = 0.17;
-    for (let i = -1; i < 5; i += 1) {
-      const drift = (state.time * (6 + i) + state.camera.x * 0.025) % (w + 280);
-      drawEllipse(drift - 180, h * (0.35 + i * 0.09), 190, 34, colors.accent);
-    }
-  } else if (region.decor === "stars") {
-    for (let i = 0; i < 34; i += 1) {
-      const x = (i * 97 - state.camera.x * 0.04 + w * 3) % w;
-      const y = h * 0.2 + (i * 47) % Math.max(80, Math.floor(h * 0.47));
-      ctx.globalAlpha = 0.16 + Math.abs(Math.sin(state.time * 1.5 + i)) * 0.48;
-      drawEllipse(x, y, 1.4 + hashNumber(i + 3) * 2.1, 1.4 + hashNumber(i + 3) * 2.1, colors.accent);
-    }
-  } else if (region.decor === "village") {
-    for (let i = 0; i < 9; i += 1) {
-      const x = (i * 181 - state.camera.x * 0.08 + w * 4) % w;
-      const y = h * (0.32 + hashNumber(i + 18) * 0.31);
-      const glow = ctx.createRadialGradient(x, y, 1, x, y, 22);
-      glow.addColorStop(0, "rgba(255, 224, 122, 0.58)");
-      glow.addColorStop(1, "rgba(255, 224, 122, 0)");
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(x, y, 22, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else {
-    ctx.globalAlpha = 0.2;
-    for (let i = 0; i < 6; i += 1) {
-      const x = (i * 260 - state.camera.x * 0.06 + w * 4) % w;
-      drawEllipse(x, h * 0.48 + Math.sin(i) * 16, 4, 4, colors.accent);
-    }
-  }
-  ctx.restore();
-}
-
-function drawRegionGroundDecor() {
-  if (isInSecretWorld()) return;
-  const start = Math.floor((state.camera.x - 120) / 190) * 190;
-  const end = state.camera.x + window.innerWidth + 160;
-  ctx.save();
-  for (let x = start; x <= end; x += 190) {
-    const region = getBiome(x);
-    const seed = Math.floor(x / 190);
-    const y = getWalkSurfaceY(x) - 18;
-    if (region.decor === "forest") {
-      drawEllipse(x + 32, y - 9, 10, 6, seed % 2 ? "#d38a6c" : "#e5c36b");
-      ctx.fillStyle = "#ead8a2";
-      ctx.fillRect(x + 29, y - 5, 6, 10);
-      drawEllipse(x + 66, y + 1, 13, 5, "rgba(110, 137, 61, 0.72)");
-    } else if (region.decor === "village") {
-      ctx.strokeStyle = "rgba(100, 67, 38, 0.72)";
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(x + 10, y - 15);
-      ctx.lineTo(x + 10, y + 7);
-      ctx.moveTo(x + 52, y - 15);
-      ctx.lineTo(x + 52, y + 7);
-      ctx.moveTo(x + 5, y - 8);
-      ctx.lineTo(x + 58, y - 8);
-      ctx.stroke();
-      drawEllipse(x + 80, y - 3, 6, 6, seed % 2 ? "#e9a0a8" : "#f0cf70");
-    } else if (region.decor === "mist") {
-      drawEllipse(x + 28, y, 23, 9, "#73827c");
-      drawEllipse(x + 16, y - 4, 10, 4, "rgba(247,243,223,0.2)");
-      drawEllipse(x + 82, y + 2, 14, 6, "#64746f");
-    } else {
-      const pulse = 0.55 + Math.sin(state.time * 2 + seed) * 0.2;
-      ctx.globalAlpha = pulse;
-      drawEllipse(x + 32, y - 5, 8, 8, "#f6cf36");
-      drawEllipse(x + 25, y - 5, 7, 4, "#d89ab2");
-      drawEllipse(x + 39, y - 5, 7, 4, "#d89ab2");
-      ctx.globalAlpha = 1;
-    }
-  }
-  ctx.restore();
-}
 
 function drawPlantedItems() {
   if (!Array.isArray(state.plantedItems) || !state.plantedItems.length || isInSecretWorld()) return;
@@ -2456,7 +2388,6 @@ function drawWorldObjects() {
   const interactionTarget = getInteractionTarget(visibleDiscoveries, visibleResidents);
 
   drawCoverForeground();
-  drawRegionGroundDecor();
   drawPlantedItems();
 
   getProceduralVillages().forEach((village) => {
@@ -3991,7 +3922,7 @@ function drawVillager(x, villager) {
 
 function drawVillagerCharacter(x, y, villager) {
   const seed = Math.abs(hashNumber(villager.role.length + (villager.villageActivityActor ? villager.homeX : x)));
-  const walk = villager.villageActivityActor && state.villageActivity?.stage === "returning" ? Math.sin(state.time * 8) * 9 : 0;
+  const walk = villager.villageActivityActor && ["preparing","returning"].includes(state.villageActivity?.stage) ? Math.sin(state.time * 8) * 9 : 0;
   const bodyColors = ["#6a8a80", "#8b6840", "#6f7f4f", "#4f7f99", "#7f6a8a"];
   const body = villager.specialCompanionGiver ? "#6f7f4f" : bodyColors[Math.floor(seed * bodyColors.length) % bodyColors.length];
   const skin = "#e5b878";
@@ -4431,7 +4362,29 @@ function drawContextualInteraction() {
   ctx.restore();
 }
 
+function getActivityHudPosition() {
+  const hud=document.querySelector(".hud").getBoundingClientRect();
+  return {x:window.innerWidth/2,y:Math.max(36,hud.bottom+30)};
+}
+
+function drawVillageActivityHud() {
+  const activity=state.villageActivity;
+  if(activity?.kind!=="hide" || activity.stage==="returning" || isInSecretWorld())return;
+  const {x,y}=getActivityHudPosition();
+  const preparing=activity.stage==="preparing";
+  const label=preparing ? `Il se cache... ${Math.max(1,Math.ceil(activity.readyAt-state.time))}`
+    : `Retrouve le villageois !  ${Math.max(0,Math.ceil(activity.expiresAt-state.time))} s`;
+  ctx.save();
+  ctx.fillStyle="rgba(20,34,33,0.9)";
+  const width=Math.min(310,window.innerWidth-24);
+  roundedRect(x-width/2,y-20,width,40,8);ctx.fill();
+  ctx.fillStyle="#fff1bc";ctx.font="800 14px Nunito";ctx.textAlign="center";
+  ctx.fillText(label,x,y+5,width-16);
+  ctx.restore();
+}
+
 function drawFriendlyChallengeHud() {
+  drawVillageActivityHud();
   const challenge = state.friendlyChallenge;
   if (!challenge || isInSecretWorld()) return;
   if (challenge.readyAt > state.time || state.time < challenge.readyAt + 0.7) {
@@ -4442,16 +4395,16 @@ function drawFriendlyChallengeHud() {
     ctx.strokeStyle = "#142221";
     ctx.lineWidth = 4;
     const count = challenge.readyAt > state.time ? String(Math.ceil(challenge.readyAt - state.time)) : "GO";
-    ctx.strokeText(count, window.innerWidth / 2, window.innerHeight * 0.3);
-    ctx.fillText(count, window.innerWidth / 2, window.innerHeight * 0.3);
+    const {x,y}=getActivityHudPosition();
+    ctx.strokeText(count,x,y);
+    ctx.fillText(count,x,y);
     ctx.restore();
     return;
   }
   if (challenge.kind === "collection" || challenge.kind === "search") {
     const remaining = Math.max(0, Math.ceil(challenge.remaining));
     const progress = Math.min(challenge.target || 1, challenge.progress || 0);
-    const x = window.innerWidth * 0.5;
-    const y = 34;
+    const {x,y}=getActivityHudPosition();
     ctx.save();
     ctx.translate(x, y);
     ctx.fillStyle = "rgba(20, 34, 33, 0.82)";
@@ -4472,8 +4425,7 @@ function drawFriendlyChallengeHud() {
   const progressAt = (x) => Math.max(0, Math.min(1, ((x - startX) * direction) / courseLength));
   const playerProgress = Math.round(progressAt(state.player.x) * 100);
   const runnerProgress = Math.round(progressAt(challenge.runner?.x ?? startX) * 100);
-  const x = window.innerWidth * 0.5;
-  const y = 34;
+  const {x,y}=getActivityHudPosition();
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = "rgba(20, 34, 33, 0.8)";
@@ -4512,7 +4464,7 @@ function drawFriendlyChallengeHud() {
 function drawCompassHint() {
   const direction = Math.sign(state.itemEffects.compassTargetX - state.player.x) || state.player.face || 1;
   const x = window.innerWidth * 0.5;
-  const y = 92;
+  const y = state.friendlyChallenge || state.villageActivity?.kind==="hide" ? getActivityHudPosition().y+58 : 92;
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = "rgba(20, 34, 33, 0.76)";
@@ -4559,7 +4511,6 @@ function drawSecretWorldHud() {
 function draw() {
   const colors = biomeColors();
   drawBackground(colors);
-  drawRegionAtmosphere(colors);
   ctx.save();
   ctx.translate(window.innerWidth / 2, window.innerHeight * 0.58);
   ctx.scale(state.camera.zoom, state.camera.zoom);

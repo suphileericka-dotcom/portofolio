@@ -97,11 +97,11 @@ async function main() {
         const colors=biomeColors();state.time=100;state.camera.x=1700;
         const snapshot=()=>{
           ctx.clearRect(0,0,canvas.width,canvas.height);
-          drawParallaxTrees(colors);drawRegionGroundDecor();
+          drawParallaxTrees(colors);
           return canvas.toDataURL();
         };
         state.player.x=1799;const before=snapshot();state.player.x=1801;
-        const stableScenery=before===snapshot();
+        const stableScenery=before===snapshot() && typeof drawRegionGroundDecor==='undefined' && typeof drawRegionAtmosphere==='undefined';
         state.player.x=860;state.camera.x=500;state.inventory.leaf=3;
         state.itemEffects.scoutActivatedByPlayer=false;state.itemEffects.scoutUntil=0;
         state.worldDiscoveries={};state.discoveryRespawns={};state.discoveryVacancies={};

@@ -15,7 +15,9 @@ async function main(){
   const browser=await chromium.launch({headless:true});
   try{
     for(const viewport of [{width:1280,height:800},{width:390,height:844},{width:844,height:390}]){
-      const context=await browser.newContext({viewport,isMobile:viewport.width<900,hasTouch:viewport.width<900,serviceWorkers:'block',reducedMotion:'reduce'});
+      const context=await browser.newContext({viewport,isMobile:viewport.width<900,hasTouch:viewport.width<900,
+        ...(viewport.width<900?{userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'}:{}),
+        serviceWorkers:'block',reducedMotion:'reduce'});
       const page=await context.newPage(),errors=[];
       page.on('pageerror',e=>errors.push(e.message));
       await page.route('https://**/*',route=>route.abort());
@@ -36,7 +38,10 @@ async function main(){
         if(!actualOffer?.activityOffer)throw Error('No real offer in resident dialogue');
         handleVillagerChoice(0);
         const preparing=state.villageActivity?.stage==='preparing';
-        state.time+=3;updateVillageActivity(.1);
+        state.time+=1.5;updateVillageActivity(1.5);
+        const moving=getResidentForVillage(village);
+        const walked=moving.x!==host.homeX && moving.x!==state.villageActivity.spot.x && !moving.concealed;
+        state.time+=1.5;updateVillageActivity(1.5);
         const hidden=getResidentForVillage(village);
         const relocated=hidden.concealed && hidden.x!==hidden.homeX;
         state.player.x=hidden.x+100;findHiddenResident(hidden);
@@ -68,10 +73,45 @@ async function main(){
         handleVillageActivityChoice(host,refused,refused.choices[1]);
         const refusedSafe=!state.villageActivity && !canOfferVillageActivity(host);
         state.player.x=host.homeX;draw();
-        return {preparing,relocated,notAuto,returning,home,cooldown,anotherSpot,reloadSafe,paused,departureSafe,questPriority,challengePriority,refusedSafe,target:target?.kind};
+        return {preparing,walked,relocated,notAuto,returning,home,cooldown,anotherSpot,reloadSafe,paused,departureSafe,questPriority,challengePriority,refusedSafe,target:target?.kind};
       });
       assert.equal(result.target,'hidden-resident');
       for(const [key,value]of Object.entries(result))if(key!=='target')assert.equal(value,true,key);
+      const hud=await page.evaluate(()=>{
+        const village=getVillageByIndex(0),host=getResidentForVillage(village);
+        state.player.x=host.homeX;state.camera.x=host.homeX-window.innerWidth*.5;
+        state.nextVillageActivityAt=0;state.villageActivityCooldowns={};
+        const random=Math.random;Math.random=()=>0;
+        const offer=createVillageActivityOffer(host);Math.random=random;
+        handleVillageActivityChoice(host,offer,offer.choices[0]);
+        const labels=[],fill=ctx.fillText;
+        ctx.fillText=function(text,...args){labels.push(text);return fill.call(this,text,...args);};
+        for(let i=0;i<3;i++){drawVillageActivityHud();state.time+=1;updateVillageActivity(1);}
+        drawVillageActivityHud();ctx.fillText=fill;
+        const countdown=['3','2','1'].every((n,i)=>labels[i]===`Il se cache... ${n}`);
+        const search=labels[3]==='Retrouve le villageois !  240 s';
+        const position=getActivityHudPosition(),top=document.querySelector('.hud').getBoundingClientRect();
+        const pad=document.getElementById('mobilePad').getBoundingClientRect();
+        const clearTop=position.y-20>top.bottom;
+        const clearPad=position.y+20<pad.top || pad.width===0;
+        draw();return {countdown,search,clearTop,clearPad};
+      });
+      for(const [key,value]of Object.entries(hud))assert.equal(value,true,`HUD: ${key}`);
+      fs.mkdirSync(path.join(root,'.tools','village'),{recursive:true});
+      await page.screenshot({path:path.join(root,'.tools','village',`hide-search-${viewport.width}.png`)});
+      const retry=await page.evaluate(()=>{
+        const village=getVillageByIndex(0),host=getResidentForVillage(village);
+        state.time=state.villageActivity.expiresAt;updateVillageActivity(.1);
+        const ended=!state.villageActivity && getResidentForVillage(village).x===host.homeX;
+        saveGame();loadGame();
+        const random=Math.random;Math.random=()=>.99;
+        const offer=createVillageActivityOffer(host);Math.random=random;
+        const retryOffered=offer?.activityOffer.kind==='hide';
+        handleVillageActivityChoice(host,offer,offer.choices[0]);
+        const restarted=state.villageActivity?.stage==='preparing';
+        finishVillageActivity();return {ended,retryOffered,restarted};
+      });
+      for(const [key,value]of Object.entries(retry))assert.equal(value,true,`retry: ${key}`);
       const lost=await page.evaluate(()=>{
         state.player.x=world.firstRouteEnd+520+410;state.camera.x=world.firstRouteEnd+320;state.chapter=4;
         state.activeQuest=null;state.pendingQuestReward=null;state.friendlyChallenge=null;
