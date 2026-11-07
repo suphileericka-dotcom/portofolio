@@ -15,7 +15,7 @@ async function main(){
   const browser=await chromium.launch({headless:true});
   try{
     for(const viewport of [{width:1280,height:800},{width:390,height:844},{width:844,height:390}]){
-      const context=await browser.newContext({viewport,isMobile:viewport.width<900,hasTouch:viewport.width<900,serviceWorkers:'block'});
+      const context=await browser.newContext({viewport,isMobile:viewport.width<900,hasTouch:viewport.width<900,serviceWorkers:'block',reducedMotion:'reduce'});
       const page=await context.newPage(),errors=[];
       page.on('pageerror',e=>errors.push(e.message));
       await page.route('https://**/*',route=>route.abort());

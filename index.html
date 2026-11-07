@@ -92,7 +92,7 @@
       <small id="regionBannerSubtitle"></small>
     </aside>
     <aside id="missionTracker" class="mission-tracker" aria-live="polite"></aside>
-        <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.34</aside>
+        <aside id="versionBadge" class="version-badge" aria-label="Version du jeu">Version 1.0.35</aside>
     <section id="cinematic" class="cinematic" aria-live="polite">
       <div class="cinematic-frame">
         <p id="cinematicText"></p>
@@ -251,8 +251,7 @@
         </section>
         <section class="guide-section">
           <h3>&#127918; Comment jouer</h3>
-          <p>Explore librement le Bosquet. Certaines choses sont visibles tout de suite, d'autres demandent de regarder attentivement autour de toi. Rien ne presse.</p>
-          <p>Parle a l'habitant de chaque village, accomplis les missions recues et reviens parfois dans les endroits connus : le Bosquet peut changer.</p>
+          <p>Explore, rencontre les habitants et accomplis leurs missions.</p>
         </section>
         <section class="guide-section guide-controls">
           <h3>&#128241; Téléphone et tablette</h3>
@@ -263,29 +262,17 @@
             <span class="pad-action guide-pad-action guide-pad-companion is-locked" aria-hidden="true"><svg class="control-icon" viewBox="0 0 32 32"><use href="#companionIcon"/></svg></span>
           </div>
           <dl class="guide-control-list">
-            <div><dt>Joystick</dt><dd>Le joystick apparaît en bas à gauche. Fais glisser la boule à gauche ou à droite pour te déplacer.</dd></div>
-            <div><dt>Allure</dt><dd>Touche le bouton Marche ou Course au centre du joystick pour choisir ton rythme.</dd></div>
-            <div><dt>Saut</dt><dd>Touche le bouton avec le personnage qui saute, au-dessus du joystick.</dd></div>
-            <div><dt>Compagnon</dt><dd>Touche la patte à droite du joystick pour cacher ton compagnon, puis le faire revenir.</dd></div>
-            <div><dt>Interaction</dt><dd>Approche une enveloppe, un objet ou un habitant, puis touche près de ton personnage lorsqu'une action apparaît.</dd></div>
-            <div><dt>Aide</dt><dd>Après deux minutes sans avancer, la main indique un objet proche ou le mouvement à faire.</dd></div>
+            <div><dt>Joystick</dt><dd>Déplacement.</dd></div>
+            <div><dt>Allure</dt><dd>Marche ou course.</dd></div>
+            <div><dt>Saut</dt><dd>Franchit un obstacle.</dd></div>
+            <div><dt>Compagnon</dt><dd>Affiche ou masque le compagnon.</dd></div>
+            <div><dt>Interaction</dt><dd>Approche un objet ou un habitant. L'action disponible apparaît.</dd></div>
           </dl>
         </section>
-        <section class="guide-section guide-desktop-controls">
-          <h3>&#128187; Ordinateur</h3>
-          <dl class="guide-control-list">
-            <div><dt>ZQSD / WASD / Flèches</dt><dd>Déplacement gauche-droite. Il n'y a pas de joystick sur ordinateur.</dd></div>
-            <div><dt>Shift</dt><dd>Bascule entre Marche et Course. Le mode reste actif.</dd></div>
-            <div><dt>Espace / Z / W / Fleche haut</dt><dd>Saut.</dd></div>
-            <div><dt>C</dt><dd>Rappelle ou fait revenir le compagnon.</dd></div>
-            <div><dt>E</dt><dd>Interagir avec un objet, une enveloppe ou un habitant.</dd></div>
-            <div><dt>Echap</dt><dd>Met la promenade en pause.</dd></div>
-          </dl>
-        </section>
-        <section class="guide-section"><h3>&#127960; Villages</h3><p>Chaque village possede son habitant. Prends le temps de discuter : certaines conversations sont simples, d'autres menent naturellement a une vraie mission.</p><p>Cache-cache : après une courte préparation, l’habitant se cache autour du village. Explore près des maisons, du jardin et du grand arbre : sa tête dépasse parfois et quelques feuilles remuent. Approche-toi de cet indice, puis touche près de ton personnage lorsque « Appeler doucement » apparaît, ou appuie sur E au clavier. L’habitant ressort et rentre chez lui. Pour arrêter, utilise « Abandonner l’activité du village » dans Options.</p></section>
-        <section class="guide-section"><h3>Compagnon</h3><p>Ton compagnon marche pres de toi et te rejoint lorsque tu cours. Sur mobile, touche la patte du joystick pour le cacher, puis touche-la a nouveau pour le faire revenir. Sur ordinateur, utilise la touche C.</p></section>
-        <section class="guide-section"><h3>&#128269; Exploration</h3><p>Tout n'est pas place au milieu du chemin. Un passage discret, un element du decor ou un chemin secondaire peut meriter un detour. Le Carnet garde la trace de tes trouvailles.</p></section>
-        <section class="guide-section"><h3>&#127783; Monde et meteo</h3><p>Le Bosquet evolue avec le temps, la meteo et les saisons. La pluie, la nuit ou une nouvelle visite peuvent changer l'ambiance et les possibilites de decouverte.</p></section>
+        <section class="guide-section"><h3>&#127960; Villages</h3><p>Chaque village possède son identité, ses habitants et ses activités.</p><p>Cache-cache : cherche la tête qui dépasse et les feuilles qui bougent près des maisons.</p></section>
+        <section class="guide-section"><h3>Compagnon</h3><p>Ton compagnon marche près de toi et te rejoint lorsque tu cours.</p></section>
+        <section class="guide-section"><h3>&#128269; Exploration</h3><p>Le Carnet conserve les objets et les lieux découverts.</p></section>
+        <section class="guide-section"><h3>&#127783; Monde et météo</h3><p>Le temps, la météo et les saisons évoluent.</p></section>
       </form>
     </dialog>
 
@@ -322,7 +309,7 @@
   <script src="script.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js?v=1.0.34").then((registration) => {
+      navigator.serviceWorker.register("sw.js?v=1.0.35").then((registration) => {
         registration.update();
         if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }).catch(() => {});

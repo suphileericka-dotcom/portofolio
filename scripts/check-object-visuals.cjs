@@ -39,7 +39,7 @@ async function main() {
   fs.mkdirSync(path.join(root,'.tools','objects'),{recursive:true});
   try {
     for (const viewport of [{width:1280,height:800},{width:390,height:844},{width:844,height:390}]) {
-      const context = await browser.newContext({viewport,isMobile:viewport.width<900,hasTouch:viewport.width<900,serviceWorkers:'block'});
+      const context = await browser.newContext({viewport,isMobile:viewport.width<900,hasTouch:viewport.width<900,serviceWorkers:'block',reducedMotion:'reduce'});
       const page = await context.newPage();
       const errors = [];
       page.on('pageerror',error => errors.push(error.message));
@@ -82,6 +82,8 @@ async function main() {
         state.discoveries = itemCatalog.map(item=>item.id);
         buildJournal();
         const journalCount = ui.journalList.querySelectorAll('[data-object-visual]').length;
+        delete state.inventory['item-9'];
+        state.discoveries = state.discoveries.filter(id => baseDiscoveryId(id) !== 'item-9');
         const collected = {...itemCatalog.find(item=>item.id==='item-9'),id:makeId('item-9',990),x:state.player.x};
         if(!collectDiscovery(collected)) throw Error('Collection failed');
         const collectedId = ui.discoveryBody.querySelector('[data-object-visual]')?.dataset.objectVisual;

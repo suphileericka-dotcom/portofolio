@@ -1,11 +1,12 @@
 {
   "name": "bosquet-lent",
-  "version": "1.0.34",
+  "version": "1.0.35",
   "private": true,
   "description": "Jeu contemplatif solo.",
   "scripts": {
     "check": "node --check script.js",
     "check:tester": "node scripts/check-tester-improvements.cjs",
+    "check:villages": "node scripts/check-village-prototype.cjs",
     "build": "node scripts/build.js",
     "cap:sync": "npm run build && npx cap sync",
     "android:sync": "npm run build && npx cap sync android",

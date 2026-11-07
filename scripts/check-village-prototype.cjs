@@ -36,16 +36,25 @@ async function main() {
         const resident=getResidentForVillage(village);
         const identity={name:village.name,role:resident.role,homeX:resident.homeX,villageId:resident.villageId};
         const signGap=layout.houses[0].x-layout.houses[0].width/2-(layout.signX+60);
-        const variants=Array.from({length:8},(_,i)=>getVillagePrototypeLayout(getVillageByIndex(i)));
+        const villages=Array.from({length:12},(_,i)=>getVillageByIndex(i));
+        const variants=villages.map(getVillagePrototypeLayout);
         const varied=variants.every(l=>new Set(l.houses.map(h=>h.type)).size===4 && l.houses.every(h=>h.setback>=30))
           && new Set(variants.map(l=>l.houses.map(h=>`${h.type}:${h.width}:${h.height}`).join('|'))).size>=4;
         const anchors=variants.every((l,i)=>{
-          const v=getVillageByIndex(i),shelter=getVillageShelter(v);
+          const v=villages[i],shelter=getVillageShelter(v);
           const workshop=l.houses.find(h=>h.type==='workshop');
           return shelter.x===l.houses[0].x && l.houses[0].type!=='raised'
             && getVillageActivitySpots(v).find(s=>s.id==='workshop')?.x===workshop.x-44
+            && getVillageActivitySpots(v).some(s=>s.id===`landmark-${v.identity.id}` && s.x===l.landmarkX)
             && getResidentForVillage(v).homeX===v.x+410;
         });
+        const identityCount=new Set(villages.map(v=>v.identity.id)).size;
+        const nameCount=new Set(villages.map(v=>v.name)).size;
+        const spacingStable=villages.slice(1).every((v,i)=>v.x-villages[i].x===villageSpacing) && villageSpacing===5000;
+        const legacyStable=Array.from({length:5},(_,i)=>getVillageByIndex(i*3)).every((v,i)=>
+          v.x===world.firstRouteEnd+520+i*legacyVillageSpacing
+          && v.villager.role===villagers[i%villagers.length].role
+          && getVillageShelter(v).id===`village-shelter-${i}`);
         const layoutBefore=JSON.stringify(layout);
         state.time=100;draw();
         const day=[...ctx.getImageData(0,0,canvas.width,canvas.height).data].filter((_,i)=>i%4!==3).reduce((a,b)=>a+b,0);
@@ -69,13 +78,64 @@ async function main() {
         state.companion.x=x-32;state.companion.y=getWalkSurfaceY(state.companion.x);
         state.camera.x=x-350;state.time=100;draw();
         ui.message.classList.remove('is-visible');
-        return {varied,anchors,signGap,sameLayout,sameResident,clearLane,crossed,companionFollowed,day,night,identity,types:layout.houses.map(h=>h.type)};
+        return {varied,anchors,identityCount,nameCount,spacingStable,legacyStable,signGap,sameLayout,sameResident,clearLane,crossed,companionFollowed,day,night,identity,types:layout.houses.map(h=>h.type)};
       });
-      assert(result.varied && result.anchors && result.sameLayout && result.sameResident && result.clearLane);
+      assert(result.varied && result.anchors && result.sameLayout && result.sameResident && result.clearLane,JSON.stringify(result));
+      assert.equal(result.identityCount,12,'The first twelve villages have distinct identities');
+      assert.equal(result.nameCount,12,'The first twelve villages have distinct names');
+      assert(result.spacingStable && result.legacyStable,'New villages are closer while legacy village coordinates and residents stay stable');
       assert(result.signGap>100,'Entrance is separated from first house');
       assert(result.crossed && result.companionFollowed,`Player and companion have a continuous path: ${JSON.stringify(result)}`);
       assert(result.night<result.day,'Existing night phase darkens the same village');
       assert.deepEqual(result.types,['forest','garden','workshop','raised']);
+      const persistence=await page.evaluate(()=>{
+        const village=getVillageByIndex(10), layout=JSON.stringify(getVillagePrototypeLayout(village));
+        state.player.x=village.x+410;state.camera.x=village.x;updateVillageArrival();
+        const id=getVillageIdFromX(village.x), banner=ui.regionBannerTitle.textContent;
+        saveGame();state.arrivedVillages=[];loadGame();
+        const restored=state.arrivedVillages.includes(id) && JSON.stringify(getVillagePrototypeLayout(getVillageByIndex(10)))===layout;
+        const colors=biomeColors();state.time=100;state.camera.x=1700;
+        const snapshot=()=>{
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+          drawParallaxTrees(colors);drawRegionGroundDecor();
+          return canvas.toDataURL();
+        };
+        state.player.x=1799;const before=snapshot();state.player.x=1801;
+        const stableScenery=before===snapshot();
+        state.player.x=860;state.camera.x=500;state.inventory.leaf=3;
+        state.itemEffects.scoutActivatedByPlayer=false;state.itemEffects.scoutUntil=0;
+        state.worldDiscoveries={};state.discoveryRespawns={};state.discoveryVacancies={};
+        ensureVisibleDiscoveryZones();
+        const first=Object.values(state.worldDiscoveries).find(i=>i.zoneKey==='start');
+        if(first){state.player.x=first.x-100;state.camera.x=first.x-150;}
+        const items=getVisibleWorldDiscoveries().filter(i=>!i.collected&&!i.missionItem&&!i.grounded);
+        if(!items.length)throw Error('Returning to the first route must restore its objects');
+        state.hiddenDiscoveryPopups=itemCatalog.map(i=>i.id);
+        collectDiscovery({...getCatalogItem('cone'),id:'cone-999',x:860});
+        const noAutoScout=state.itemEffects.scoutActivatedByPlayer===false;
+        const quantity=state.inventory.leaf;
+        useScoutItem('leaf');
+        const manual=state.itemEffects.scoutActivatedByPlayer && state.inventory.leaf===quantity-1;
+        const targetId=state.itemEffects.scoutTargetId;
+        saveGame();loadGame();
+        const scoutRestored=state.itemEffects.scoutActivatedByPlayer && state.itemEffects.scoutTargetId===targetId;
+        const routeProgressPreserved=state.cinematicPlayed;
+        const target=getVisibleWorldDiscoveries().find(i=>i.id===targetId);
+        collectDiscovery(target);
+        const cleared=!state.itemEffects.scoutActivatedByPlayer && !state.itemEffects.scoutTargetId;
+        state.activeQuest=null;state.pendingQuestReward=null;state.friendlyChallenge=null;state.villageActivity=null;
+        state.completedQuests=2;state.nextLetterAt=state.time+10;state.pendingLetter=null;
+        const waitsForLetter=getProceduralLetters().length===0;
+        state.time+=11;const letter=getProceduralLetters()[0];
+        const nearbyLetter=letter && letter.x>state.player.x && letter.x-state.player.x<1800;
+        saveGame();state.pendingLetter=null;loadGame();
+        const letterRestored=getProceduralLetters()[0]?.x===letter.x;
+        state.activeQuest=makeQuest(1240);
+        const noDuplicateLetter=getProceduralLetters().length===0;
+        state.activeQuest=null;
+        return {restored,banner:banner===village.name,stableScenery,noAutoScout,manual,scoutRestored,routeProgressPreserved,cleared,waitsForLetter,nearbyLetter,letterRestored,noDuplicateLetter};
+      });
+      assert(Object.values(persistence).every(Boolean),JSON.stringify(persistence));
       await page.waitForTimeout(600);
       for(const [phase,time] of [['day',100],['night',220]]) {
         await page.evaluate(time=>{state.time=time;state.camera.x=world.firstRouteEnd+520-350;draw();},time);
@@ -90,10 +150,11 @@ async function main() {
       }
       assert.deepEqual(errors,[]);
       for(const index of [1,2,3]) {
-        await page.evaluate(index=>{const v=getVillageByIndex(index);state.camera.x=v.x-300;state.player.x=v.x+410;state.chapter=getChapter();state.time=100;draw();},index);
+        await page.evaluate(index=>{const v=getVillageByIndex(index);state.camera.x=v.x-300;state.player.x=v.x+410;state.chapter=getChapter();state.time=100;updateVillageArrival();draw();},index);
+        await page.waitForTimeout(50);
         await page.screenshot({path:path.join(out,`village-${index+1}-${viewport.width}.png`)});
       }
-      console.log(`${viewport.width}x${viewport.height}: varied villages, stable refuge/activity anchors, same Village 1, open walking lane and day/night passed`);
+      console.log(`${viewport.width}x${viewport.height}: 12 village identities, closer spacing, legacy anchors, activities, open lane and day/night passed`);
       await context.close();
     }
   } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
