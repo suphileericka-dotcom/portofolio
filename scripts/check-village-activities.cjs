@@ -112,6 +112,26 @@ async function main(){
         finishVillageActivity();return {ended,retryOffered,restarted};
       });
       for(const [key,value]of Object.entries(retry))assert.equal(value,true,`retry: ${key}`);
+      const searchHint=await page.evaluate(()=>{
+        const village=getVillageByIndex(0),host=getResidentForVillage(village);
+        state.friendlyChallenge={kind:'search',villageId:host.villageId,villager:host,
+          startedAt:state.time,readyAt:state.time+3,remaining:125,target:1,progress:0,targetX:host.x+300};
+        const item=createSearchChallengeItem(state.friendlyChallenge);
+        state.friendlyChallenge.targetItemId=item.id;
+        const labels=[],original=ctx.fillText;
+        ctx.fillText=function(label,...args){labels.push(label);return original.call(this,label,...args);};
+        drawFriendlyChallengeHud();
+        const named=labels.includes(`Cherche : ${item.label}`),countdown=labels.includes('Depart dans 3 s');
+        state.time+=3;state.player.x=item.x-100;drawFriendlyChallengeHud();
+        const right=labels.includes('Sur le sentier, a droite - 125 s');
+        state.player.x=item.x+100;drawFriendlyChallengeHud();
+        const left=labels.includes('Sur le sentier, a gauche - 125 s');
+        ctx.fillText=original;draw();
+        return {named,countdown,right,left};
+      });
+      for(const [key,value]of Object.entries(searchHint))assert.equal(value,true,`search hint: ${key}`);
+      await page.screenshot({path:path.join(root,'.tools','village',`search-hint-${viewport.width}.png`)});
+      await page.evaluate(()=>{state.friendlyChallenge=null;});
       const lost=await page.evaluate(()=>{
         state.player.x=world.firstRouteEnd+520+410;state.camera.x=world.firstRouteEnd+320;state.chapter=4;
         state.activeQuest=null;state.pendingQuestReward=null;state.friendlyChallenge=null;

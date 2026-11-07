@@ -4387,7 +4387,7 @@ function drawFriendlyChallengeHud() {
   drawVillageActivityHud();
   const challenge = state.friendlyChallenge;
   if (!challenge || isInSecretWorld()) return;
-  if (challenge.readyAt > state.time || state.time < challenge.readyAt + 0.7) {
+  if (challenge.kind !== "search" && (challenge.readyAt > state.time || state.time < challenge.readyAt + 0.7)) {
     ctx.save();
     ctx.font = "900 24px Nunito";
     ctx.textAlign = "center";
@@ -4408,14 +4408,25 @@ function drawFriendlyChallengeHud() {
     ctx.save();
     ctx.translate(x, y);
     ctx.fillStyle = "rgba(20, 34, 33, 0.82)";
-    roundedRect(-144, -18, 288, 36, 8);
+    roundedRect(-144, -18, 288, challenge.kind === "search" ? 46 : 36, 8);
     ctx.fill();
     ctx.strokeStyle = "rgba(240, 189, 108, 0.4)";
     ctx.stroke();
     ctx.fillStyle = "#f0bd6c";
     ctx.font = "900 12px Nunito";
     ctx.textAlign = "center";
-    ctx.fillText(`${challenge.title}  ${progress}/${challenge.target}  ${remaining}s`, 0, 4);
+    if (challenge.kind === "search") {
+      const item = state.worldDiscoveries[challenge.targetItemId];
+      const label = item?.label || challenge.targetItemLabel || "l'objet du defi";
+      const targetX = item?.x ?? challenge.targetX;
+      const direction = targetX >= state.player.x ? "a droite" : "a gauche";
+      ctx.fillText(`Cherche : ${label}`, 0, -1, 268);
+      ctx.fillStyle = "#f7f3df";
+      const detail = challenge.readyAt > state.time
+        ? `Depart dans ${Math.ceil(challenge.readyAt - state.time)} s`
+        : `Sur le sentier, ${direction} - ${remaining} s`;
+      ctx.fillText(detail, 0, 17, 268);
+    } else ctx.fillText(`${challenge.title}  ${progress}/${challenge.target}  ${remaining}s`, 0, 4);
     ctx.restore();
     return;
   }
@@ -6573,6 +6584,7 @@ function startFriendlyChallenge() {
       return;
     }
     state.friendlyChallenge.targetItemId = hiddenItem.id;
+    state.friendlyChallenge.targetItemLabel = hiddenItem.label;
     state.friendlyChallenge.targetX = hiddenItem.x;
     state.friendlyChallenge.objective = `Retrouver ${hiddenItem.label.toLowerCase()} cache sur le sentier.`;
   }
