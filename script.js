@@ -3920,11 +3920,17 @@ function drawVillager(x, villager) {
 
 }
 
+function getVillagerOutfit(villager) {
+  const seed=hashNumber((villager.homeX ?? villager.x ?? 0)+villager.role.length*71);
+  const index=Math.floor(seed*6)%6;
+  return {index,body:["#527e75","#ac6471","#6f804b","#527c9c","#92729b","#b38b52"][index],
+    accent:["#e7d59e","#e6c7a6","#d4ad63","#a9cbbb","#dfb6ad","#486e66"][index]};
+}
+
 function drawVillagerCharacter(x, y, villager) {
-  const seed = Math.abs(hashNumber(villager.role.length + (villager.villageActivityActor ? villager.homeX : x)));
+  const outfit=getVillagerOutfit(villager);
   const walk = villager.villageActivityActor && ["preparing","returning"].includes(state.villageActivity?.stage) ? Math.sin(state.time * 8) * 9 : 0;
-  const bodyColors = ["#6a8a80", "#8b6840", "#6f7f4f", "#4f7f99", "#7f6a8a"];
-  const body = villager.specialCompanionGiver ? "#6f7f4f" : bodyColors[Math.floor(seed * bodyColors.length) % bodyColors.length];
+  const body = villager.specialCompanionGiver ? "#6f7f4f" : outfit.body;
   const skin = "#e5b878";
   const hair = villager.specialCompanionGiver ? "#6d7f3f" : "#4a3632";
   ctx.save();
@@ -3946,6 +3952,26 @@ function drawVillagerCharacter(x, y, villager) {
   ctx.beginPath();
   ctx.ellipse(0, 22, 22, 30, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle=outfit.accent;
+  if(outfit.index===0) {
+    roundedRect(-13,10,26,31,3);ctx.fill();
+    ctx.strokeStyle=outfit.accent;ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(-10,13);ctx.lineTo(-7,-3);ctx.moveTo(10,13);ctx.lineTo(7,-3);ctx.stroke();
+  } else if(outfit.index===1) {
+    roundedRect(-17,-3,34,8,3);ctx.fill();roundedRect(8,2,8,22,2);ctx.fill();
+  } else if(outfit.index===2) {
+    roundedRect(-18,1,12,33,3);ctx.fill();roundedRect(6,1,12,33,3);ctx.fill();
+  } else if(outfit.index===3) {
+    for(let i=0;i<3;i++){roundedRect(-18,10+i*9,36,3,1);ctx.fill();}
+  } else if(outfit.index===4) {
+    ctx.fillRect(-1,0,2,42);
+    for(let i=0;i<3;i++)drawEllipse(5,9+i*10,2,2,outfit.accent);
+    roundedRect(-15,25,10,9,2);ctx.fill();
+  } else {
+    ctx.strokeStyle=outfit.accent;ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(-14,0);ctx.lineTo(16,34);ctx.stroke();
+    roundedRect(8,24,16,17,3);ctx.fill();
+  }
   if (villager.specialCompanionGiver) {
     ctx.fillStyle = "rgba(240, 189, 108, 0.5)";
     roundedRect(-16, 3, 32, 7, 4);
@@ -3965,6 +3991,11 @@ function drawVillagerCharacter(x, y, villager) {
   ctx.lineTo(-20, -26);
   ctx.quadraticCurveTo(-4, -32, 17, -42);
   ctx.fill();
+  if(!villager.specialCompanionGiver && [0,2,5].includes(outfit.index)) {
+    drawEllipse(-2,-43,21,9,outfit.body);
+    if(outfit.index===2)drawEllipse(-1,-39,29,4,outfit.accent);
+    if(outfit.index===5)drawEllipse(-3,-53,5,5,outfit.accent);
+  }
   ctx.strokeStyle = "#2d2730";
   ctx.lineWidth = 6;
   ctx.beginPath();
@@ -4408,7 +4439,7 @@ function drawFriendlyChallengeHud() {
     ctx.save();
     ctx.translate(x, y);
     ctx.fillStyle = "rgba(20, 34, 33, 0.82)";
-    roundedRect(-144, -18, 288, challenge.kind === "search" ? 46 : 36, 8);
+    roundedRect(-144, -18, 288, challenge.kind === "search" ? 65 : 36, 8);
     ctx.fill();
     ctx.strokeStyle = "rgba(240, 189, 108, 0.4)";
     ctx.stroke();
@@ -4420,12 +4451,14 @@ function drawFriendlyChallengeHud() {
       const label = item?.label || challenge.targetItemLabel || "l'objet du defi";
       const targetX = item?.x ?? challenge.targetX;
       const direction = targetX >= state.player.x ? "a droite" : "a gauche";
-      ctx.fillText(`Cherche : ${label}`, 0, -1, 268);
+      if(item){ctx.save();ctx.translate(-116,13);ctx.scale(.6,.6);renderObjectVisual(item,ctx);ctx.restore();}
+      ctx.fillText(`Cherche : ${label}`, 22, -1, 222);
       ctx.fillStyle = "#f7f3df";
+      ctx.fillText(challenge.searchLandmark || "Sur le sentier",22,17,222);
       const detail = challenge.readyAt > state.time
         ? `Depart dans ${Math.ceil(challenge.readyAt - state.time)} s`
-        : `Sur le sentier, ${direction} - ${remaining} s`;
-      ctx.fillText(detail, 0, 17, 268);
+        : `${direction} - ${remaining} s`;
+      ctx.fillText(detail,22,35,222);
     } else ctx.fillText(`${challenge.title}  ${progress}/${challenge.target}  ${remaining}s`, 0, 4);
     ctx.restore();
     return;
@@ -4475,7 +4508,7 @@ function drawFriendlyChallengeHud() {
 function drawCompassHint() {
   const direction = Math.sign(state.itemEffects.compassTargetX - state.player.x) || state.player.face || 1;
   const x = window.innerWidth * 0.5;
-  const y = state.friendlyChallenge || state.villageActivity?.kind==="hide" ? getActivityHudPosition().y+58 : 92;
+  const y = state.friendlyChallenge || state.villageActivity?.kind==="hide" ? getActivityHudPosition().y+80 : 92;
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = "rgba(20, 34, 33, 0.76)";
@@ -5824,15 +5857,27 @@ function createSearchChallengeItem(challenge) {
   const pool = itemCatalog.filter((item) => item.rarity !== "Legendaire" && item.id !== portalInvokerItemId);
   const item = pool[Math.floor(hashNumber(challenge.startedAt + challenge.targetX) * pool.length) % pool.length];
   if (!item) return null;
-  const placed = storeWorldDiscovery(placeDiscoverySafely({
+  const village=getVillageForResident(challenge.villager);
+  const spots=village ? getVillageActivitySpots(village).filter(spot=>["garden","workshop"].includes(spot.id)) : [];
+  const candidates=spots.flatMap(spot=>[-80,80,-110,110].map(offset=>({spot,x:spot.x+offset})))
+    .filter(candidate=>!isRiverGap(candidate.x,40)
+      && Math.abs(candidate.x-(challenge.villager.homeX ?? challenge.villager.x))>85
+      && !Object.values(state.worldDiscoveries).some(other=>!other.collected && Math.abs(other.x-candidate.x)<60));
+  const location=candidates[Math.floor(hashNumber(challenge.startedAt)*candidates.length)];
+  if(village && !location)return null;
+  const requestedX=location ? location.x : challenge.targetX;
+  const draft = {
     ...item,
     id: makeId(item.id, 980000 + Math.floor(hashNumber(challenge.startedAt + challenge.targetX) * 19000)),
-    x: challenge.targetX,
-    place: getPlaceType(challenge.targetX),
+    x: requestedX,
+    place: getPlaceType(requestedX),
     zoneKey: `challenge-${challenge.villageId}-${Math.floor(challenge.startedAt)}`,
     challengeItem: true,
-    hiddenUntil: state.time
-  }));
+    hiddenUntil: challenge.readyAt
+  };
+  const placed=storeWorldDiscovery(location ? {...draft,grounded:true,groundOffset:-20} : placeDiscoverySafely(draft));
+  if(!placed)return null;
+  challenge.searchLandmark=location ? location.spot.label : "Sur le sentier";
   return placed;
 }
 
@@ -6428,6 +6473,7 @@ function getQuestCollectTypes(item) {
 
 function collectDiscovery(item, quiet = false) {
   if (!item || item.collected || hasCollectedDiscovery(item) || collectingDiscoveryIds.has(item.id)) return false;
+  if(item.id===state.friendlyChallenge?.targetItemId && state.time<state.friendlyChallenge.readyAt)return false;
   collectingDiscoveryIds.add(item.id);
   try {
   const baseId = baseDiscoveryId(item.id);
@@ -6597,8 +6643,8 @@ function startFriendlyChallenge() {
   pendingVillagerHelp = null;
   if (definition.kind === "race") setPlayerAction("run", 0.5);
   const rewardPreview = getFriendlyChallengeReward(state.friendlyChallenge);
-  showMessage(`${state.friendlyChallenge.title} : ${state.friendlyChallenge.objective} Temps : ${definition.duration} s.${rewardPreview ? ` Recompense : ${rewardPreview.label}.` : ""}`);
-  showVillagerBubble(villager, definition.kind === "race" ? "Je pars a mon rythme. Rendez-vous a l'arrivee !" : "Je garde le temps. Bonne recherche !", { cooldown: 20, force: true });
+  if(definition.kind!=="search")showMessage(`${state.friendlyChallenge.title} : ${state.friendlyChallenge.objective} Temps : ${definition.duration} s.${rewardPreview ? ` Recompense : ${rewardPreview.label}.` : ""}`);
+  showVillagerBubble(villager, definition.kind === "search" ? "J'ai cache cet objet. A toi de le retrouver !" : definition.kind === "race" ? "Je pars a mon rythme. Rendez-vous a l'arrivee !" : "Je garde le temps. Bonne recherche !", { cooldown: 20, force: true });
   playSoftPing();
   saveGame();
 }
