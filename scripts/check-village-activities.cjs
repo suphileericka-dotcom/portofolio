@@ -24,6 +24,30 @@ async function main(){
       await page.goto(`http://127.0.0.1:${server.address().port}/`);
       await page.locator('#startButton')[viewport.width<900?'tap':'click']();
       await page.waitForTimeout(600);
+      await page.evaluate(()=>exploration?.finishScene());
+      const migration=await page.evaluate(()=>{
+        running=false;
+        const host=getResidentForVillage(getVillageByIndex(0));
+        const inventory=JSON.stringify(state.inventory);
+        state.friendlyChallenge={kind:'exploration',villageId:host.villageId,villager:host,
+          targetX:host.x+4200,remaining:95,readyAt:state.time+3};
+        saveGame();loadGame();
+        const removed=state.friendlyChallenge===null && JSON.stringify(state.inventory)===inventory;
+        state.friendlyChallengeHistory=[];
+        const racer=Array.from({length:12},(_,i)=>getResidentForVillage(getVillageByIndex(i)))
+          .find(v=>getFriendlyChallengeDefinition(v).kind==='race');
+        state.player.x=racer.homeX;state.chapter=4;state.cinematicPlayed=true;
+        pendingVillagerHelp=racer;state.pendingQuestReward=null;state.activeQuest=null;
+        startFriendlyChallenge();
+        const race=state.friendlyChallenge;
+        const original=race?.kind==='race' && race.remaining===52 && race.targetX-race.startX===6000
+          && race.readyAt===state.time+3 && race.runner && race.route.length>0;
+        saveGame();loadGame();
+        const restored=state.friendlyChallenge?.kind==='race' && state.friendlyChallenge.remaining===52;
+        state.friendlyChallenge=null;pendingVillagerHelp=null;
+        return {removed,original:Boolean(original),restored};
+      });
+      for(const [key,value]of Object.entries(migration))assert.equal(value,true,`challenge removal: ${key}`);
       const result=await page.evaluate(()=>{
         running=false;
         const villageX=world.firstRouteEnd+520;
@@ -195,6 +219,7 @@ async function main(){
         for(let i=0;i<180;i++)update(1/60);
         clearMovementIntent();
         const worldContinues=state.time>time+2 && state.player.x===x;
+        if(!worldContinues)throw Error(JSON.stringify({time,now:state.time,x,nowX:state.player.x,dialogs:[...document.querySelectorAll('dialog[open]')].map(d=>d.id),quest:state.activeQuest}));
         const calm=getWeatherForChapter().id==='clear' && state.shelter?.calmSignalled===true;
         const voluntary=state.shelter?.stage==='inside';
         triggerPlayerHop();const noHop=state.player.action!=='hop';
@@ -231,6 +256,55 @@ async function main(){
         return activitySafe && shelterSafe && getResidentForVillage(village).x===host.homeX;
       });
       assert.equal(portal,true,'portal safely clears activities and refuge');
+      const basket=await page.evaluate(()=>{
+        const host=getResidentForVillage(getVillageByIndex(0)),x=host.homeX;
+        state.player.x=x;state.activeQuest=null;state.pendingQuestReward=null;
+        state.friendlyChallenge={kind:'collection',title:'Panier du village',villageId:host.villageId,villager:host,
+          startX:x,targetX:x,startedAt:state.time,readyAt:state.time+3,remaining:110,target:4,progress:0,runnerProgress:0,
+          runner:createFriendlyChallengeRunner(host,x,1)};
+        const challenge=state.friendlyChallenge;
+        const item={...getCatalogItem('leaf'),id:'leaf-941001',x:x+80,hiddenUntil:0};
+        state.worldDiscoveries[item.id]=item;
+        challenge.runner.pickupTargetId=item.id;
+        const inventory=JSON.stringify(state.inventory);
+        updateFriendlyChallenge(.5);
+        const countdown=challenge.runner.x===x && !item.collected;
+        state.time+=3;updateFriendlyChallenge(.1);
+        const moves=challenge.runner.x>x && challenge.runner.x<item.x;
+        for(let i=0;i<60 && !item.collected;i++){state.time+=.1;updateFriendlyChallenge(.1);}
+        const picked=item.collected && challenge.runnerProgress===1 && challenge.progress===0;
+        const separate=inventory===JSON.stringify(state.inventory) && !state.discoveries.includes(item.id);
+        const noDouble=collectDiscovery(item)===false;
+        saveGame();loadGame();
+        const restored=state.friendlyChallenge.runnerProgress===1 && state.worldDiscoveries[item.id].collected;
+        const active=state.friendlyChallenge;active.runner.pickupUntil=0;
+        for(let i=0;i<3;i++) {
+          const next={...getCatalogItem('leaf'),id:`leaf-${941002+i}`,x:active.runner.x,hiddenUntil:0};
+          state.worldDiscoveries[next.id]=next;active.runner.pickupTargetId=next.id;active.runner.pickupUntil=0;
+          state.time+=2;updateFriendlyChallenge(.1);
+        }
+        const loses=!state.friendlyChallenge && state.friendlyChallengeHistory.at(-1).won===false;
+        state.friendlyChallenge={...challenge,progress:0,runnerProgress:0,remaining:110,readyAt:state.time,runner:null};
+        for(let i=0;i<4;i++)registerFriendlyChallengeDiscovery({id:`leaf-${942000+i}`});
+        const wins=!state.friendlyChallenge && state.friendlyChallengeHistory.at(-1).won===true;
+        closeDialog(ui.discoveryDialog);
+        state.friendlyChallenge={...challenge,progress:1,runnerProgress:1,remaining:.01,readyAt:state.time,
+          runner:{...challenge.runner,pickupUntil:state.time+100}};
+        updateFriendlyChallenge(.1);
+        const tie=!state.friendlyChallenge && ui.message.textContent.startsWith('Egalite');
+        const removed=!friendlyChallengeDefinitions.some(def=>def.kind==='exploration');
+        state.friendlyChallenge={...challenge,progress:1,runnerProgress:2,remaining:80,readyAt:state.time,
+          runner:{...challenge.runner,mode:'collection',x:x+150,vx:30}};
+        exploration?.finishScene();
+        clearSecretWorldTransition();
+        state.friendlyChallenge.readyAt=state.time-1;
+        ui.regionBanner.classList.remove('is-visible');ui.message.classList.remove('is-visible');
+        state.camera.x=x-window.innerWidth*.45;state.player.x=x;draw();
+        return {countdown,moves,picked,separate,noDouble,restored,loses,wins,tie,removed};
+      });
+      for(const [key,value]of Object.entries(basket))assert.equal(value,true,`basket: ${key}`);
+      await page.waitForTimeout(500);
+      await page.screenshot({path:path.join(root,'.tools','village',`basket-duel-${viewport.width}.png`)});
       assert.deepEqual(errors,[]);
       console.log(`${viewport.width}x${viewport.height}: hide-and-seek proposal, real relocation, proximity, return, varied spots, cooldown, refusal, mission/challenge priority, pause, departure and reload passed`);
       console.log(`${viewport.width}x${viewport.height}: lost object truthful placement, separate pickup, no respawn, handover, relation and search/carried reload passed`);

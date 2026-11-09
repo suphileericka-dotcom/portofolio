@@ -31,7 +31,9 @@ const challenges = evaluateBlock(
   "const hopDurationSeconds",
   "friendlyChallengeDefinitions"
 );
-assert.deepEqual(Array.from(challenges, (challenge) => challenge.kind), ["race", "collection", "exploration", "search"]);
+assert.deepEqual(Array.from(challenges, (challenge) => challenge.kind), ["race", "collection", "search"]);
+assert.equal(challenges[0].distance, 6000);
+assert.equal(challenges[0].duration, 52);
 assert.ok(challenges.every((challenge) => challenge.objective && challenge.duration > 0 && challenge.target > 0));
 
 for (const persistedField of ["discoveredRegions", "arrivedVillages", "friendlyChallengeHistory", "plantedItems"]) {

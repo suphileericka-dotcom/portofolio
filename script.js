@@ -171,8 +171,7 @@ const friendlyChallengeRunnerSpeed = playerWalkSpeed * 1.18;
 const friendlyChallengeRunnerReturnSpeed = playerWalkSpeed * 0.82;
 const friendlyChallengeDefinitions = [
   { kind: "race", title: "Course du sentier", objective: "Atteindre l'arrivee avant l'habitant.", duration: 52, distance: 6000, target: 1 },
-  { kind: "collection", title: "Panier du village", objective: "Ramasser 4 trouvailles avant la fin du temps.", duration: 110, distance: 0, target: 4 },
-  { kind: "exploration", title: "Chemin inconnu", objective: "Atteindre la balise d'exploration avant la fin du temps.", duration: 95, distance: 4200, target: 1 },
+  { kind: "collection", title: "Panier du village", objective: "Remplis ton panier de 4 objets avant l'habitant.", duration: 110, distance: 0, target: 4 },
   { kind: "search", title: "Objet cache", objective: "Retrouver l'objet cache sur le sentier.", duration: 125, distance: 2600, target: 1 }
 ];
 const hopDurationSeconds = 0.62;
@@ -2001,6 +2000,7 @@ function updateRegionDiscovery() {
 }
 
 function updateVillageArrival() {
+  if(state.friendlyChallenge)return;
   if (isInSecretWorld() || !isExpandedWorld()) {
     activeVillageBannerId = "";
     return;
@@ -3221,7 +3221,7 @@ function drawFriendlyChallengeGoal() {
   ctx.fillStyle = "#f7f3df";
   ctx.font = "800 11px Nunito";
   ctx.textAlign = "center";
-  ctx.fillText(challenge.kind === "exploration" ? "Balise" : "Arrivee", x, y - 101);
+  ctx.fillText("Arrivee", x, y - 101);
   ctx.restore();
 }
 
@@ -3898,7 +3898,7 @@ function getVisibleRiverX() {
 function drawVillager(x, villager) {
   if(villager.concealed){drawHiddenResidentClue(villager);return;}
   const y = getWalkSurfaceY(x);
-  if (villager.raceActor) {
+  if (villager.raceActor && villager.raceActor.mode !== "collection") {
     const seed = Math.abs(hashNumber(villager.role.length + villager.homeX));
     const bodyColors = ["#6a8a80", "#8b6840", "#6f7f4f", "#4f7f99", "#7f6a8a"];
     const hopTimeLeft = Math.max(0, (villager.raceActor.hopUntil || 0) - state.time);
@@ -3929,7 +3929,7 @@ function getVillagerOutfit(villager) {
 
 function drawVillagerCharacter(x, y, villager) {
   const outfit=getVillagerOutfit(villager);
-  const walk = villager.villageActivityActor && ["preparing","returning"].includes(state.villageActivity?.stage) ? Math.sin(state.time * 8) * 9 : 0;
+  const walk = (villager.villageActivityActor && ["preparing","returning"].includes(state.villageActivity?.stage)) || Math.abs(villager.raceActor?.vx || 0)>1 ? Math.sin(state.time * 8) * 9 : 0;
   const body = villager.specialCompanionGiver ? "#6f7f4f" : outfit.body;
   const skin = "#e5b878";
   const hair = villager.specialCompanionGiver ? "#6d7f3f" : "#4a3632";
@@ -4004,6 +4004,13 @@ function drawVillagerCharacter(x, y, villager) {
   ctx.moveTo(16, 14);
   ctx.lineTo(24 + walk * .5, 24);
   ctx.stroke();
+  if(villager.raceActor?.mode==="collection") {
+    ctx.strokeStyle="#b48e52";ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(27,27,8,Math.PI,0);ctx.stroke();
+    ctx.fillStyle="#bb9459";roundedRect(16,27,22,15,3);ctx.fill();
+    ctx.strokeStyle="#775b39";ctx.lineWidth=1;
+    for(let line=0;line<3;line++){ctx.beginPath();ctx.moveTo(18,31+line*4);ctx.lineTo(36,31+line*4);ctx.stroke();}
+  }
   ctx.restore();
 }
 
@@ -4459,7 +4466,7 @@ function drawFriendlyChallengeHud() {
         ? `Depart dans ${Math.ceil(challenge.readyAt - state.time)} s`
         : `${direction} - ${remaining} s`;
       ctx.fillText(detail,22,35,222);
-    } else ctx.fillText(`${challenge.title}  ${progress}/${challenge.target}  ${remaining}s`, 0, 4);
+    } else ctx.fillText(`Toi ${progress}/${challenge.target} - Habitant ${challenge.runnerProgress || 0}/${challenge.target} - ${remaining}s`, 0, 4, 270);
     ctx.restore();
     return;
   }
@@ -4481,9 +4488,7 @@ function drawFriendlyChallengeHud() {
   ctx.fillStyle = "#f0bd6c";
   ctx.font = "900 12px Nunito";
   ctx.textAlign = "center";
-  const label = challenge.kind === "exploration"
-    ? `${challenge.title}  Progression ${playerProgress}%  ${Math.ceil(challenge.remaining)}s`
-    : `Course ${friendlyChallengeDistanceLabel}  Toi ${playerProgress}%  Habit. ${runnerProgress}%`;
+  const label = `Course ${friendlyChallengeDistanceLabel}  Toi ${playerProgress}%  Habit. ${runnerProgress}%`;
   ctx.fillText(label, 0, 4);
   ctx.restore();
   const next = (challenge.route || []).find((obstacle) => !obstacle.playerPassed && (obstacle.x - state.player.x) * direction > 0);
@@ -6020,6 +6025,16 @@ function updateFriendlyChallenge(dt) {
   if (!challenge || isInSecretWorld()) return;
   if (challenge.readyAt > state.time) return;
   challenge.remaining = Math.max(0, challenge.remaining - dt);
+  if(challenge.kind==="collection") {
+    if(challenge.remaining>0)updateCollectionOpponent(challenge,dt);
+    if((challenge.runnerProgress || 0)>=challenge.target) {
+      finishFriendlyChallenge(false,"basket");return;
+    }
+    if(challenge.remaining<=0) {
+      const difference=(challenge.progress || 0)-(challenge.runnerProgress || 0);
+      finishFriendlyChallenge(difference>0,difference===0?"tie":"basket");return;
+    }
+  }
   if (challenge.kind === "race" || !challenge.kind) {
     const runnerFinished = updateChallengeRunner(challenge, dt);
     updateChallengePlayerRoute(challenge);
@@ -6031,14 +6046,42 @@ function updateFriendlyChallenge(dt) {
       finishFriendlyChallenge(false, "runner");
       return;
     }
-  } else if (challenge.kind === "exploration" && Math.abs(state.player.x - challenge.targetX) <= 72) {
-    challenge.progress = 1;
-    finishFriendlyChallenge(true);
-    return;
   }
   if (challenge.remaining <= 0) {
     finishFriendlyChallenge(false, "timeout");
   }
+}
+
+function updateCollectionOpponent(challenge,dt) {
+  const runner=challenge.runner || (challenge.runner=createFriendlyChallengeRunner(challenge.villager,challenge.startX,1));
+  runner.mode="collection";
+  if(state.time<(runner.pickupUntil || 0)){runner.vx=0;return;}
+  const chapter=Math.max(0,Math.floor((runner.x-world.firstRouteEnd)/world.chapterSize));
+  if(isExpandedWorld())for(let index=Math.max(0,chapter-1);index<=chapter+1;index++) {
+    ensureDiscoveryZone(`chapter-${index}`,()=>buildChapterDiscoveries(index));
+  }
+  const available=Object.values(state.worldDiscoveries).filter(item=>!item.collected && !hasCollectedDiscovery(item)
+    && !item.missionItem && !item.challengeItem && !item.grounded && !item.zoneKey?.startsWith("secret-world")
+    && (item.hiddenUntil || 0)<=state.time && Math.abs(item.x-challenge.startX)<4000
+    && (!state.activeQuest?.itemId || baseDiscoveryId(item.id)!==state.activeQuest.itemId));
+  const target=available.find(item=>item.id===runner.pickupTargetId)
+    || available.sort((a,b)=>Math.abs(a.x-runner.x)-Math.abs(b.x-runner.x))[0];
+  if(!target){runner.vx=0;return;}
+  runner.pickupTargetId=target.id;
+  const distance=target.x-runner.x;
+  const step=playerWalkSpeed*.85*getWeatherSpeedFactor()*dt;
+  runner.vx=Math.sign(distance)*playerWalkSpeed*.85;
+  runner.x+=Math.sign(distance)*Math.min(Math.abs(distance),step);
+  if(Math.abs(target.x-runner.x)>18)return;
+  // Only the inhabitant's basket changes; player inventory and quests stay untouched.
+  target.collected=true;
+  target.respawnAt=state.time+getDiscoveryRespawnDelay();
+  state.discoveryRespawns[target.id]=target.respawnAt;
+  state.discoveryVacancies[target.id]={x:target.x,until:target.respawnAt};
+  challenge.runnerProgress=(challenge.runnerProgress || 0)+1;
+  runner.pickupTargetId=null;runner.pickupUntil=state.time+1.2;runner.vx=0;
+  showVillagerBubble({...challenge.villager,x:runner.x},`${challenge.runnerProgress}/${challenge.target} dans mon panier.`,{force:true,cooldown:0});
+  saveGame();
 }
 
 function finishFriendlyChallenge(won, reason = "") {
@@ -6059,7 +6102,7 @@ function finishFriendlyChallenge(won, reason = "") {
       collectDiscovery({ ...reward, id: makeId(reward.id, Math.floor(state.time * 10) + challenge.targetX), place: getPlaceType(challenge.targetX) }, true);
       showMessage(`${challenge.title || "Defi reussi"} termine. Tu gagnes : ${reward.label}.`);
       rememberJournalEvent(`J'ai reussi ${challenge.title?.toLowerCase() || "un defi amical"} propose par ${villager.role.toLowerCase()} et gagne ${reward.label.toLowerCase()}.`);
-      if (challenge.kind === "race" || challenge.kind === "exploration") openDiscoveryPopup(reward);
+      if (challenge.kind === "race") openDiscoveryPopup(reward);
     } else {
       showMessage("Defi reussi. L'habitant est impressionne.");
     }
@@ -6067,7 +6110,7 @@ function finishFriendlyChallenge(won, reason = "") {
     playSoftPing();
   } else {
     const runnerWon = reason === "runner";
-    showMessage(runnerWon ? `${villager.role} atteint l'arrivee avant toi.` : `Le temps du defi « ${challenge.title || "Defi amical"} » est termine.`);
+    showMessage(reason==="tie" ? "Egalite ! Vos paniers contiennent autant d'objets." : reason==="basket" ? "L'habitant gagne avec son panier. On peut rejouer !" : runnerWon ? `${villager.role} atteint l'arrivee avant toi.` : `Le temps du defi « ${challenge.title || "Defi amical"} » est termine.`);
     showVillagerBubble(villager, runnerWon ? "J'y suis arrive avant toi. On recommence quand tu veux." : "On pourra reprendre ce defi calmement une autre fois.", { cooldown: 18, force: true });
   }
   state.friendlyChallengeHistory.push({
@@ -6599,6 +6642,7 @@ function startFriendlyChallenge() {
     return;
   }
   const definition = getFriendlyChallengeDefinition(villager);
+  clearTimeout(regionBannerTimer);ui.regionBanner.classList.remove("is-visible");
   const startX = Number.isFinite(villager.homeX) ? villager.homeX : villager.x;
   const direction = getFriendlyChallengeDirection(villager);
   const targetX = clampToPlayableWorldX(startX + direction * definition.distance);
@@ -6620,7 +6664,8 @@ function startFriendlyChallenge() {
     startedAt: state.time,
     readyAt: state.time + 3,
     route: definition.kind === "race" ? createFriendlyChallengeRoute(startX, targetX) : [],
-    runner: definition.kind === "race" ? createFriendlyChallengeRunner(villager, targetX, direction) : null
+    runnerProgress: 0,
+    runner: ["race","collection"].includes(definition.kind) ? createFriendlyChallengeRunner(villager, targetX, direction) : null
   };
   if (definition.kind === "search") {
     const hiddenItem = createSearchChallengeItem(state.friendlyChallenge);
@@ -6634,17 +6679,18 @@ function startFriendlyChallenge() {
     state.friendlyChallenge.targetX = hiddenItem.x;
     state.friendlyChallenge.objective = `Retrouver ${hiddenItem.label.toLowerCase()} cache sur le sentier.`;
   }
-  if (definition.kind === "race" || definition.kind === "exploration") state.player.x = startX;
+  if (definition.kind === "race") state.player.x = startX;
   state.player.face = direction;
   state.player.vx = 0;
   if (state.friendlyChallenge.runner) state.friendlyChallenge.runner.departAt = state.friendlyChallenge.readyAt;
+  if(definition.kind==="collection")state.friendlyChallenge.runner.mode="collection";
   closeDialog(ui.villagerDialog);
   pendingVillagerConversation = null;
   pendingVillagerHelp = null;
   if (definition.kind === "race") setPlayerAction("run", 0.5);
   const rewardPreview = getFriendlyChallengeReward(state.friendlyChallenge);
   if(definition.kind!=="search")showMessage(`${state.friendlyChallenge.title} : ${state.friendlyChallenge.objective} Temps : ${definition.duration} s.${rewardPreview ? ` Recompense : ${rewardPreview.label}.` : ""}`);
-  showVillagerBubble(villager, definition.kind === "search" ? "J'ai cache cet objet. A toi de le retrouver !" : definition.kind === "race" ? "Je pars a mon rythme. Rendez-vous a l'arrivee !" : "Je garde le temps. Bonne recherche !", { cooldown: 20, force: true });
+  showVillagerBubble(villager, definition.kind === "search" ? "J'ai cache cet objet. A toi de le retrouver !" : definition.kind === "race" ? "Je pars a mon rythme. Rendez-vous a l'arrivee !" : "Le premier a remplir son panier gagne !", { cooldown: 20, force: true });
   playSoftPing();
   saveGame();
 }
@@ -7614,6 +7660,7 @@ function loadGame() {
       ? payload.friendlyChallengeHistory.filter((entry) => entry && typeof entry === "object").slice(-20)
       : [];
     state.friendlyChallenge = payload.friendlyChallenge && typeof payload.friendlyChallenge === "object"
+      && payload.friendlyChallenge.kind !== "exploration"
       && typeof payload.friendlyChallenge.villageId === "string"
       && Number.isFinite(payload.friendlyChallenge.targetX)
       && Number.isFinite(payload.friendlyChallenge.remaining)
