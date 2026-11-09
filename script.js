@@ -275,7 +275,9 @@ const playerAppearanceOptions = {
     berry: "#ce6f75",
     forest: "#4f8763",
     river: "#4f7f99",
-    sun: "#d09a3d"
+    sun: "#d09a3d",
+    sailor: "#426f8c",
+    gardener: "#528578"
   }
 };
 
@@ -307,7 +309,9 @@ const appearanceChoiceGroups = [
       { value: "berry", label: "Manteau baie", color: "#ce6f75" },
       { value: "forest", label: "Cape foret", color: "#4f8763" },
       { value: "river", label: "Veste riviere", color: "#4f7f99" },
-      { value: "sun", label: "Pull soleil", color: "#d09a3d" }
+      { value: "sun", label: "Pull soleil", color: "#d09a3d" },
+      { value: "sailor", label: "Mariniere", color: "#426f8c" },
+      { value: "gardener", label: "Salopette", color: "#528578" }
     ]
   },
   {
@@ -317,6 +321,8 @@ const appearanceChoiceGroups = [
       { value: "bag", label: "Sac", icon: "S" },
       { value: "scarf", label: "Echarpe", icon: "E" },
       { value: "hat", label: "Chapeau", icon: "C" },
+      { value: "beanie", label: "Bonnet", icon: "B" },
+      { value: "glasses", label: "Lunettes rondes", icon: "LR" },
       { value: "lantern", label: "Lanterne", icon: "L", locked: () => state.lanterns.length < 3, hint: "Debloquee apres 3 lanternes" }
     ]
   }
@@ -3430,6 +3436,7 @@ function getPlayerAppearance() {
     skin: playerAppearanceOptions.skin[appearance.skin] || playerAppearanceOptions.skin.warm,
     hair: playerAppearanceOptions.hair[appearance.hair] || playerAppearanceOptions.hair.dark,
     body: playerAppearanceOptions.outfit[appearance.outfit] || playerAppearanceOptions.outfit.berry,
+    outfit: appearance.outfit,
     accessory: appearance.accessory
   };
 }
@@ -3439,7 +3446,7 @@ function normalizeAppearance(appearance = {}) {
     skin: playerAppearanceOptions.skin[appearance.skin] ? appearance.skin : "warm",
     hair: playerAppearanceOptions.hair[appearance.hair] ? appearance.hair : "dark",
     outfit: playerAppearanceOptions.outfit[appearance.outfit] ? appearance.outfit : "berry",
-    accessory: ["bag", "scarf", "hat", "lantern"].includes(appearance.accessory) ? appearance.accessory : "bag"
+    accessory: ["bag", "scarf", "hat", "lantern", "beanie", "glasses"].includes(appearance.accessory) ? appearance.accessory : "bag"
   };
 }
 
@@ -4170,6 +4177,7 @@ function drawPlayer() {
     face: p.face,
     velocity: exploration ? Math.hypot(p.vx, p.depthVelocity || 0) : p.vx,
     body: appearance.body,
+    outfit: appearance.outfit,
     skin: appearance.skin,
     hair: appearance.hair,
     accessory: appearance.accessory,
@@ -4180,7 +4188,40 @@ function drawPlayer() {
   ctx.restore();
 }
 
-function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = "#f0bd6c", hair = "#22322c", accessory = "", label = "", seated = false, action = "" }) {
+function drawPlayerOutfitDetail(g,outfit) {
+  g.save();
+  if(outfit==="sailor") {
+    g.fillStyle="#e5eadc";
+    for(let row=0;row<4;row++)g.fillRect(-18,5+row*9,36,3);
+    g.strokeStyle="#e5eadc";g.lineWidth=3;
+    g.beginPath();g.moveTo(-10,-2);g.lineTo(0,6);g.lineTo(10,-2);g.stroke();
+  } else if(outfit==="gardener") {
+    g.fillStyle="#d8c88e";
+    g.fillRect(-13,-1,5,23);g.fillRect(8,-1,5,23);
+    g.fillStyle="#31594f";drawPreviewRoundedRect(g,-15,15,30,26,3);g.fill();
+    g.strokeStyle="#b7d5be";g.lineWidth=1.5;
+    g.strokeRect(-7,22,14,10);
+    g.fillStyle="#edd899";
+    for(const x of [-10,10]){g.beginPath();g.arc(x,17,2,0,Math.PI*2);g.fill();}
+  }
+  g.restore();
+}
+
+function drawPlayerHeadAccessory(g,accessory) {
+  g.save();
+  if(accessory==="beanie") {
+    g.fillStyle="#ad6578";g.beginPath();g.ellipse(-4,-43,23,16,0,Math.PI,Math.PI*2);g.fill();
+    g.fillStyle="#e2b5b0";drawPreviewRoundedRect(g,-27,-45,46,7,3);g.fill();
+    g.beginPath();g.arc(-4,-62,5,0,Math.PI*2);g.fill();
+  } else if(accessory==="glasses") {
+    g.strokeStyle="#54473e";g.lineWidth=2;
+    g.beginPath();g.arc(11,-27,8,0,Math.PI*2);g.moveTo(3,-29);g.lineTo(-15,-32);g.stroke();
+    g.fillStyle="rgba(220,243,240,0.12)";g.beginPath();g.arc(11,-27,7,0,Math.PI*2);g.fill();
+  }
+  g.restore();
+}
+
+function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", outfit = "", skin = "#f0bd6c", hair = "#22322c", accessory = "", label = "", seated = false, action = "" }) {
   const speed = Math.min(1, Math.abs(velocity) / 190);
   const walk = seated ? 0 : Math.sin(state.time * (speed > 0.72 ? 13 : 9)) * speed;
   const idleBreath = seated ? 0 : Math.sin(state.time * 2.2) * (speed < 0.08 ? 1.6 : 0.3);
@@ -4217,6 +4258,7 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
   ctx.beginPath();
   ctx.ellipse(-7, 10, 8, 16, -0.2, 0, Math.PI * 2);
   ctx.fill();
+  drawPlayerOutfitDetail(ctx,outfit);
   if (accessory === "scarf") {
     ctx.fillStyle = "#d8bd7c";
     roundedRect(-18, -1, 36, 8, 4);
@@ -4267,6 +4309,7 @@ function drawCharacter({ x, y, face = 1, velocity = 0, body = "#ce6f75", skin = 
     roundedRect(-14, -62, 24, 18, 6);
     ctx.fill();
   }
+  drawPlayerHeadAccessory(ctx,accessory);
   ctx.strokeStyle = "#2d2730";
   ctx.lineWidth = 6;
   ctx.lineCap = "round";
@@ -7892,6 +7935,8 @@ function drawAppearancePreview() {
   previewCtx.beginPath();
   previewCtx.ellipse(-12, 8, 12, 26, -0.2, 0, Math.PI * 2);
   previewCtx.fill();
+  previewCtx.save();previewCtx.translate(0,-4);previewCtx.scale(1.7,1.7);
+  drawPlayerOutfitDetail(previewCtx,appearance.outfit);previewCtx.restore();
   if (appearance.accessory === "scarf") {
     previewCtx.fillStyle = "#d8bd7c";
     drawPreviewRoundedRect(previewCtx, -32, -13, 64, 13, 7);
@@ -7920,6 +7965,8 @@ function drawAppearancePreview() {
     drawPreviewRoundedRect(previewCtx, -22, -104, 40, 28, 9);
     previewCtx.fill();
   }
+  previewCtx.save();previewCtx.translate(0,-4);previewCtx.scale(1.7,1.7);
+  drawPlayerHeadAccessory(previewCtx,appearance.accessory);previewCtx.restore();
   previewCtx.strokeStyle = "#2d2730";
   previewCtx.lineWidth = 9;
   previewCtx.lineCap = "round";
